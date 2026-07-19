@@ -166,7 +166,7 @@ heavy concurrent bridge traffic).
 (`cpp_embedlib_add(WebAssets FOLDER public ...)` in `CMakeLists.txt`). Build
 order is always: `npm install && npm run build` in `web/` first, then
 `cmake -B build && cmake --build build`. All four build scripts
-(`build_and_run.{sh,bat}`, `package_release.{sh,bat}`) do this automatically.
+(`build_and_run.bat`, `package_release.bat`) do this automatically.
 
 One non-obvious wrinkle worth knowing before touching `web/shell/vite.config.ts`:
 both simulator submodules need `useDefineForClassFields: false` — several of

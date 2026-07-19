@@ -209,7 +209,6 @@ void schedule_heartbeat(boost::asio::steady_timer &timer,
   timer.expires_after(interval);
   timer.async_wait([&timer, interval](const boost::system::error_code &ec) {
     if (ec) return; // cancelled or destroyed
-    std::cout << "[asio] heartbeat" << std::endl;
     schedule_heartbeat(timer, interval);
   });
 }

@@ -18,6 +18,12 @@ import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 const FLASH_WORDS = 0x8000;
 const CLOCK_HZ = 16e6;
 const STEPS_PER_TICK = 20000;
+// Caps how often a *running* simulation posts a state update. The tick loop
+// itself runs unthrottled (as fast as the event loop allows) — this only
+// bounds the postMessage/DOM-update rate that follows from it, which
+// otherwise fires hundreds of times/sec forever and is what actually made
+// the UI get slower the longer a run went on.
+const EMIT_INTERVAL_MS = 100;
 
 export class Avr8Adapter implements SimulatorAdapter {
   readonly id = "avr8";
@@ -34,6 +40,7 @@ export class Avr8Adapter implements SimulatorAdapter {
 
   private running = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
+  private lastEmitAt = 0;
   private listeners = new Set<(state: SimState) => void>();
 
   async init(_config: unknown): Promise<void> {
@@ -96,7 +103,11 @@ export class Avr8Adapter implements SimulatorAdapter {
         avrInstruction(this.cpu);
         this.cpu.tick();
       }
-      this.emitState();
+      const now = Date.now();
+      if (now - this.lastEmitAt >= EMIT_INTERVAL_MS) {
+        this.lastEmitAt = now;
+        this.emitState();
+      }
       this.scheduleTick();
     }, 0);
   }

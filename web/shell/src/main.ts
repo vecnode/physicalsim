@@ -3,7 +3,6 @@ import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import "./native-bridge.js";
 
 const adapterSelect = document.getElementById("adapter-select") as HTMLSelectElement;
-const firmwareInput = document.getElementById("firmware-input") as HTMLInputElement;
 const startBtn = document.getElementById("start-btn") as HTMLButtonElement;
 const stopBtn = document.getElementById("stop-btn") as HTMLButtonElement;
 const stepBtn = document.getElementById("step-btn") as HTMLButtonElement;
@@ -37,19 +36,6 @@ watch(adapterSelect.value as AdapterId);
 
 adapterSelect.addEventListener("change", () => {
   watch(adapterSelect.value as AdapterId);
-});
-
-firmwareInput.addEventListener("change", async () => {
-  const file = firmwareInput.files?.[0];
-  if (!file) return;
-  const id = adapterSelect.value as AdapterId;
-  const bytes = new Uint8Array(await file.arrayBuffer());
-  try {
-    await getAdapterClient(id).call("loadFirmware", bytes);
-    logLine(`loaded ${file.name}`);
-  } catch (err) {
-    logLine(`load failed: ${(err as Error).message}`);
-  }
 });
 
 function activeClient() {

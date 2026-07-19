@@ -1,9 +1,10 @@
 # physicalsim
 
-Native desktop physcomp simulator host.
+Native desktop PComp simulator host.
 
 CPU Emulators:
-- c
+- RP2040 Microcontroller
+- Arduino 8-bit AVR Microcontroller 
 
 ## Repository layout
 
@@ -99,8 +100,11 @@ npm run typecheck     # tsc --noEmit across common/adapters/shell
 compiled directly under strict mode; it doesn't affect `npm run build`, which
 uses esbuild/Vite transpilation rather than `tsc`.
 
-Firmware files are loaded as Intel HEX (`.hex`) through the shell's file
-picker; both adapters share a minimal parser in `web/common/src/intel-hex.ts`.
+No firmware loading yet — `start`/`stop`/`step`/`reset` run each adapter's
+CPU against whatever's already in its (empty) flash/program memory. That's
+deliberate for now: this stage is about the control-flow architecture
+(C++ <-> JS <-> Worker <-> CPU) working end to end, not real simulation
+output. Loading and exporting firmware is a later step.
 
 ## Native <-> JS bridge
 
@@ -116,10 +120,6 @@ adapters execute).
 curl -X POST http://127.0.0.1:<port>/bridge/rp2040/start
 curl -X POST http://127.0.0.1:<port>/bridge/rp2040/step -d '5'
 curl -X POST http://127.0.0.1:<port>/bridge/rp2040/stop
-
-# Load firmware: params must be {"firmwareBase64": "<base64-encoded .hex>"}
-curl -X POST http://127.0.0.1:<port>/bridge/rp2040/loadFirmware \
-  -d "{\"firmwareBase64\":\"$(base64 -w0 firmware.hex)\"}"
 
 # Last known state (from the adapter's own stateChange events)
 curl http://127.0.0.1:<port>/bridge/rp2040/state

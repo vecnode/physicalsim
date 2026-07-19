@@ -58,7 +58,6 @@ oversight.
 interface SimulatorAdapter {
   readonly id: string;
   init(config: unknown): Promise<void>;
-  loadFirmware(bytes: Uint8Array): Promise<void>;
   start(): void;
   stop(): void;
   step(n: number): void;
@@ -67,10 +66,15 @@ interface SimulatorAdapter {
 }
 ```
 
-Also home to `intel-hex.ts` (firmware parsing, shared by both adapters) and
-`worker-host.ts` (`hostAdapter()`, wires any `SimulatorAdapter` to the
-postMessage RPC protocol — every adapter's `worker.ts` is a two-line file
-that just calls this).
+No firmware loading yet — deliberately. Right now `start`/`step` just runs
+each adapter's CPU against whatever's already in its (empty) flash/program
+memory; this stage is about the control-flow architecture working end to
+end (C++ <-> JS <-> Worker <-> CPU), not real simulation output. Loading
+(and exporting) firmware is a later addition to `SimulatorAdapter`.
+
+Also home to `worker-host.ts` (`hostAdapter()`, wires any `SimulatorAdapter`
+to the postMessage RPC protocol — every adapter's `worker.ts` is a two-line
+file that just calls this).
 
 **`web/adapters/{rp2040,avr8}`** — one package per simulator. Each
 `adapter.ts` implements `SimulatorAdapter` against its library; each
@@ -89,8 +93,8 @@ the coordinating:
   the UI and the native bridge both call `getAdapterClient(id)` and get the
   *same* running instance, so driving an adapter from one side is visible
   from the other.
-- `main.ts` — the black/white control UI (adapter picker, firmware file
-  input, start/stop/step/reset, live state readout).
+- `main.ts` — the black/white control UI (adapter picker,
+  start/stop/step/reset, live state readout).
 - `native-bridge.ts` + `native-notify.ts` — the JS half of the native<->JS
   bridge (next section). Imported into `main.ts` for its side effect
   (registers `window.physicalsimBridge`); harmless in a plain browser tab,

@@ -89,9 +89,11 @@ tracing. When something in the bridge doesn't reply:
 - Black-and-white visual design (`web/shell/src/style.css`), no color
   system to extend — this was an explicit user requirement, not a
   placeholder.
-- Firmware format is Intel HEX only (`web/common/src/intel-hex.ts`),
-  matching how both upstream simulator demos load firmware. No UF2/ELF
-  support exists; don't assume it does.
+- No firmware loading right now — deliberately. `SimulatorAdapter.start()`/
+  `step()` run each adapter's CPU against whatever's already in its (empty)
+  flash/program memory. Don't reintroduce firmware loading (Intel HEX or
+  otherwise) unless asked; the current focus is the control-flow
+  architecture (C++ <-> JS <-> Worker <-> CPU), not simulation output.
 - The native shell (webview + httplib + cpp-embedlib) is intentionally
   *not* Ultralight/CEF. Cross-platform JS-engine consistency is a known,
   explicitly deferred tradeoff — don't "fix" it unprompted.

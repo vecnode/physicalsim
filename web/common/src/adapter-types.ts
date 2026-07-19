@@ -9,7 +9,6 @@ export interface SimState {
 export interface SimulatorAdapter {
   readonly id: string;
   init(config: unknown): Promise<void>;
-  loadFirmware(bytes: Uint8Array): Promise<void>;
   start(): void;
   stop(): void;
   step(n: number): void;
@@ -24,7 +23,6 @@ export interface SimulatorAdapter {
 
 export type AdapterMethod =
   | "init"
-  | "loadFirmware"
   | "start"
   | "stop"
   | "step"

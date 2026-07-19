@@ -20,35 +20,10 @@ interface BridgeRequest {
   params?: unknown;
 }
 
-interface FirmwarePayload {
-  firmwareBase64: string;
-}
-
-function isFirmwarePayload(value: unknown): value is FirmwarePayload {
-  return (
-    typeof value === "object" &&
-    value !== null &&
-    typeof (value as FirmwarePayload).firmwareBase64 === "string"
-  );
-}
-
-function decodeBase64(base64: string): Uint8Array {
-  const binary = atob(base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) {
-    bytes[i] = binary.charCodeAt(i);
-  }
-  return bytes;
-}
-
 async function handleDispatch(req: BridgeRequest): Promise<void> {
   try {
     const client = getAdapterClient(req.adapter);
-    const params =
-      req.method === "loadFirmware" && isFirmwarePayload(req.params)
-        ? decodeBase64(req.params.firmwareBase64)
-        : req.params;
-    const result = await client.call(req.method, params);
+    const result = await client.call(req.method, req.params);
     notifyNative({ id: req.id, result: result ?? null });
   } catch (err) {
     notifyNative({ id: req.id, error: err instanceof Error ? err.message : String(err) });

@@ -17,11 +17,11 @@
 // -----------------------------
 // Build/Version Metadata
 // -----------------------------
-#ifndef WEBVIEW_BOOST_APP_VERSION
-#define WEBVIEW_BOOST_APP_VERSION "0.1.0"
+#ifndef PHYSICALSIM_VERSION
+#define PHYSICALSIM_VERSION "0.1.0"
 #endif
-#ifndef WEBVIEW_BOOST_APP_BUILD
-#define WEBVIEW_BOOST_APP_BUILD __DATE__ " " __TIME__
+#ifndef PHYSICALSIM_BUILD
+#define PHYSICALSIM_BUILD __DATE__ " " __TIME__
 #endif
 
 
@@ -100,7 +100,7 @@ void apply_windows_icons(webview::webview &w) {
     return;
   }
 
-  const auto icon_dir = get_executable_dir() / "icons";
+  const auto icon_dir = get_executable_dir() / "assets";
   const auto small_icon_path = (icon_dir / "app_icon_small.ico").wstring();
   const auto large_icon_path = (icon_dir / "app_icon.ico").wstring();
 
@@ -153,12 +153,12 @@ void apply_linux_icon(webview::webview &w) {
   // Prefer PNG (reliably supported by gdk-pixbuf on all distros).
   // ICO entries are kept as fallback for environments that have the loader.
   const std::filesystem::path candidates[] = {
-      exe_dir / "icons" / "app_icon.png",
-      exe_dir / "icons" / "app_icon.ico",
-      exe_dir / "icons" / "app_icon_small.ico",
-      std::filesystem::current_path() / "icons" / "app_icon.png",
-      std::filesystem::current_path() / "icons" / "app_icon.ico",
-      std::filesystem::current_path() / "icons" / "app_icon_small.ico"};
+      exe_dir / "assets" / "app_icon.png",
+      exe_dir / "assets" / "app_icon.ico",
+      exe_dir / "assets" / "app_icon_small.ico",
+      std::filesystem::current_path() / "assets" / "app_icon.png",
+      std::filesystem::current_path() / "assets" / "app_icon.ico",
+      std::filesystem::current_path() / "assets" / "app_icon_small.ico"};
 
   for (const auto &icon_path : candidates) {
     if (!std::filesystem::exists(icon_path)) {
@@ -328,8 +328,8 @@ int main(int argc, char **argv) {
   }
 
   // --- Print version/build info on startup (stdout, not UI) ---
-  std::cout << "physicalsim v" << WEBVIEW_BOOST_APP_VERSION
-            << " (" << WEBVIEW_BOOST_APP_BUILD << ")\n"
+  std::cout << "physicalsim v" << PHYSICALSIM_VERSION
+            << " (" << PHYSICALSIM_BUILD << ")\n"
             << "Copyright (c) 2026 vecnode\n";
 
 

@@ -14,7 +14,7 @@ missing `public/` entirely on a clean checkout):
 ```sh
 cd web && npm install && npm run build && cd ..
 cmake -B build
-cmake --build build --target webview-app -j --config Debug
+cmake --build build --target physicalsim -j --config Debug
 ```
 
 `npm run typecheck` (in `web/`) surfaces one pre-existing type-narrowing
@@ -68,7 +68,7 @@ params array, not the `{id,method,params}` envelope; and the stray-`.js`
 class-field crash above) were only found by actually running calls and
 tracing. When something in the bridge doesn't reply:
 
-- Run headless (`webview-app --headless`), it prints the bound port.
+- Run headless (`physicalsim --headless`), it prints the bound port.
 - `curl -X POST http://127.0.0.1:<port>/bridge/<adapter>/<method>` with a
   JSON body — a hang past ~5s means `dispatch_bridge_call()` timed out.
 - If you need to see what's actually happening in the real webview window

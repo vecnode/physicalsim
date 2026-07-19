@@ -57,20 +57,20 @@ echo "[2/4] Configuring portable Release build..."
     -DCMAKE_BUILD_TYPE=Release
 
 # --- Build Release target ---------------------------------------------------
-echo "[3/4] Building webview-app (Release)..."
-"$CMAKE_EXE" --build build --target webview-app -j
+echo "[3/4] Building physicalsim (Release)..."
+"$CMAKE_EXE" --build build --target physicalsim -j
 
 # --- Export portable package ------------------------------------------------
 echo "[4/4] Exporting package to: $OUT_DIR"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-cp "build/webview-app" "$OUT_DIR/webview-app"
-chmod +x "$OUT_DIR/webview-app"
+cp "build/physicalsim" "$OUT_DIR/physicalsim"
+chmod +x "$OUT_DIR/physicalsim"
 
-# Copy icons (PNG preferred on Linux; ICO files included as well)
-if [[ -d "icons" ]]; then
-    cp -r "icons" "$OUT_DIR/icons"
+# Copy assets (PNG preferred on Linux; ICO files included as well)
+if [[ -d "assets" ]]; then
+    cp -r "assets" "$OUT_DIR/assets"
 fi
 
 # On Linux, webkit2gtk is a system library — no runtime folder to bundle.

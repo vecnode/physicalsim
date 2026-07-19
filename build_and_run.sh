@@ -3,7 +3,7 @@ set -euo pipefail
 
 # ===========================================================================
 # vecnode 2026 - Linux Release Build and Run Script
-# Purpose: Configure, build, package, and run webview-app using a clean
+# Purpose: Configure, build, package, and run physicalsim using a clean
 # GCC/Clang toolchain. Mirrors the functionality of build_and_run.bat and
 # package_release.bat on Windows.
 # ===========================================================================
@@ -73,30 +73,30 @@ echo "[1/5] Building web/ (npm install + vite build -> public/)"
 echo "[2/5] Configuring CMake (Release)"
 "$CMAKE_EXE" -B build -DCMAKE_BUILD_TYPE=Release
 
-echo "[3/5] Building webview-app (Release)"
-"$CMAKE_EXE" --build build --target webview-app -j
+echo "[3/5] Building physicalsim (Release)"
+"$CMAKE_EXE" --build build --target physicalsim -j
 
 echo "[4/5] Packaging to: $OUT_DIR"
 rm -rf "$OUT_DIR"
 mkdir -p "$OUT_DIR"
 
-cp "build/webview-app" "$OUT_DIR/webview-app"
-chmod +x "$OUT_DIR/webview-app"
+cp "build/physicalsim" "$OUT_DIR/physicalsim"
+chmod +x "$OUT_DIR/physicalsim"
 
-# Copy icons if present (source icons/ directory)
-if [[ -d "icons" ]]; then
-    cp -r "icons" "$OUT_DIR/icons"
+# Copy assets if present (source assets/ directory)
+if [[ -d "assets" ]]; then
+    cp -r "assets" "$OUT_DIR/assets"
 fi
 
 # On Linux, webkit2gtk is a system library — no runtime files need bundling.
 
-echo "[5/5] Running webview-app"
-if [[ ! -x "$OUT_DIR/webview-app" ]]; then
-    echo "ERROR: $OUT_DIR/webview-app not found or not executable."
+echo "[5/5] Running physicalsim"
+if [[ ! -x "$OUT_DIR/physicalsim" ]]; then
+    echo "ERROR: $OUT_DIR/physicalsim not found or not executable."
     exit 1
 fi
 
-"$OUT_DIR/webview-app"
+"$OUT_DIR/physicalsim"
 
 echo
 echo "Success."

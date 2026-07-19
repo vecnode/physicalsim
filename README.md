@@ -3,8 +3,18 @@
 Native desktop PComp simulator host.
 
 CPU Emulators:
-- RP2040 Microcontroller
-- Arduino 8-bit AVR Microcontroller 
+
+- Arduino 8-bit AVR `avr8js`
+	- Arduino Uno
+	- Arduino Nano
+	- Arduino Pro Mini
+
+- RP2040 `rp2040js`
+	- Raspberry Pi Pico
+	- Adafruit Feather RP2040
+	- SparkFun Pro Micro RP2040
+	- Pimoroni Tiny RP2040
+
 
 ## Repository layout
 

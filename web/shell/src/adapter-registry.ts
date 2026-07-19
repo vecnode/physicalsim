@@ -22,14 +22,13 @@ function createWorker(id: AdapterId): Worker {
 
 const clients = new Map<AdapterId, AdapterClient>();
 
-// A running adapter emits a stateChange roughly every tick (see
-// STEPS_PER_TICK in each adapter.ts) — effectively continuously. Each one
-// forwarded to native round-trips through webview eval()/bind() on the UI
-// thread; forwarding every single event floods that channel and can starve
-// new dispatch_bridge_call()s in src/main.cpp long enough to time out. The
-// UI's own onStateChange subscribers (main.ts) still get every event —
-// only the native forwarding is throttled, since only that goes through
-// the native round trip.
+// Each adapter already caps how often it emits a stateChange while running
+// (see EMIT_INTERVAL_MS in adapter.ts — that's what keeps the UI responsive
+// no matter how long a run goes on). This second throttle is specifically
+// for the native<->JS bridge: every event forwarded to native round-trips
+// through webview eval()/bind() on the UI thread, and even the
+// adapter-level rate is enough to starve a freshly-dispatched
+// dispatch_bridge_call() in src/main.cpp long enough to time out.
 const NATIVE_FORWARD_INTERVAL_MS = 200;
 const lastForwardedAt = new Map<AdapterId, number>();
 

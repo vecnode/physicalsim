@@ -21,13 +21,6 @@ simulators/
   avr8js/             git submodule -> https://github.com/vecnode/avr8js
 ```
 
-Simulator libraries are consumed directly from their submodule source
-(`simulators/<name>/src`) via a Vite/tsconfig alias in `web/shell/vite.config.ts`
-and each adapter's `tsconfig.json`, rather than a pre-built npm package.
-Swapping or adding a simulator later means: add/point a submodule, add its
-alias entry, and add an adapter package implementing `SimulatorAdapter`
-(`web/common/src/adapter-types.ts`) — nothing else in the shell changes.
-
 ## Reproduce
 
 ```sh
@@ -80,9 +73,6 @@ cmake --build build --target physicalsim -j --config Release
 
 # Headless
 ./build/physicalsim --headless
-
-# Helper script (same flow)
-./build_and_run.sh
 ```
 
 ### Web/ development
@@ -95,25 +85,8 @@ npm run build         # production build -> ../public (embedded by CMake)
 npm run typecheck     # tsc --noEmit across common/adapters/shell
 ```
 
-`npm run typecheck` surfaces one pre-existing type-narrowing nuance inside
-`avr8js`'s own `adc.ts` (unrelated to this repo's code) when its source is
-compiled directly under strict mode; it doesn't affect `npm run build`, which
-uses esbuild/Vite transpilation rather than `tsc`.
-
-No firmware loading yet — `start`/`stop`/`step`/`reset` run each adapter's
-CPU against whatever's already in its (empty) flash/program memory. That's
-deliberate for now: this stage is about the control-flow architecture
-(C++ <-> JS <-> Worker <-> CPU) working end to end, not real simulation
-output. Loading and exporting firmware is a later step.
 
 ## Native <-> JS bridge
-
-The C++ shell can drive any adapter directly over HTTP, independent of the
-UI — this is the intended path for an external caller like droidcli, which
-talks only to the C++ process, never to the JS/TS layer directly. Works in
-both windowed and `--headless` mode (headless still runs the embedded
-webview's JS engine, just with the window hidden — that's where the
-adapters execute).
 
 ```sh
 # Start/stop/step/reset an adapter. Body is a JSON params object (or empty).
@@ -125,23 +98,6 @@ curl -X POST http://127.0.0.1:<port>/bridge/rp2040/stop
 curl http://127.0.0.1:<port>/bridge/rp2040/state
 ```
 
-Implementation: `src/main.cpp` calls into the page via webview's `eval()`
-(`window.physicalsimBridge.dispatch(...)`, see `web/shell/src/native-bridge.ts`)
-and receives replies/state events back via a webview `bind()`
-(`window.physicalsimReply`, see `web/shell/src/native-notify.ts`), correlated
-by request id and blocked on with a 5s timeout in `dispatch_bridge_call()`.
-Both the UI and the native bridge share the same running adapter instances
-(`web/shell/src/adapter-registry.ts`) — driving an adapter from one side is
-visible from the other.
-
-Known limitation: state-change forwarding to native is throttled to 5/s per
-adapter (`NATIVE_FORWARD_INTERVAL_MS` in `adapter-registry.ts`) since every
-event round-trips through `eval()`/`bind()` on the UI thread and an
-unthrottled stream can starve new bridge commands long enough to time out.
-This fixes the common single-adapter case; running multiple adapters
-simultaneously under heavy back-to-back bridge calls can still occasionally
-time out — increase the timeout in `dispatch_bridge_call()` or the throttle
-interval if this becomes a real problem.
 
 ## Dependencies
 
@@ -171,3 +127,7 @@ Downloaded automatically at configure/build time (`FetchContent`):
 	- https://github.com/yhirose/cpp-embedlib
 - `nlohmann/json`
 	- https://github.com/nlohmann/json
+
+## License
+
+Licensed under [Apache 2.0](./LICENSE).

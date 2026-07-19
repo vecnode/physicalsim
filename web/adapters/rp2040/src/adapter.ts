@@ -1,8 +1,6 @@
 import { RP2040 } from "rp2040js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
-import { loadIntelHex } from "@physicalsim/common";
 
-const FLASH_BASE = 0x10000000;
 const STEPS_PER_TICK = 20000;
 
 export class Rp2040Adapter implements SimulatorAdapter {
@@ -14,19 +12,9 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private listeners = new Set<(state: SimState) => void>();
 
   async init(_config: unknown): Promise<void> {
-    // RP2040 constructor already resets the core; nothing else required
-    // until firmware is loaded.
-  }
-
-  async loadFirmware(bytes: Uint8Array): Promise<void> {
-    this.stop();
-    const hexText = new TextDecoder().decode(bytes);
-    loadIntelHex(hexText, this.mcu.flash, FLASH_BASE);
-    // No bootrom is loaded, so boot straight into the flash image's own
-    // vector table (standard for a minimal, bootrom-less emulation).
-    this.mcu.core.VTOR = FLASH_BASE;
-    this.mcu.core.reset();
-    this.emitState();
+    // RP2040 constructor already resets the core; nothing else required.
+    // No firmware loading yet — this just runs the CPU against whatever
+    // is in flash/bootrom (empty), to exercise start/stop/step/reset.
   }
 
   start(): void {

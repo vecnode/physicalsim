@@ -1,12 +1,12 @@
 # ============================================================================
 # vecnode 2026 - Build Configuration
-# Purpose: Configure webview-boost-app with secure defaults and portable
+# Purpose: Configure physicalsim with secure defaults and portable
 # Windows packaging support.
 # ============================================================================
 
 # ---- Project baseline -------------------------------------------------------
 cmake_minimum_required(VERSION 3.20)
-project(webview-boost-app CXX)
+project(physicalsim CXX)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -36,10 +36,10 @@ if(WIN32 AND MSVC)
                 if(_value_lower MATCHES "${_pat}")
                     if(_var STREQUAL "PATH")
                         message(WARNING
-                            "[webview-app] PATH contains '${_pat}'. The Windows launcher will try to repair the build environment, but a clean Visual Studio Developer Command Prompt is recommended.")
+                            "[physicalsim] PATH contains '${_pat}'. The Windows launcher will try to repair the build environment, but a clean Visual Studio Developer Command Prompt is recommended.")
                     else()
                         message(FATAL_ERROR
-                            "[webview-app] Unsafe Windows build environment detected. "
+                            "[physicalsim] Unsafe Windows build environment detected. "
                             "${_var} contains '${_pat}', so MSVC may pick up MinGW/MSYS2 "
                             "headers instead of the Windows SDK. Use a clean Visual Studio "
                             "Developer Command Prompt and remove MSYS2/MinGW entries from include variables."
@@ -103,7 +103,7 @@ cpp_embedlib_add(WebAssets
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(webview-app src/main.cpp)
+add_executable(physicalsim src/main.cpp)
 
 function(apply_hardening target_name)
     if(MSVC)
@@ -137,9 +137,9 @@ function(apply_hardening target_name)
     endif()
 endfunction()
 
-apply_hardening(webview-app)
+apply_hardening(physicalsim)
 
-target_link_libraries(webview-app PRIVATE
+target_link_libraries(physicalsim PRIVATE
     httplib::httplib
     webview::core
     WebAssets
@@ -150,7 +150,7 @@ target_link_libraries(webview-app PRIVATE
 )
 
 if(APPLE)
-    target_link_libraries(webview-app PRIVATE
+    target_link_libraries(physicalsim PRIVATE
         "-framework CoreFoundation"
         "-framework Security"
     )
@@ -162,30 +162,30 @@ if(WIN32)
     # _WIN32_WINNT=0x0A00 targets Windows 10 and enables modern async I/O APIs.
     # WIN32_LEAN_AND_MEAN keeps windows.h slim so it doesn't clash with Boost/STL.
     # NOMINMAX prevents the windows.h min/max macros from conflicting with std::min/max.
-    target_compile_definitions(webview-app PRIVATE
+    target_compile_definitions(physicalsim PRIVATE
         _WIN32_WINNT=0x0A00
         WIN32_LEAN_AND_MEAN
         NOMINMAX
     )
-    target_link_libraries(webview-app PRIVATE
+    target_link_libraries(physicalsim PRIVATE
         ws2_32
         mswsock
     )
 
-    target_compile_definitions(webview-app PRIVATE
+    target_compile_definitions(physicalsim PRIVATE
         $<$<BOOL:${INCLUDE_TERMINAL_ON_RELEASE}>:INCLUDE_TERMINAL_ON_RELEASE=1>
         $<$<NOT:$<BOOL:${INCLUDE_TERMINAL_ON_RELEASE}>>:INCLUDE_TERMINAL_ON_RELEASE=0>
     )
 
     if(MSVC AND NOT INCLUDE_TERMINAL_ON_RELEASE)
-        target_link_options(webview-app PRIVATE
+        target_link_options(physicalsim PRIVATE
             $<$<CONFIG:Release>:/SUBSYSTEM:WINDOWS>
             $<$<CONFIG:Release>:/ENTRY:mainCRTStartup>
         )
     endif()
 
     if(MSVC AND STATIC_MSVC_RUNTIME_RELEASE)
-        set_property(TARGET webview-app PROPERTY
+        set_property(TARGET physicalsim PROPERTY
             MSVC_RUNTIME_LIBRARY "$<$<CONFIG:Debug>:MultiThreadedDebugDLL>$<$<NOT:$<CONFIG:Debug>>:MultiThreaded>"
         )
     endif()
@@ -206,18 +206,18 @@ if(WIN32)
         "${CMAKE_BINARY_DIR}/_deps/microsoft_web_webview2-src/build/native/${_wv2_arch}/WebView2Loader.dll"
     )
 
-    add_custom_command(TARGET webview-app POST_BUILD
+    add_custom_command(TARGET physicalsim POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${_webview2_loader_dll}"
-            $<TARGET_FILE_DIR:webview-app>/WebView2Loader.dll
+            $<TARGET_FILE_DIR:physicalsim>/WebView2Loader.dll
         COMMAND ${CMAKE_COMMAND} -E make_directory
-            $<TARGET_FILE_DIR:webview-app>/icons
+            $<TARGET_FILE_DIR:physicalsim>/assets
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon_small.ico
-            $<TARGET_FILE_DIR:webview-app>/icons/app_icon_small.ico
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/app_icon_small.ico
+            $<TARGET_FILE_DIR:physicalsim>/assets/app_icon_small.ico
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            ${CMAKE_CURRENT_SOURCE_DIR}/icons/app_icon.ico
-            $<TARGET_FILE_DIR:webview-app>/icons/app_icon.ico
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/app_icon.ico
+            $<TARGET_FILE_DIR:physicalsim>/assets/app_icon.ico
         COMMENT "Copying runtime files to executable directory"
     )
 
@@ -228,15 +228,15 @@ if(WIN32)
             )
         endif()
 
-        target_compile_definitions(webview-app PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=1)
+        target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=1)
 
-        add_custom_command(TARGET webview-app POST_BUILD
+        add_custom_command(TARGET physicalsim POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_directory
                 "${WEBVIEW2_FIXED_RUNTIME_DIR}"
-                $<TARGET_FILE_DIR:webview-app>/WebView2Runtime
+                $<TARGET_FILE_DIR:physicalsim>/WebView2Runtime
             COMMENT "Bundling fixed WebView2 runtime"
         )
     else()
-        target_compile_definitions(webview-app PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=0)
+        target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=0)
     endif()
 endif()

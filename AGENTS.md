@@ -14,7 +14,7 @@ missing `public/` entirely on a clean checkout):
 ```sh
 cd web && npm install && npm run build && cd ..
 cmake -B build
-cmake --build build --target webview-app -j --config Debug
+cmake --build build --target physicalsim -j --config Debug
 ```
 
 `npm run typecheck` (in `web/`) surfaces one pre-existing type-narrowing
@@ -68,7 +68,7 @@ params array, not the `{id,method,params}` envelope; and the stray-`.js`
 class-field crash above) were only found by actually running calls and
 tracing. When something in the bridge doesn't reply:
 
-- Run headless (`webview-app --headless`), it prints the bound port.
+- Run headless (`physicalsim --headless`), it prints the bound port.
 - `curl -X POST http://127.0.0.1:<port>/bridge/<adapter>/<method>` with a
   JSON body — a hang past ~5s means `dispatch_bridge_call()` timed out.
 - If you need to see what's actually happening in the real webview window
@@ -89,9 +89,11 @@ tracing. When something in the bridge doesn't reply:
 - Black-and-white visual design (`web/shell/src/style.css`), no color
   system to extend — this was an explicit user requirement, not a
   placeholder.
-- Firmware format is Intel HEX only (`web/common/src/intel-hex.ts`),
-  matching how both upstream simulator demos load firmware. No UF2/ELF
-  support exists; don't assume it does.
+- No firmware loading right now — deliberately. `SimulatorAdapter.start()`/
+  `step()` run each adapter's CPU against whatever's already in its (empty)
+  flash/program memory. Don't reintroduce firmware loading (Intel HEX or
+  otherwise) unless asked; the current focus is the control-flow
+  architecture (C++ <-> JS <-> Worker <-> CPU), not simulation output.
 - The native shell (webview + httplib + cpp-embedlib) is intentionally
   *not* Ultralight/CEF. Cross-platform JS-engine consistency is a known,
   explicitly deferred tradeoff — don't "fix" it unprompted.

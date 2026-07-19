@@ -18,9 +18,6 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
         case "init":
           result = await adapter.init(params);
           break;
-        case "loadFirmware":
-          result = await adapter.loadFirmware(params as Uint8Array);
-          break;
         case "start":
           result = adapter.start();
           break;

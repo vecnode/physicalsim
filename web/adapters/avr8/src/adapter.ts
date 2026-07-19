@@ -13,7 +13,6 @@ import {
   usart0Config,
 } from "avr8js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
-import { loadIntelHex } from "@physicalsim/common";
 
 // ATmega328p (Arduino Uno) parameters.
 const FLASH_WORDS = 0x8000;
@@ -38,17 +37,9 @@ export class Avr8Adapter implements SimulatorAdapter {
   private listeners = new Set<(state: SimState) => void>();
 
   async init(_config: unknown): Promise<void> {
+    // No firmware loading yet — this just runs the CPU against an empty
+    // program, to exercise start/stop/step/reset.
     this.attachPeripherals();
-  }
-
-  async loadFirmware(bytes: Uint8Array): Promise<void> {
-    this.stop();
-    const hexText = new TextDecoder().decode(bytes);
-    this.program = new Uint16Array(FLASH_WORDS);
-    loadIntelHex(hexText, new Uint8Array(this.program.buffer));
-    this.cpu = new CPU(this.program);
-    this.attachPeripherals();
-    this.emitState();
   }
 
   start(): void {

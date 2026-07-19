@@ -78,8 +78,8 @@ echo     Using fixed runtime from: !FIXED_RUNTIME_DIR!
 if errorlevel 1 goto :error
 
 REM --- Build Release target ---------------------------------------------------
-echo [3/4] Building webview-app ^(Release^)...
-"%CMAKE_EXE%" --build build --target webview-app -j --config Release
+echo [3/4] Building physicalsim ^(Release^)...
+"%CMAKE_EXE%" --build build --target physicalsim -j --config Release
 if errorlevel 1 goto :error
 
 REM --- Export portable package ------------------------------------------------
@@ -87,15 +87,15 @@ echo [4/4] Exporting package to: %OUT_DIR%
 if exist "%OUT_DIR%" rd /s /q "%OUT_DIR%"
 mkdir "%OUT_DIR%"
 
-copy /y "build\Release\webview-app.exe" "%OUT_DIR%\webview-app.exe" >nul
+copy /y "build\Release\physicalsim.exe" "%OUT_DIR%\physicalsim.exe" >nul
 if errorlevel 1 goto :error
 
 if exist "build\Release\WebView2Loader.dll" (
   copy /y "build\Release\WebView2Loader.dll" "%OUT_DIR%\WebView2Loader.dll" >nul
 )
 
-if exist "build\Release\icons" (
-  xcopy "build\Release\icons" "%OUT_DIR%\icons" /E /I /Y >nul
+if exist "build\Release\assets" (
+  xcopy "build\Release\assets" "%OUT_DIR%\assets" /E /I /Y >nul
 )
 
 if exist "build\Release\WebView2Runtime" (

@@ -3,7 +3,7 @@ setlocal EnableExtensions EnableDelayedExpansion
 
 REM ===========================================================================
 REM vecnode 2026 - Windows Debug Build and Run Script
-REM Purpose: Configure, build, and run webview-app using a clean MSVC toolchain.
+REM Purpose: Configure, build, and run physicalsim using a clean MSVC toolchain.
 REM ===========================================================================
 
 REM --- Script context ---------------------------------------------------------
@@ -136,17 +136,17 @@ echo [2/4] Configuring CMake
 "%CMAKE_EXE%" -B build
 if errorlevel 1 goto :error
 
-echo [3/4] Building webview-app (Debug)
-"%CMAKE_EXE%" --build build --target webview-app -j --config Debug
+echo [3/4] Building physicalsim (Debug)
+"%CMAKE_EXE%" --build build --target physicalsim -j --config Debug
 if errorlevel 1 goto :error
 
-echo [4/4] Running webview-app
-if not exist ".\build\Debug\webview-app.exe" (
-	echo ERROR: .\build\Debug\webview-app.exe not found.
+echo [4/4] Running physicalsim
+if not exist ".\build\Debug\physicalsim.exe" (
+	echo ERROR: .\build\Debug\physicalsim.exe not found.
 	goto :error
 )
 
-".\build\Debug\webview-app.exe"
+".\build\Debug\physicalsim.exe"
 if errorlevel 1 goto :error
 
 echo.

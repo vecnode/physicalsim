@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2022", "WebWorker"],
+    "strict": false,
+    "useDefineForClassFields": false,
+    "paths": {
+      "rp2040js": ["../../../simulators/rp2040js/src/index.ts"],
+      "@physicalsim/common": ["../../common/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

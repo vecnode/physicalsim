@@ -1,0 +1,20 @@
+{
+  "name": "@physicalsim/shell",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@physicalsim/adapter-avr8": "*",
+    "@physicalsim/adapter-rp2040": "*",
+    "@physicalsim/common": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vite": "^6.0.0"
+  }
+}

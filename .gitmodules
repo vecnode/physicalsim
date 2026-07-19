@@ -1,0 +1,6 @@
+[submodule "simulators/rp2040js"]
+	path = simulators/rp2040js
+	url = https://github.com/vecnode/rp2040js.git
+[submodule "simulators/avr8js"]
+	path = simulators/avr8js
+	url = https://github.com/vecnode/avr8js.git

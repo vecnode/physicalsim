@@ -1,0 +1,11 @@
+{
+  "name": "@physicalsim/adapter-rp2040",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "main": "./src/adapter.ts",
+  "types": "./src/adapter.ts",
+  "dependencies": {
+    "@physicalsim/common": "*"
+  }
+}

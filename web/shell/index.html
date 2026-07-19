@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
+  <meta name="referrer" content="no-referrer">
+  <title>physicalsim</title>
+  <link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+  <main class="app">
+    <header>
+      <h1>physicalsim</h1>
+    </header>
+
+    <section class="panel">
+      <label for="adapter-select">Simulator</label>
+      <select id="adapter-select">
+        <option value="rp2040">rp2040</option>
+        <option value="avr8">avr8</option>
+      </select>
+
+      <label for="firmware-input">Firmware (.hex)</label>
+      <input id="firmware-input" type="file" accept=".hex">
+
+      <div class="controls">
+        <button id="start-btn" type="button">Start</button>
+        <button id="stop-btn" type="button">Stop</button>
+        <button id="step-btn" type="button">Step</button>
+        <button id="reset-btn" type="button">Reset</button>
+      </div>
+    </section>
+
+    <section class="panel state">
+      <dl id="state-list">
+        <dt>status</dt><dd id="state-running">idle</dd>
+        <dt>cycles</dt><dd id="state-cycles">0</dd>
+        <dt>pc</dt><dd id="state-pc">0x0</dd>
+      </dl>
+    </section>
+
+    <output id="log" aria-live="polite"></output>
+  </main>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>

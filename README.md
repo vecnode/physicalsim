@@ -2,6 +2,8 @@
 
 Native desktop physcomp simulator host.
 
+CPU Emulators:
+- c
 
 ## Repository layout
 

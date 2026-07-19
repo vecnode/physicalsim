@@ -1,13 +1,25 @@
 import { RP2040 } from "rp2040js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 
-const STEPS_PER_TICK = 20000;
 // Caps how often a *running* simulation posts a state update. The tick loop
 // itself runs unthrottled (as fast as the event loop allows) — this only
 // bounds the postMessage/DOM-update rate that follows from it, which
 // otherwise fires hundreds of times/sec forever and is what actually made
 // the UI get slower the longer a run went on.
-const EMIT_INTERVAL_MS = 100;
+const EMIT_INTERVAL_MS = 50;
+
+// The Worker is single-threaded: a `stop` message can't be processed until
+// the current tick's synchronous batch of mcu.step() calls returns control
+// to the event loop, no matter how quickly stop() itself runs. So batch
+// size directly controls worst-case stop latency. Rather than hardcode a
+// step count (whose wall-clock duration depends entirely on the host JS
+// engine's speed), self-tune it every tick to target a fixed wall-clock
+// budget — keeps stop responsive consistently across machines instead of
+// being fast on one and sluggish on another.
+const TARGET_BATCH_MS = 8;
+const MIN_BATCH_STEPS = 200;
+const MAX_BATCH_STEPS = 500_000;
+const INITIAL_BATCH_STEPS = 20_000;
 
 export class Rp2040Adapter implements SimulatorAdapter {
   readonly id = "rp2040";
@@ -16,6 +28,7 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private running = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private lastEmitAt = 0;
+  private batchSteps = INITIAL_BATCH_STEPS;
   private listeners = new Set<(state: SimState) => void>();
 
   async init(_config: unknown): Promise<void> {
@@ -61,8 +74,16 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private scheduleTick(): void {
     this.timer = setTimeout(() => {
       if (!this.running) return;
-      for (let i = 0; i < STEPS_PER_TICK; i++) {
+      const start = performance.now();
+      for (let i = 0; i < this.batchSteps; i++) {
         this.mcu.step();
+      }
+      const elapsedMs = performance.now() - start;
+      if (elapsedMs > 0) {
+        const stepsPerMs = this.batchSteps / elapsedMs;
+        this.batchSteps = Math.round(
+          Math.min(MAX_BATCH_STEPS, Math.max(MIN_BATCH_STEPS, stepsPerMs * TARGET_BATCH_MS)),
+        );
       }
       const now = Date.now();
       if (now - this.lastEmitAt >= EMIT_INTERVAL_MS) {

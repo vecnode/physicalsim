@@ -202,7 +202,46 @@ std::vector<std::uint8_t> minimal_vector_table_stub() {
   return image;
 }
 
+// Self-contained (deliberately not shared with main.cpp's own
+// get_executable_dir() helpers) so qemu_adapter.cpp stays decoupled from
+// main.cpp internals - this is the only place it's needed.
+std::filesystem::path executable_dir() {
+#ifdef _WIN32
+  wchar_t path[MAX_PATH]{};
+  const auto len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH) {
+    return std::filesystem::current_path();
+  }
+  return std::filesystem::path(path).parent_path();
+#else
+  char path[4096]{};
+  const auto len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+  if (len <= 0) {
+    return std::filesystem::current_path();
+  }
+  path[len] = '\0';
+  return std::filesystem::path(path).parent_path();
+#endif
+}
+
+std::optional<std::filesystem::path> find_bundled() {
+  const auto candidate = executable_dir() / "qemu" / kExeName;
+  std::error_code ec;
+  if (std::filesystem::exists(candidate, ec)) {
+    return candidate;
+  }
+  return std::nullopt;
+}
+
 std::optional<std::filesystem::path> find_qemu_system_arm() {
+  // A bundled copy (see CMakeLists.txt's BUNDLE_QEMU_ARM) takes priority
+  // over whatever happens to be on the system: it's the exact version
+  // this adapter was tested against, and its purpose is specifically to
+  // make packaged distribution not depend on the end user having
+  // installed QEMU themselves.
+  if (auto bundled = find_bundled()) {
+    return bundled;
+  }
   if (auto found = find_on_path()) {
     return found;
   }

@@ -76,7 +76,9 @@ cmake --build build --target physicalsim -j --config Release
 .\build_and_run.bat
 
 # One-command portable package to Desktop\Release
-# (always bundles fixed WebView2 runtime automatically)
+# (always bundles fixed WebView2 runtime; bundles qemu-system-arm too if
+# it's installed on the build machine, so the packaged app doesn't need
+# QEMU installed wherever it's run)
 .\package_release.bat
 
 # -----------------------------
@@ -143,15 +145,28 @@ Build/runtime prerequisites:
 - Linux runtime/build libs (webview GTK backend):
 	- GTK 3 development files
 	- WebKit2GTK development files
-- `qemu-system-arm` (for the `cortex-m` adapter) — not vendored or built
-  by this project; install it yourself (e.g. from
+- `qemu-system-arm` (for the `cortex-m` adapter) — not built by this
+  project. For local dev builds, install it yourself (e.g. from
   [qemu.org](https://www.qemu.org/download/), or `scoop install qemu` /
   `winget install SoftwareFreedomConservancy.QEMU` on Windows, your
-  distro's package manager on Linux). Looked up at startup on PATH, then
-  a couple of well-known install locations (e.g. `C:\Program
-  Files\qemu\` on Windows) — `avr8`/`rp2040` work fine without it, only
-  `cortex-m` needs it. Not required to build physicalsim, only to run
-  the `cortex-m` adapter.
+  distro's package manager on Linux). `avr8`/`rp2040` work fine without
+  it, only `cortex-m` needs it. Not required to build physicalsim, only
+  to run the `cortex-m` adapter.
+
+  **Packaged builds bundle their own copy** — `package_release.bat`
+  auto-detects a local QEMU install and copies `qemu-system-arm.exe` +
+  its DLLs into the output's `qemu/` folder (see `BUNDLE_QEMU_ARM` /
+  `QEMU_ARM_DIR` in `CMakeLists.txt`, same mechanism as the existing
+  `BUNDLE_WEBVIEW2_FIXED_RUNTIME` option — nothing is committed to git,
+  only copied at package time from wherever it's installed on the build
+  machine). At runtime, `find_qemu_system_arm()` (`src/qemu_adapter.cpp`)
+  checks a `qemu/` folder next to the executable *first*, before PATH or
+  any system install — so a packaged release runs standalone, with no
+  QEMU install required on the machine it's run on. Verified directly:
+  the spawned `qemu-system-arm.exe` process's path resolves to the
+  bundled copy, not the system one, even with both present. The bundled
+  copy is GPLv2 (its `COPYING` file travels with it in `qemu/`); it's
+  spawned as a separate process, never linked into physicalsim itself.
 
 Downloaded automatically at configure/build time (`FetchContent`):
 

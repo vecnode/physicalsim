@@ -17,6 +17,15 @@ option(STATIC_MSVC_RUNTIME_RELEASE "Use static MSVC runtime in non-Debug configs
 option(BUNDLE_WEBVIEW2_FIXED_RUNTIME "Bundle a fixed WebView2 runtime folder into the output" OFF)
 set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime directory")
 
+# qemu-system-arm (the "cortex-m" adapter's backend) is never built or
+# fetched by this project - like the WebView2 runtime above, this only
+# copies an *already-installed* copy into the packaged output so a
+# distributed build doesn't require the end user to have installed QEMU
+# themselves. src/qemu_adapter.cpp still falls back to PATH/well-known
+# system locations when unbundled (e.g. plain Debug dev builds).
+option(BUNDLE_QEMU_ARM "Bundle qemu-system-arm + its DLLs into the output" OFF)
+set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing qemu-system-arm.exe")
+
 include(FetchContent)
 
 if(POLICY CMP0135)
@@ -238,5 +247,44 @@ if(WIN32)
         )
     else()
         target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=0)
+    endif()
+
+    if(BUNDLE_QEMU_ARM)
+        set(_qemu_exe "${QEMU_ARM_DIR}/qemu-system-arm.exe")
+        if(NOT EXISTS "${_qemu_exe}")
+            message(FATAL_ERROR
+                "BUNDLE_QEMU_ARM is ON but qemu-system-arm.exe was not found under QEMU_ARM_DIR: ${QEMU_ARM_DIR}"
+            )
+        endif()
+
+        # qemu-system-arm.exe implicitly (not lazily) links its DLLs, so the
+        # whole top-level *.dll set has to travel with it - checked with
+        # dumpbin /dependents rather than guessing a minimal subset, which
+        # would silently break on a QEMU version bump. The share/ directory
+        # (BIOS/UEFI blobs for other architectures, ~355 MB) is not needed:
+        # the netduinoplus2 machine boots straight off -kernel, confirmed
+        # by actually running it, no -bios required.
+        file(GLOB _qemu_dlls "${QEMU_ARM_DIR}/*.dll")
+
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                $<TARGET_FILE_DIR:physicalsim>/qemu
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_qemu_exe}"
+                $<TARGET_FILE_DIR:physicalsim>/qemu/qemu-system-arm.exe
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_qemu_dlls}
+                $<TARGET_FILE_DIR:physicalsim>/qemu/
+            COMMENT "Bundling qemu-system-arm + DLLs"
+        )
+
+        if(EXISTS "${QEMU_ARM_DIR}/COPYING")
+            add_custom_command(TARGET physicalsim POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    "${QEMU_ARM_DIR}/COPYING"
+                    $<TARGET_FILE_DIR:physicalsim>/qemu/COPYING
+                COMMENT "Bundling QEMU license (GPLv2)"
+            )
+        endif()
     endif()
 endif()

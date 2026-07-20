@@ -94,11 +94,19 @@ change, and give it a `NativeAdapterClient`-style entry (fetch + poll, see
   development (`taskkill /F` on physicalsim without it left
   `qemu-system-arm.exe` running).
 - **Don't add Docker.** Explicitly decided against for this adapter —
-  spawn the native binary directly, no container. `qemu-system-arm` is a
-  runtime prerequisite (README's Dependencies section), not something
-  this project builds or vendors — bundling a redistributable copy into
-  `assets/` (matching the existing `WebView2Loader.dll` pattern in
-  `CMakeLists.txt`) is a reasonable future step, not done yet.
+  spawn the native binary directly, no container.
+- **Packaged builds bundle their own QEMU** (`BUNDLE_QEMU_ARM` in
+  `CMakeLists.txt`, wired up in `package_release.bat`) — copied from
+  wherever it's installed on the *build* machine into the output's
+  `qemu/` folder, never committed to git, same mechanism as
+  `BUNDLE_WEBVIEW2_FIXED_RUNTIME`. `find_qemu_system_arm()` in
+  `qemu_adapter.cpp` checks that folder first, before PATH or system
+  install locations. If you change what DLLs QEMU needs (e.g. after a
+  QEMU version bump changes its dependency graph), re-run `dumpbin
+  /dependents qemu-system-arm.exe` rather than guessing a minimal set —
+  the DLLs are implicitly linked, not lazily loaded, so a missing one
+  fails the whole process at load time, not at some specific feature
+  path.
 - **Debugging a stuck `start`/`step`/`reset` call**: check the QEMU log
   file in the OS temp dir first — most failures (missing binary, boot
   fault, port conflict) show up there, not as a C++ exception with a

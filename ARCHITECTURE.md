@@ -230,6 +230,30 @@ closes every handle a process owns when it terminates for *any* reason
 (crash, or an external `taskkill /F`), and closing the job's last handle
 kills every process assigned to it.
 
+**Distribution: bundled vs. system QEMU.** `find_qemu_system_arm()`
+checks three places in order: a `qemu/` folder next to physicalsim's own
+executable, then PATH, then well-known system install locations. The
+first one exists specifically so packaged builds don't require QEMU
+installed on the machine they run on — `CMakeLists.txt`'s
+`BUNDLE_QEMU_ARM` option (mirroring the pre-existing
+`BUNDLE_WEBVIEW2_FIXED_RUNTIME` pattern) copies `qemu-system-arm.exe` +
+its DLLs into the build output at package time, from wherever it's
+installed on the *build* machine — nothing is committed to git, same as
+the WebView2 runtime. `package_release.bat` auto-detects a local install
+and enables this automatically; it's a warning, not a build failure,
+when QEMU isn't found there, since `avr8`/`rp2040` don't need it.
+Verified directly during development: with both a bundled and a system
+copy present, `Get-Process qemu-system-arm | Select Path` resolved to
+the bundled one.
+
+The DLL set (114 files, ~140 MB) was determined with `dumpbin
+/dependents` rather than guessed — `qemu-system-arm.exe` implicitly
+(not lazily) links GTK/SDL/etc. even though `-nographic` never uses
+them, so the whole top-level DLL set has to travel with it. QEMU's
+`share/` directory (~355 MB of BIOS/UEFI blobs for *other*
+architectures) is not bundled — confirmed unnecessary by actually
+booting `netduinoplus2` with no `-bios` flag.
+
 ## Build pipeline
 
 `public/` is never authored by hand — it's Vite's build output

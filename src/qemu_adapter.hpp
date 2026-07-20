@@ -21,11 +21,14 @@ namespace qemu {
 
 using json = nlohmann::json;
 
-// Locates a usable qemu-system-arm executable: checks PATH first (via the
-// OS's own search order), then a short list of well-known install
-// locations per platform (e.g. the default Windows installer target).
-// Returns nullopt if not found anywhere - callers should surface this as
-// a clear, actionable error rather than trying to spawn a missing binary.
+// Locates a usable qemu-system-arm executable: checks a "qemu/" folder
+// next to physicalsim's own executable first (CMake's BUNDLE_QEMU_ARM
+// option copies one there for packaged builds - see CMakeLists.txt),
+// then PATH (via the OS's own search order), then a short list of
+// well-known install locations per platform (e.g. the default Windows
+// installer target). Returns nullopt if not found anywhere - callers
+// should surface this as a clear, actionable error rather than trying to
+// spawn a missing binary.
 std::optional<std::filesystem::path> find_qemu_system_arm();
 
 // Owns one running qemu-system-arm child process for the "cortex-m"

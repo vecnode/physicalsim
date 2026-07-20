@@ -42,6 +42,26 @@
     </section>
 
     <output id="log" aria-live="polite"></output>
+
+    <section class="panel pins">
+      <label for="pin-select">Pins (active simulator)</label>
+      <div class="select-row">
+        <select id="pin-select"></select>
+        <select id="pin-kind-select">
+          <option value="led">LED (display)</option>
+          <option value="button">Button (control)</option>
+        </select>
+        <button id="pin-read-btn" type="button">Read</button>
+        <button id="pin-attach-btn" type="button">Attach</button>
+      </div>
+      <p id="pin-unsupported" class="hint" hidden>
+        This simulator has no pin I/O yet.
+      </p>
+
+      <div id="pin-rows" class="pin-rows"></div>
+
+      <output id="pin-log" class="pin-log" aria-live="polite"></output>
+    </section>
   </main>
 
   <script type="module" src="/src/main.ts"></script>

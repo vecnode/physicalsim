@@ -58,6 +58,15 @@ input[type="file"] {
   font: inherit;
 }
 
+.select-row {
+  display: flex;
+  gap: 8px;
+}
+
+.select-row select {
+  flex: 1;
+}
+
 .controls {
   display: flex;
   gap: 8px;

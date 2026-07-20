@@ -103,7 +103,7 @@ cpp_embedlib_add(WebAssets
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp)
+add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp)
 
 function(apply_hardening target_name)
     if(MSVC)

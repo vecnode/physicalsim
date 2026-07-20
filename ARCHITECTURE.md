@@ -33,6 +33,9 @@ there over HTTP.
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
+Not shown above: a third adapter kind, `cortex-m`, has no JS/TS side at
+all — see "Two adapter kinds" below.
+
 ## Why it's split this way
 
 The native shell ([webview](https://github.com/webview/webview) +
@@ -157,6 +160,75 @@ the UI's own `onStateChange` subscribers still get every event, since only
 the native round trip is expensive. See the README's "Known limitation" for
 what this doesn't yet cover (multiple adapters running simultaneously under
 heavy concurrent bridge traffic).
+
+## Two adapter kinds: Worker-backed and native-backed
+
+`avr8`/`rp2040` are **Worker-backed**: pure JS/TS running in a Web Worker,
+reached by the UI via `postMessage` and by external callers via the bridge
+above. `cortex-m` is **native-backed**: no JS/TS library exists for ARM
+Cortex-M the way `avr8js`/`rp2040js` exist for AVR8/RP2040 (confirmed by
+research — the real, mature option for that architecture is QEMU, a
+native process, not a browser library), so `src/qemu_adapter.{hpp,cpp}`
+spawns and controls a real `qemu-system-arm` process directly from C++.
+There is nothing running in JS for this adapter at all — it's reached
+*only* through the same `/bridge/:adapter/:method` HTTP surface external
+callers already use, including by the shell UI itself
+(`web/shell/src/native-adapter-client.ts`, a `fetch()`-based client
+structurally matching the Worker-backed `AdapterClient` so
+`adapter-registry.ts`'s `getAdapterClient()` can hand either one back to
+`main.ts` without it needing to know which kind it got — see the
+`SimClient` interface in `adapter-registry.ts`).
+
+Concretely, for `cortex-m`:
+
+- `POST /bridge/:adapter/:method` branches in `src/main.cpp`: `cortex-m`
+  routes to `handle_qemu_bridge_call()` instead of `dispatch_bridge_call()`
+  (the JS-eval path), but both write into the same
+  `g_bridge_latest_state` map, so `GET /bridge/:adapter/state` needs no
+  adapter-kind-specific code at all.
+- `start`/`stop`/`reset` go over **QMP** (QEMU Machine Protocol,
+  JSON-over-TCP) — `cont`/`stop`/`system_reset`.
+- `step` goes over a **minimal GDB Remote Serial Protocol client**
+  (`$packet#checksum` framing, just enough for `s` single-step and `g`
+  register read) — QMP has no clean single-instruction-step command,
+  that's what the GDB stub exists for.
+- Because register reads require the target halted, `state()` while
+  `running` reports the last known PC/cycles *frozen* rather than live —
+  documented in `qemu_adapter.hpp`, not a bug. Polling from the UI
+  (`native-adapter-client.ts`, 200ms interval) reflects this honestly:
+  cycles/PC only move again once something actually stops/steps the CPU.
+- `cycles` in `state()` is not a real cycle count — QEMU doesn't expose
+  one over QMP/GDB for this target — it's the number of `step()` calls
+  issued, which is what it actually is, not silently relabeled.
+
+**Why a real vector table stub is baked in.** Unlike `avr8js`/`rp2040js`'s
+simplified CPU models (which happily execute whatever's in empty
+flash/bootrom as inert instructions), real ARM Cortex-M silicon requires
+a valid vector table at address 0 to boot at all — word 0 is the initial
+SP, word 1 is the initial PC. Left at all-zero, the CPU immediately
+double-faults trying to execute from (and then handle a fault from)
+address 0, and QEMU exits with `qemu: fatal: Lockup: can't escalate 3 to
+HardFault`. `minimal_vector_table_stub()` in `qemu_adapter.cpp` writes a
+10-byte image (SP + PC + one `b .` Thumb instruction, an infinite
+self-branch) to a temp file and loads it via `-kernel` — not firmware,
+just enough for the CPU to boot into a real, inert, steppable state,
+matching the other adapters' "runs, executes nothing meaningful yet"
+posture until real firmware loading exists for this adapter too.
+
+**Process lifecycle.** `-nographic` redirects QEMU's "display" to
+stdio/console — spawned with no console and no inherited handles (as a
+GUI-subsystem app would naturally want), it has nowhere valid to
+redirect to and exits almost immediately (this looked like a working
+spawn during development — the QMP handshake and one GDB register read
+completed in the brief window before the process was gone). Fixed by
+redirecting QEMU's stdout/stderr to a log file via `STARTUPINFOA`. On
+Windows, the child is also assigned to a Job Object with
+`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` — this, not the `Impl` destructor,
+is what actually guarantees `qemu-system-arm` doesn't outlive
+physicalsim: destructors only run on the normal-exit path, but Windows
+closes every handle a process owns when it terminates for *any* reason
+(crash, or an external `taskkill /F`), and closing the job's last handle
+kills every process assigned to it.
 
 ## Build pipeline
 

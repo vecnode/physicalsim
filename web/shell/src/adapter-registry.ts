@@ -68,6 +68,14 @@ export function getAdapterClient(id: AdapterId): SimClient {
       client = new NativeAdapterClient(id);
     } else {
       const workerClient = new AdapterClient(createWorker(id));
+      // Worker-backed adapters need init() before anything beyond the raw
+      // CPU works - avr8's attachPeripherals() (which sets up the GPIO
+      // ports readPin/writePin/onPinChange depend on) only runs from
+      // there, not from the constructor. Safe to fire without awaiting:
+      // postMessage delivers to the worker in order, so every call queued
+      // after this one is guaranteed to be handled after init() completes
+      // (see worker-host.ts's message handler).
+      void workerClient.call("init", undefined);
       workerClient.onStateChange((state) => {
         const now = Date.now();
         const last = lastForwardedAt.get(id) ?? 0;

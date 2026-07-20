@@ -117,3 +117,64 @@ button:disabled {
   color: var(--muted);
   white-space: pre-wrap;
 }
+
+.hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.pins .select-row select#pin-select {
+  flex: 2;
+}
+
+.pin-rows {
+  display: grid;
+  gap: 6px;
+}
+
+.pin-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.pin-row .pin-row-name {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
+.pin-row .pin-row-name .pin-row-id {
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.led-dot {
+  width: 12px;
+  height: 12px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg);
+  flex: none;
+}
+
+.led-dot.on {
+  background: var(--fg);
+}
+
+.pin-row-detach {
+  padding: 4px 10px;
+}
+
+.pin-log {
+  display: block;
+  height: 8em;
+  overflow-y: auto;
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: pre-wrap;
+  border: 1px solid var(--border);
+  padding: 8px;
+}

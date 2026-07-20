@@ -63,6 +63,17 @@ public:
   // not silently faked.
   json state() const;
 
+  // Pin I/O: unimplemented pending a spike into whether QEMU's netduinoplus2
+  // GPIO model supports external stimulus at all (see ARCHITECTURE.md /
+  // the io-pins plan). Both throw std::runtime_error unconditionally so the
+  // bridge surface is uniform across all three adapter kinds today - the
+  // shell never needs a cortex-m special case - without pretending pin
+  // access actually works. Replace with a real implementation (likely QMP
+  // or GDB memory reads/writes against the STM32 GPIO IDR/ODR registers)
+  // once that spike resolves.
+  json read_pin(const std::string &pin) const;
+  json write_pin(const std::string &pin, int value);
+
   bool running() const { return running_; }
 
 private:

@@ -12,12 +12,17 @@ export class AdapterClient {
   private nextId = 1;
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private stateListeners = new Set<(state: SimState) => void>();
+  private pinChangeListeners = new Set<(pin: string, value: number) => void>();
 
   constructor(private worker: Worker) {
     this.worker.addEventListener("message", (ev: MessageEvent<RpcResponse>) => {
       const msg = ev.data;
       if (isRpcEvent(msg)) {
-        for (const listener of this.stateListeners) listener(msg.state);
+        if (msg.event === "stateChange") {
+          for (const listener of this.stateListeners) listener(msg.state);
+        } else {
+          for (const listener of this.pinChangeListeners) listener(msg.pin, msg.value);
+        }
         return;
       }
       const entry = this.pending.get(msg.id);
@@ -45,9 +50,15 @@ export class AdapterClient {
     return () => this.stateListeners.delete(cb);
   }
 
+  onPinChange(cb: (pin: string, value: number) => void): () => void {
+    this.pinChangeListeners.add(cb);
+    return () => this.pinChangeListeners.delete(cb);
+  }
+
   terminate(): void {
     this.worker.terminate();
     this.pending.clear();
     this.stateListeners.clear();
+    this.pinChangeListeners.clear();
   }
 }

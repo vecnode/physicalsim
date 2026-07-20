@@ -14,6 +14,12 @@ export interface SimulatorAdapter {
   step(n: number): void;
   reset(): void;
   onStateChange(cb: (state: SimState) => void): () => void;
+  // Pin I/O is an optional capability - not every adapter kind supports it
+  // (e.g. a native/QEMU-backed adapter may only support a subset, or none,
+  // depending on what its underlying machine model exposes).
+  readPin?(pin: string): number | undefined;
+  writePin?(pin: string, value: number): void;
+  onPinChange?(pin: string, cb: (value: number) => void): () => void;
 }
 
 // ---- Worker RPC protocol -------------------------------------------------
@@ -26,7 +32,23 @@ export type AdapterMethod =
   | "start"
   | "stop"
   | "step"
-  | "reset";
+  | "reset"
+  | "readPin"
+  | "writePin"
+  | "subscribePin";
+
+export interface ReadPinParams {
+  pin: string;
+}
+
+export interface WritePinParams {
+  pin: string;
+  value: number;
+}
+
+export interface SubscribePinParams {
+  pin: string;
+}
 
 export interface RpcRequest {
   id: number;
@@ -44,10 +66,18 @@ export interface RpcError {
   error: string;
 }
 
-export interface RpcEvent {
+export interface StateChangeEvent {
   event: "stateChange";
   state: SimState;
 }
+
+export interface PinChangeEvent {
+  event: "pinChange";
+  pin: string;
+  value: number;
+}
+
+export type RpcEvent = StateChangeEvent | PinChangeEvent;
 
 export type RpcResponse = RpcResult | RpcError | RpcEvent;
 

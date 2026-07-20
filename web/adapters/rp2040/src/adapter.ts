@@ -1,4 +1,5 @@
 import { RP2040 } from "rp2040js";
+import type { GPIOPin } from "rp2040js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 
 // Caps how often a *running* simulation posts a state update. The tick loop
@@ -30,6 +31,10 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private lastEmitAt = 0;
   private batchSteps = INITIAL_BATCH_STEPS;
   private listeners = new Set<(state: SimState) => void>();
+
+  private pinListeners = new Map<string, Set<(value: number) => void>>();
+  private lastPinValues = new Map<string, number>();
+  private subscribedPins = new Set<number>();
 
   async init(_config: unknown): Promise<void> {
     // RP2040 constructor already resets the core; nothing else required.
@@ -69,6 +74,81 @@ export class Rp2040Adapter implements SimulatorAdapter {
   onStateChange(cb: (state: SimState) => void): () => void {
     this.listeners.add(cb);
     return () => this.listeners.delete(cb);
+  }
+
+  // Pin ids are "GP<n>", e.g. "GP25" (the Pico's onboard LED). Board-level
+  // logical names are resolved to this shape one layer up.
+  readPin(pin: string): number {
+    const gpio = this.resolvePin(pin);
+    return this.effectiveValue(gpio) ? 1 : 0;
+  }
+
+  writePin(pin: string, value: number): void {
+    const gpio = this.resolvePin(pin);
+    // Real firmware enables a pad's input path explicitly (gpio_init())
+    // before an externally-driven pin reads as anything but disabled -
+    // GPIOPin's padValue defaults to input disabled (see gpio-pin.ts).
+    // writePin models an external wire being attached to this pin, so
+    // force that on rather than requiring firmware to have configured it.
+    gpio.padValue |= 0x40;
+    gpio.setInputValue(!!value);
+    // setInputValue() only updates the pin's raw external-input value and
+    // its IRQ status - unlike an SIO/PADS/PIO-driven output change, it
+    // never calls checkForUpdates() (see gpio-pin.ts), so it never
+    // reaches the addListener hook subscribePin() below wires up. Notify
+    // explicitly so writePin-driven changes (e.g. simulating a button
+    // press) surface the same way firmware-driven ones do.
+    this.notifyPinChange(pin, this.effectiveValue(gpio) ? 1 : 0);
+  }
+
+  onPinChange(pin: string, cb: (value: number) => void): () => void {
+    const index = this.pinIndex(pin);
+    const gpio = this.resolvePin(pin);
+    let listeners = this.pinListeners.get(pin);
+    if (!listeners) {
+      listeners = new Set();
+      this.pinListeners.set(pin, listeners);
+    }
+    listeners.add(cb);
+    if (!this.subscribedPins.has(index)) {
+      this.subscribedPins.add(index);
+      gpio.addListener(() => {
+        this.notifyPinChange(pin, this.effectiveValue(gpio) ? 1 : 0);
+      });
+    }
+    return () => listeners.delete(cb);
+  }
+
+  // A GPIOPin's own `.value` only reports Low/High while it's actively
+  // driven as an output (see gpio-pin.ts's `value` getter) - it doesn't
+  // reflect an externally-injected input value at all. Combine both so
+  // readPin/onPinChange report one consistent "what would a multimeter
+  // read on this pin" bit regardless of direction.
+  private effectiveValue(gpio: GPIOPin): boolean {
+    return gpio.outputEnable ? gpio.outputValue : gpio.inputValue;
+  }
+
+  private pinIndex(pin: string): number {
+    const match = /^GP(\d+)$/i.exec(pin);
+    if (!match) {
+      throw new Error(`Invalid pin id "${pin}"`);
+    }
+    return Number(match[1]);
+  }
+
+  private resolvePin(pin: string): GPIOPin {
+    const index = this.pinIndex(pin);
+    const gpio = this.mcu.gpio[index];
+    if (!gpio) {
+      throw new Error(`Unknown pin id "${pin}"`);
+    }
+    return gpio;
+  }
+
+  private notifyPinChange(pin: string, value: number): void {
+    if (this.lastPinValues.get(pin) === value) return;
+    this.lastPinValues.set(pin, value);
+    for (const cb of this.pinListeners.get(pin) ?? []) cb(value);
   }
 
   private scheduleTick(): void {

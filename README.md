@@ -15,7 +15,7 @@ CPU Emulators:
 	- SparkFun Pro Micro RP2040
 	- Pimoroni Tiny RP2040
 
-- ARM Cortex-M `qemu-system-arm` (QEMU, spawned as a native process — no JS/TS library exists for this architecture)
+- ARM Cortex-M `qemu-system-arm` (QEMU, spawned as a native process)
 	- Netduino Plus 2 (`netduinoplus2` machine, STM32F405)
 
 

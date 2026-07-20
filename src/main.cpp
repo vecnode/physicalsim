@@ -329,6 +329,19 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       instance.reset();
     } else if (method == "init") {
       // Process is already started by get_or_create_qemu_instance() above.
+    } else if (method == "readPin") {
+      const std::string pin = params.is_object() && params.contains("pin")
+                                   ? params.at("pin").get<std::string>()
+                                   : "";
+      instance.read_pin(pin);  // always throws today, see qemu_adapter.hpp
+    } else if (method == "writePin") {
+      const std::string pin = params.is_object() && params.contains("pin")
+                                   ? params.at("pin").get<std::string>()
+                                   : "";
+      const int value = params.is_object() && params.contains("value")
+                             ? params.at("value").get<int>()
+                             : 0;
+      instance.write_pin(pin, value);  // always throws today, see qemu_adapter.hpp
     } else {
       return json{{"error", "Unknown method: " + method}};
     }

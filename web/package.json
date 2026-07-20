@@ -10,10 +10,12 @@
   "scripts": {
     "build": "npm run build --workspace=shell",
     "dev": "npm run dev --workspace=shell",
-    "typecheck": "tsc -p common && tsc -p adapters/rp2040 && tsc -p adapters/avr8 && tsc -p shell"
+    "typecheck": "tsc -p common && tsc -p adapters/rp2040 && tsc -p adapters/avr8 && tsc -p shell",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@types/node": "^20",
-    "typescript": "^5.7.3"
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
   }
 }

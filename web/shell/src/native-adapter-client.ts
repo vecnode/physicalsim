@@ -19,6 +19,11 @@ interface BridgeHttpResult {
   error?: string;
 }
 
+// Does not implement SimClient's optional onPinChange: the native bridge
+// has no push channel for pin events, and cortex-m's QemuInstance
+// currently stubs readPin/writePin as unsupported (see src/main.cpp),
+// so there's no pin data to poll for yet either. Add it once cortex-m
+// actually exposes pin state through the bridge.
 export class NativeAdapterClient {
   private listeners = new Set<(state: SimState) => void>();
   private pollTimer: ReturnType<typeof setInterval> | null = null;

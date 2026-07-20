@@ -553,4 +553,16 @@ json QemuInstance::state() const {
   };
 }
 
+json QemuInstance::read_pin(const std::string &pin) const {
+  throw std::runtime_error(
+      "cortex-m does not support pin I/O yet (readPin \"" + pin +
+      "\"): QEMU GPIO access is unimplemented, see qemu_adapter.hpp");
+}
+
+json QemuInstance::write_pin(const std::string &pin, int /*value*/) {
+  throw std::runtime_error(
+      "cortex-m does not support pin I/O yet (writePin \"" + pin +
+      "\"): QEMU GPIO access is unimplemented, see qemu_adapter.hpp");
+}
+
 }  // namespace qemu

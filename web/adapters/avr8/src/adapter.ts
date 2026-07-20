@@ -57,6 +57,10 @@ export class Avr8Adapter implements SimulatorAdapter {
   private batchCycles = INITIAL_BATCH_CYCLES;
   private listeners = new Set<(state: SimState) => void>();
 
+  private portLetters = new Map<AVRIOPort, string>();
+  private pinListeners = new Map<string, Set<(value: number) => void>>();
+  private lastPinValues = new Map<string, number>();
+
   async init(_config: unknown): Promise<void> {
     // No firmware loading yet — this just runs the CPU against an empty
     // program, to exercise start/stop/step/reset.
@@ -99,6 +103,56 @@ export class Avr8Adapter implements SimulatorAdapter {
     return () => this.listeners.delete(cb);
   }
 
+  // Pin ids are "<port letter><bit>", e.g. "B5" (Arduino Uno's onboard LED).
+  // Board-level logical names ("D13") are resolved to this shape one layer
+  // up - see the boards/ mapping this feeds into.
+  readPin(pin: string): number {
+    const { port, bit } = this.resolvePin(pin);
+    return (this.cpu.data[port.portConfig.PIN] >> bit) & 1;
+  }
+
+  writePin(pin: string, value: number): void {
+    const { port, bit } = this.resolvePin(pin);
+    port.setPin(bit, !!value);
+    // setPin() drives AVRIOPort's external input value directly and does
+    // not go through writeGpio() (that's only for the CPU's own PORT/DDR
+    // writes), so it never reaches the port.addListener hook wired up in
+    // attachPeripherals(). Notify explicitly so writePin-driven changes
+    // (e.g. simulating a button press) surface the same way CPU-driven
+    // ones do.
+    this.notifyPinChange(pin, (this.cpu.data[port.portConfig.PIN] >> bit) & 1);
+  }
+
+  onPinChange(pin: string, cb: (value: number) => void): () => void {
+    let listeners = this.pinListeners.get(pin);
+    if (!listeners) {
+      listeners = new Set();
+      this.pinListeners.set(pin, listeners);
+    }
+    listeners.add(cb);
+    return () => listeners.delete(cb);
+  }
+
+  private resolvePin(pin: string): { port: AVRIOPort; bit: number } {
+    const portLetter = pin.charAt(0).toUpperCase();
+    const bit = Number(pin.slice(1));
+    if (!Number.isInteger(bit) || bit < 0 || bit > 7) {
+      throw new Error(`Invalid pin id "${pin}"`);
+    }
+    const port =
+      portLetter === "B" ? this.portB : portLetter === "C" ? this.portC : portLetter === "D" ? this.portD : undefined;
+    if (!port) {
+      throw new Error(`Unknown port for pin id "${pin}"`);
+    }
+    return { port, bit };
+  }
+
+  private notifyPinChange(pin: string, value: number): void {
+    if (this.lastPinValues.get(pin) === value) return;
+    this.lastPinValues.set(pin, value);
+    for (const cb of this.pinListeners.get(pin) ?? []) cb(value);
+  }
+
   private attachPeripherals(): void {
     this.timer0 = new AVRTimer(this.cpu, timer0Config);
     this.timer1 = new AVRTimer(this.cpu, timer1Config);
@@ -107,6 +161,23 @@ export class Avr8Adapter implements SimulatorAdapter {
     this.portC = new AVRIOPort(this.cpu, portCConfig);
     this.portD = new AVRIOPort(this.cpu, portDConfig);
     this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
+
+    this.portLetters = new Map([
+      [this.portB, "B"],
+      [this.portC, "C"],
+      [this.portD, "D"],
+    ]);
+    this.lastPinValues.clear();
+    for (const [port, letter] of this.portLetters) {
+      port.addListener((newValue, oldValue) => {
+        if (newValue === oldValue) return;
+        for (let bit = 0; bit < 8; bit++) {
+          if (((newValue >> bit) ^ (oldValue >> bit)) & 1) {
+            this.notifyPinChange(`${letter}${bit}`, (newValue >> bit) & 1);
+          }
+        }
+      });
+    }
   }
 
   private scheduleTick(): void {

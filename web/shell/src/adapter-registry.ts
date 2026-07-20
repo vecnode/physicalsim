@@ -16,6 +16,10 @@ export type AdapterId = "rp2040" | "avr8" | "cortex-m";
 export interface SimClient {
   call(method: AdapterMethod, params?: unknown): Promise<unknown>;
   onStateChange(cb: (state: SimState) => void): () => void;
+  // Optional: not every client kind can push pin-change events yet (see
+  // NativeAdapterClient, which has no push channel from the native
+  // process and doesn't implement this).
+  onPinChange?(cb: (pin: string, value: number) => void): () => void;
 }
 
 // Adapters with no JS/Worker side at all - the C++ shell spawns and

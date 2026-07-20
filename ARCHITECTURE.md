@@ -66,6 +66,11 @@ interface SimulatorAdapter {
   step(n: number): void;
   reset(): void;
   onStateChange(cb: (state: SimState) => void): () => void;
+  // Optional: not every adapter kind supports pin I/O (see "Pin I/O
+  // pipeline" below for why cortex-m doesn't, today).
+  readPin?(pin: string): number | undefined;
+  writePin?(pin: string, value: number): void;
+  onPinChange?(pin: string, cb: (value: number) => void): () => void;
 }
 ```
 
@@ -253,6 +258,91 @@ them, so the whole top-level DLL set has to travel with it. QEMU's
 `share/` directory (~355 MB of BIOS/UEFI blobs for *other*
 architectures) is not bundled — confirmed unnecessary by actually
 booting `netduinoplus2` with no `-bios` flag.
+
+## Pin I/O pipeline
+
+Layered on top of the lifecycle contract above so per-pin read/write/change
+reaches every adapter kind through the exact same bridge that already
+carries `start`/`stop`/`step`/`reset` — no adapter-kind-specific code
+anywhere above the adapter implementations themselves.
+
+**The RPC surface.** Three additions to `web/common/src/adapter-types.ts`
+and `worker-host.ts`:
+
+- `readPin`/`writePin` — regular request/response `AdapterMethod`s, exactly
+  like `step`. Optional on `SimulatorAdapter` (`readPin?`/`writePin?`) since
+  not every adapter kind supports them yet.
+- `subscribePin` — a request that tells the worker to start forwarding one
+  pin's changes as `pinChange` events. Idempotent per pin (a `Map` of
+  live unsubscribe functions in `worker-host.ts` keyed by pin id) — calling
+  it twice for the same pin is a no-op the second time, so callers don't
+  need to track subscription state themselves.
+- `{ event: "pinChange", pin, value }` — a new member of the `RpcEvent`
+  union alongside `stateChange`, pushed unsolicited once a pin has been
+  subscribed.
+
+On the browser side, `AdapterClient` (`web/shell/src/worker-rpc.ts`) routes
+`pinChange` messages to a second listener set (`onPinChange`), parallel to
+`onStateChange`. `NativeAdapterClient` deliberately does **not** implement
+`onPinChange` — see "Why cortex-m has no real pin I/O" below.
+
+**Per-adapter pin semantics.** Both Worker-backed adapters converge on the
+same shape (`readPin`/`writePin` return/take a single `0`/`1`; `onPinChange`
+fires on any change, whether firmware-driven or externally injected) despite
+their underlying libraries modeling pins very differently:
+
+- **avr8** (`web/adapters/avr8/src/adapter.ts`) — pin ids are
+  `"<port letter><bit>"` (e.g. `"B5"`, the Uno's onboard LED).
+  `readPin`/`writePin` read/write avr8js's `AVRIOPort` directly (`setPin()`
+  for external stimulus, `cpu.data[PIN register]` for the actual electrical
+  read, which correctly reflects either direction). Firmware-driven changes
+  are caught via `AVRIOPort.addListener` (fires on `PORT`/`DDR` writes);
+  `writePin`-driven changes bypass that listener entirely (`setPin()` never
+  calls avr8js's internal `writeGpio()`), so `writePin` fires the
+  notification itself. A per-pin `lastPinValues` map dedupes both paths so
+  subscribers only see actual transitions.
+- **rp2040** (`web/adapters/rp2040/src/adapter.ts`) — pin ids are `"GP<n>"`.
+  Same two-path shape (`GPIOPin.addListener` for firmware/SIO-driven
+  changes, manual notification for `writePin`), but rp2040js's `GPIOPin`
+  needed one extra accommodation: its `value`/`inputValue` getters gate on
+  `padValue`'s input-enable bit, which real firmware sets via `gpio_init()`
+  before a pin reads as anything but disabled. Since `writePin` models an
+  external wire being attached (not firmware configuring its own pad),
+  it force-enables that bit rather than requiring a `gpio_init()` firmware
+  call that doesn't exist yet.
+
+**Why cortex-m has no real pin I/O.** `handle_qemu_bridge_call()` in
+`src/main.cpp` routes `readPin`/`writePin` to `QemuInstance::read_pin()` /
+`write_pin()` (`src/qemu_adapter.{hpp,cpp}`), which unconditionally throw —
+the bridge surface is uniform (the shell never special-cases `cortex-m`),
+but nothing behind it works yet. Real GPIO access would mean reading/writing
+the STM32's IDR/ODR registers over QMP or the existing GDB RSP connection
+against the `netduinoplus2` machine — unscoped, unverified, and explicitly
+left as a future spike rather than guessed at.
+
+**The circuit layer.** `web/common/src/circuit/` is a small,
+adapter-agnostic layer built entirely on the client surface above, not on
+any adapter internals directly:
+
+- `CircuitPin` wraps one pin id behind `read()`/`write()`/`onChange()`,
+  talking only to a `PinClient` (the minimal `call()`/`onPinChange()` shape
+  — deliberately not imported from `web/shell`, so `web/common` has no
+  dependency on it; `AdapterClient`/`NativeAdapterClient` satisfy it
+  structurally). `onChange()` throws for a client that doesn't implement
+  `onPinChange` (i.e. `NativeAdapterClient` today) rather than silently
+  never firing.
+- `Led`/`Button` (`web/common/src/circuit/components/`) are the first two
+  components: `Led` is read-only (tracks a pin via `onChange`, plus one
+  `read()` on construction so it reflects reality immediately rather than
+  only after the next toggle); `Button` is write-only (`press()`/
+  `release()` drive the pin to 1/0).
+- `Circuit` is currently just a typed container (`addComponent()`) —
+  intentionally thin until the UI needs more from it.
+- `web/common/src/boards/` maps a board's silkscreen pin names (`"D13"`,
+  `"LED"`) to the adapter's raw pin id (`"B5"`, `"GP25"`) —
+  `arduino-uno.ts` for avr8, `rp2040-board.ts` for rp2040.
+  `CircuitPin.forBoardPin(client, board, name)` is the convenience
+  entry point that resolves through one of these before constructing.
 
 ## Build pipeline
 

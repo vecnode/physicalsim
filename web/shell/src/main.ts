@@ -3,6 +3,7 @@ import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import "./native-bridge.js";
 
 const adapterSelect = document.getElementById("adapter-select") as HTMLSelectElement;
+const applyBtn = document.getElementById("apply-btn") as HTMLButtonElement;
 const startBtn = document.getElementById("start-btn") as HTMLButtonElement;
 const stopBtn = document.getElementById("stop-btn") as HTMLButtonElement;
 const stepBtn = document.getElementById("step-btn") as HTMLButtonElement;
@@ -13,6 +14,11 @@ const statePc = document.getElementById("state-pc") as HTMLElement;
 const log = document.getElementById("log") as HTMLElement;
 
 let unsubscribe: (() => void) | null = null;
+// The adapter the Start/Stop/Step/Reset controls act on. Only changes
+// when Apply is clicked - picking a different item in the dropdown alone
+// does not switch anything, so a control click always applies to the
+// adapter you last confirmed, not whatever the select happens to show.
+let activeAdapterId: AdapterId = adapterSelect.value as AdapterId;
 
 function renderState(state: SimState): void {
   stateRunning.textContent = state.running ? "running" : "stopped";
@@ -25,21 +31,22 @@ function logLine(text: string): void {
   log.textContent = text;
 }
 
-function watch(id: AdapterId): void {
+function apply(id: AdapterId): void {
   unsubscribe?.();
+  activeAdapterId = id;
   const client = getAdapterClient(id);
   unsubscribe = client.onStateChange(renderState);
   logLine(`watching ${id} (native bridge can drive it too)`);
 }
 
-watch(adapterSelect.value as AdapterId);
+apply(activeAdapterId);
 
-adapterSelect.addEventListener("change", () => {
-  watch(adapterSelect.value as AdapterId);
+applyBtn.addEventListener("click", () => {
+  apply(adapterSelect.value as AdapterId);
 });
 
 function activeClient() {
-  return getAdapterClient(adapterSelect.value as AdapterId);
+  return getAdapterClient(activeAdapterId);
 }
 
 startBtn.addEventListener("click", () => void activeClient().call("start"));

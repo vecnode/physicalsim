@@ -37,6 +37,7 @@
 #include <cpp-embedlib-httplib.h>
 #include "WebAssets.h"
 #include "webview/webview.h"
+#include "qemu_adapter.hpp"
 #include <nlohmann/json.hpp>
 
 #include <boost/asio.hpp>
@@ -289,6 +290,59 @@ void install_bridge(webview::webview &w) {
   });
 }
 
+// --- QEMU-backed adapters (e.g. "cortex-m") ---------------------------------
+// Unlike avr8/rp2040 (JS/TS running in a Worker, reached via eval()/bind()
+// above), a QEMU-backed adapter has no JS side at all — the C++ shell
+// spawns and controls qemu-system-arm directly (see qemu_adapter.hpp/.cpp).
+// It writes into the same g_bridge_latest_state map install_bridge()'s
+// JS->C++ handler populates, so GET /bridge/:adapter/state needs no
+// separate code path for either adapter kind.
+const std::string kCortexMAdapterId = "cortex-m";
+
+std::mutex g_qemu_mutex;
+std::unordered_map<std::string, std::unique_ptr<qemu::QemuInstance>> g_qemu_instances;
+
+qemu::QemuInstance &get_or_create_qemu_instance(const std::string &adapter) {
+  std::lock_guard<std::mutex> lock(g_qemu_mutex);
+  auto it = g_qemu_instances.find(adapter);
+  if (it == g_qemu_instances.end()) {
+    auto instance = std::make_unique<qemu::QemuInstance>();
+    instance->start_process();
+    it = g_qemu_instances.emplace(adapter, std::move(instance)).first;
+  }
+  return *it->second;
+}
+
+json handle_qemu_bridge_call(const std::string &adapter, const std::string &method,
+                              const json &params) {
+  try {
+    auto &instance = get_or_create_qemu_instance(adapter);
+
+    if (method == "start") {
+      instance.start();
+    } else if (method == "stop") {
+      instance.stop();
+    } else if (method == "step") {
+      const int n = params.is_number() ? params.get<int>() : 1;
+      instance.step(n);
+    } else if (method == "reset") {
+      instance.reset();
+    } else if (method == "init") {
+      // Process is already started by get_or_create_qemu_instance() above.
+    } else {
+      return json{{"error", "Unknown method: " + method}};
+    }
+
+    {
+      std::lock_guard<std::mutex> lock(g_bridge_state_mutex);
+      g_bridge_latest_state[adapter] = instance.state();
+    }
+    return json{{"result", nullptr}};
+  } catch (const std::exception &e) {
+    return json{{"error", e.what()}};
+  }
+}
+
 // Dispatches one adapter command into JS and blocks (with a timeout) for the
 // matching reply. Safe to call from any thread — the actual eval() runs on
 // the UI thread via w.dispatch().
@@ -420,7 +474,9 @@ int main(int argc, char **argv) {
           }
         }
 
-        const json result = dispatch_bridge_call(w, adapter, method, params);
+        const json result = adapter == kCortexMAdapterId
+                                ? handle_qemu_bridge_call(adapter, method, params)
+                                : dispatch_bridge_call(w, adapter, method, params);
         res.set_header("Cache-Control", "no-store");
         res.status = result.contains("error") ? 502 : 200;
         res.set_content(result.dump(), "application/json");

@@ -16,10 +16,14 @@
 
     <section class="panel">
       <label for="adapter-select">Simulator</label>
-      <select id="adapter-select">
-        <option value="avr8">avr8</option>
-        <option value="rp2040">rp2040</option>
-      </select>
+      <div class="select-row">
+        <select id="adapter-select">
+          <option value="avr8">avr8</option>
+          <option value="rp2040">rp2040</option>
+          <option value="cortex-m">cortex-m</option>
+        </select>
+        <button id="apply-btn" type="button">Apply</button>
+      </div>
 
       <div class="controls">
         <button id="start-btn" type="button">Start</button>

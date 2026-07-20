@@ -58,7 +58,69 @@ the adapter architecture is that it's isolated to:
 
 Nothing in `src/main.cpp` needs to change — the bridge is adapter-agnostic
 (`/bridge/:adapter/:method` takes the adapter id as a URL segment, not a
-compiled-in list).
+compiled-in list) — **unless** the target architecture has no JS/TS
+library (ARM Cortex-M, MSP430, ESP32 Xtensa all currently don't). In that
+case it's a native-backed adapter instead — see `cortex-m` in
+`src/qemu_adapter.{hpp,cpp}` as the reference pattern: spawn a real
+process from C++, add a branch for its id in the `POST
+/bridge/:adapter/:method` handler in `src/main.cpp` routing to a C++
+handler instead of `dispatch_bridge_call()`, write into the same
+`g_bridge_latest_state` map so `GET /bridge/:adapter/state` needs no
+change, and give it a `NativeAdapterClient`-style entry (fetch + poll, see
+`web/shell/src/native-adapter-client.ts`) in `adapter-registry.ts`'s
+`NATIVE_ADAPTER_IDS` set instead of a Worker.
+
+## Working with the QEMU-backed (`cortex-m`) adapter
+
+- **A real vector table is required to boot at all.** Real ARM Cortex-M
+  silicon reads SP/PC from address 0 on reset — leave flash empty (as
+  the JS adapters can get away with) and QEMU immediately exits with
+  `qemu: fatal: Lockup: can't escalate 3 to HardFault`. `qemu_adapter.cpp`
+  always loads a tiny built-in stub (`minimal_vector_table_stub()`) via
+  `-kernel`, not user firmware — don't remove this thinking it's
+  optional scaffolding.
+- **`-nographic` needs somewhere valid to redirect to.** Spawning QEMU
+  with no console and no inherited handles makes it exit almost
+  immediately (it looked like a working spawn during development — the
+  QMP handshake and one register read completed in the brief window
+  before it was gone). stdout/stderr are redirected to a log file in the
+  temp dir (`physicalsim-qemu-<pid>.log`) specifically so this doesn't
+  regress silently — if you touch the spawn code, keep that redirection.
+- **On Windows, process cleanup relies on a Job Object, not just the
+  destructor.** `~Impl()` calling `kill_process()` only covers the
+  normal-exit path. The Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`
+  is what actually guarantees `qemu-system-arm` doesn't get orphaned when
+  physicalsim is force-killed or crashes — verified directly during
+  development (`taskkill /F` on physicalsim without it left
+  `qemu-system-arm.exe` running).
+- **Don't add Docker.** Explicitly decided against for this adapter —
+  spawn the native binary directly, no container.
+- **Packaged builds bundle their own QEMU** (`BUNDLE_QEMU_ARM` in
+  `CMakeLists.txt`, wired up in `package_release.bat`) — copied from
+  wherever it's installed on the *build* machine into the output's
+  `qemu/` folder, never committed to git, same mechanism as
+  `BUNDLE_WEBVIEW2_FIXED_RUNTIME`. `find_qemu_system_arm()` in
+  `qemu_adapter.cpp` checks that folder first, before PATH or system
+  install locations. If you change what DLLs QEMU needs (e.g. after a
+  QEMU version bump changes its dependency graph), re-run `dumpbin
+  /dependents qemu-system-arm.exe` rather than guessing a minimal set —
+  the DLLs are implicitly linked, not lazily loaded, so a missing one
+  fails the whole process at load time, not at some specific feature
+  path.
+- **Debugging a stuck `start`/`step`/`reset` call**: check the QEMU log
+  file in the OS temp dir first — most failures (missing binary, boot
+  fault, port conflict) show up there, not as a C++ exception with a
+  useful message. `find_qemu_system_arm()` returning `nullopt` (binary
+  not found on PATH or in well-known install dirs) is the other common
+  failure mode; the thrown error message says so explicitly.
+
+## UI: dropdown selection requires clicking Apply
+
+`web/shell/index.html`'s `<select id="adapter-select">` does not switch
+what Start/Stop/Step/Reset act on by itself — `main.ts` only calls
+`apply()` (which updates `activeAdapterId` and re-subscribes) when
+`#apply-btn` is clicked. This was an explicit user requirement, not an
+oversight — don't wire the `change` event back up to auto-apply.
 
 ## Testing the native<->JS bridge
 

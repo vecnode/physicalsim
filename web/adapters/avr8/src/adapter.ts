@@ -60,6 +60,11 @@ export class Avr8Adapter implements SimulatorAdapter {
   private portLetters = new Map<AVRIOPort, string>();
   private pinListeners = new Map<string, Set<(value: number) => void>>();
   private lastPinValues = new Map<string, number>();
+  // Subscriptions here are the outside world's, not per-run state - unlike
+  // lastPinValues (cleared in attachPeripherals() on every reset), this set
+  // must survive a reset() the same way pinListeners does, since resetting
+  // the CPU shouldn't silently drop whoever's listening to Serial output.
+  private serialListeners = new Set<(byte: number) => void>();
 
   async init(_config: unknown): Promise<void> {
     // No firmware loading yet — this just runs the CPU against an empty
@@ -133,6 +138,18 @@ export class Avr8Adapter implements SimulatorAdapter {
     return () => listeners.delete(cb);
   }
 
+  // Fires once per byte the firmware writes to UDR (the USART transmit
+  // register) - real Arduino sketches reach this through Serial.write()/
+  // Serial.print(). Read-only: this is Stage 1 of the terminal ("show
+  // whatever the firmware transmits"), not Serial.read() support -
+  // AVRUSART.writeByte() exists for injecting an RX byte, but nothing
+  // calls it here yet (see ARCHITECTURE.md's "Serial Monitor" section for
+  // why that's deliberately a separate, later step).
+  onSerialData(cb: (byte: number) => void): () => void {
+    this.serialListeners.add(cb);
+    return () => this.serialListeners.delete(cb);
+  }
+
   private resolvePin(pin: string): { port: AVRIOPort; bit: number } {
     const portLetter = pin.charAt(0).toUpperCase();
     const bit = Number(pin.slice(1));
@@ -161,6 +178,14 @@ export class Avr8Adapter implements SimulatorAdapter {
     this.portC = new AVRIOPort(this.cpu, portCConfig);
     this.portD = new AVRIOPort(this.cpu, portDConfig);
     this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
+    // reset() replaces this.cpu and re-runs attachPeripherals(), which
+    // constructs a brand-new AVRUSART with its own (null) onByteTransmit -
+    // re-wiring it here, not just once at construction, is what keeps
+    // Serial output flowing to the same subscribers across a reset instead
+    // of silently going dark after the first Stop.
+    this.usart.onByteTransmit = (value) => {
+      for (const cb of this.serialListeners) cb(value);
+    };
 
     this.portLetters = new Map([
       [this.portB, "B"],

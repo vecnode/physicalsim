@@ -20,6 +20,9 @@ export interface SimClient {
   // NativeAdapterClient, which has no push channel from the native
   // process and doesn't implement this).
   onPinChange?(cb: (pin: string, value: number) => void): () => void;
+  // Same story as onPinChange above - NativeAdapterClient doesn't
+  // implement this either.
+  onSerialData?(cb: (byte: number) => void): () => void;
 }
 
 // Adapters with no JS/Worker side at all - the C++ shell spawns and

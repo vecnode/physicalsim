@@ -346,52 +346,71 @@ any adapter internals directly:
 
 ## The board canvas
 
-A real-time workspace for placing and powering board illustrations,
-connected to the adapter/pin machinery above via the circuit model
-(`web/shell/src/circuit.ts`) — `web/shell/index.html` +
-`web/shell/src/main.ts`'s board-workspace section. Placing a board plugs
-it into its `SimulatorAdapter`; Start/Stop powers it on/off for real (CPU
-running + a visual power LED, not just one or the other).
+A real-time workspace for placing, wiring, and powering board/sensor
+illustrations, connected to the adapter/pin machinery above via the
+circuit model (`web/shell/src/circuit.ts`) — `web/shell/index.html` +
+`web/shell/src/canvas/` (the interactive tab-1 surface) + `web/shell/
+src/main.ts` (the simulator panel, tabs, theme, and the handful of
+bottom-bar toggles). Placing a board plugs it into its
+`SimulatorAdapter`; Start/Stop powers it on/off for real (CPU running +
+a visual power LED, not just one or the other).
 
 **Layout.** `.app` is a full-viewport column: a `.topbar` (title), then
-`.body` (a row: a fixed-width `.sidebar` holding only the log output now,
-and `.workspace` filling the rest). `.workspace` is itself a tab bar
-(`#board-tabs`) over one `.tab-pane` per tab — generic tabs (`tab1`/`tab2`/
-`tab3`), not tied to a specific board. Tab 1 additionally holds the
-"Simulator" panel (board picker, Start/Pause/Stop, and the status/cycles/
-PC readout - see "Boards vs. adapters: plugging in, then powering on"
-below) pinned top-left via `align-self: flex-start` so it doesn't stretch
-to the pane's full height and never overlaps the canvas next to it. The
-state readout (`#state-list`, a plain `<dl>`) sits directly under the
-controls, inside the same panel - not its own sidebar section anymore,
-so it reads together with whatever board/adapter it's reporting on rather
-than living in a separate part of the screen. Start/Pause/Stop's icons
-(Phosphor Icons, MIT, `assets/icons/phosphor/{play,pause,stop}.svg`) are
-inlined directly into their button markup, not fetched - `fill="currentColor"`
-on the SVG is what makes them follow `button:hover`'s color inversion, and
-three small static icons don't need a fetch or a templating layer.
+`.body` (a row: a fixed-width `.sidebar` holding only the log output, and
+`.workspace` filling the rest). `.workspace` is a tab bar (`#board-tabs`)
+over one `.tab-pane` per tab — `tab2`/`tab3` are deliberately empty
+panes (future workspaces with nothing built yet, not placeholder
+canvases drawing an unused grid). Tab 1 holds the "Simulator" panel
+(board picker, Start/Pause/Stop, state/energy readouts) pinned top-left,
+next to a column of two things stacked vertically: the canvas itself
+(with its own zoom-controls/minimap overlay, pinned to *its* bottom-right
+corner, not the pane's) and, below it, the Serial Monitor panel (see
+"Serial Monitor" below) — a `.tab1-canvas-and-overlay` wrapper exists
+specifically so the overlay's positioning context is the canvas alone,
+not a box that also includes the terminal, which would otherwise need to
+know the terminal's current height to avoid overlapping it. The
+bottombar (canvas-wide, not per-tab) holds, left to right: the Serial
+Monitor visibility toggle, rotate-selected, the link-style toggle,
+the simulator-panel/zoom-controls visibility toggle, and light/dark —
+each an inlined Phosphor Icon (MIT, vendored at `assets/icons/phosphor/`)
+or, for the three link-style icons, an original stroke-based glyph
+(vendored at `assets/icons/custom/`) since no icon set has "a straight
+line vs. an elbow vs. a bezier curve" as a ready-made concept.
 
-**No pins panel in the sidebar anymore.** The per-pin attach/read/detach
-UI from the earlier "Pin I/O pipeline" work (`PinRow`, `refreshPinPanel()`,
-`addPinRow()`, etc. - previously in `main.ts`) has been removed entirely,
-DOM and JS both, not just hidden - it'll come back in a different form
-once pin interaction lives on the board itself (see "Not yet wired:
-per-pin LEDs" and the earlier per-pin-click discussion) rather than as a
-disconnected sidebar list. Nothing underneath it changed:
-`CircuitPin`/`Led`/`Button` (`web/common/src/circuit/`) and the board
-pin-name maps (`web/common/src/boards/`) are untouched and ready for
-whatever the next pin UI turns out to be.
+**Module split: `web/shell/src/canvas/`.** The interactive part of tab 1
+used to be ~900 lines inside `main.ts`; it's now six small modules, each
+owning one concern, composed by `CanvasController` (`canvas/index.ts`) —
+the only thing `main.ts` talks to:
 
-**Rendering: real DOM/SVG, not canvas.** Tabs 2/3 still use plain
-`<canvas>` placeholders (backing store sized 1:1 against
-`devicePixelRatio`, redrawn only on resize/tab-switch — see
-`resizeCanvas()`/`drawPlaceholder()`), but tab 1's design surface
-(`#canvas-tab1`) is a plain `<div>`, not a canvas — its id is a holdover
-name, not a claim about its element type. Placed boards are real
-`@wokwi/elements` custom elements (`<wokwi-arduino-uno>` etc.), each
-wrapped in a `.board-item` div positioned with ordinary CSS `left`/`top`.
-This replaced an earlier canvas-image approach (draw a static SVG, hand-roll
-hit-testing) — see "Why real DOM/SVG, not canvas" below for why.
+- **`Viewport`** (`viewport.ts`) — pan and zoom (see below). Pure state
+  and math; no DOM beyond the container/content elements it was
+  constructed with.
+- **`Scene`** (`scene.ts`) — the circuit model, its DOM, and every
+  placement/drag/select/delete/rotate interaction (see below). Owns a
+  `WiringLayer` internally (`scene.wiring`).
+- **`Minimap`** (`minimap.ts`) — the small overview panel (see below).
+- **`WiringLayer`** (`wiring.ts`) — pin-to-pin connections (see below).
+- **`ContextMenu`** (`context-menu.ts`) — the right-click "Boards/
+  Sensors/Connections" menu (see below).
+- **`CanvasController`** (`index.ts`) — composes the five above and owns
+  the interactions that don't belong to any single one of them:
+  background-drag panning (a `Viewport` concern, but the mousedown has to
+  originate from the same container `Scene` uses for its own background-
+  click deselect, so they're coordinated here), the wheel-zoom binding,
+  and the Backspace/Delete keyboard shortcut (tries `scene.deleteSelected()`
+  first, then `scene.wiring.deleteSelectedWire()` — a board/component
+  delete already takes its own wires with it, so the wire-delete path
+  only ever fires when a wire itself, not one of its endpoints, is
+  selected).
+
+`main.ts` constructs one `CanvasController`, then only ever calls a
+handful of things on it: `canvas.scene.showBoard()`/`addBoardAt()`/
+`addComponentAt()` (via the context menu's callbacks), `canvas.scene.
+onBoardPlaced()`/`onEntityDeleted()` (hooks — see "Boards vs. adapters"
+below), `canvas.scene.findBoardByAdapter()`/`getDom()` (for Start/Stop's
+power-LED and energy-readout logic), and `canvas.refresh()` (re-measure
+the minimap after it was `display:none` — switching tabs, or the panel-
+visibility toggle hiding it — see `Minimap.syncSize()`).
 
 **Vendoring `@wokwi/elements`.** `simulators/wokwi-elements` is a git
 submodule (`https://github.com/vecnode/wokwi-elements`, a fork of
@@ -426,75 +445,159 @@ Two things this vendoring needed that avr8js/rp2040js didn't:
 - `import "@wokwi/elements"` in `main.ts` is a bare side-effect import —
   Lit's `@customElement(tag)` decorator calls `customElements.define()`
   when each class is defined, i.e. on module evaluation, so importing the
-  whole library registers every `<wokwi-*>` element. Pulls in more than
-  just Arduino Uno for now (visible in the production bundle size); worth
-  narrowing once more boards are wired up and the cost is worth avoiding.
+  whole library registers every `<wokwi-*>` element, board and component
+  alike (see `COMPONENTS.md` for the full registry, and its "Adding a new
+  sensor or connection" section for why this means most new parts need
+  zero new imports anywhere).
 
-**Selection and drag.** Plain DOM/CSS, no coordinate math needed at all —
-a genuine simplification over the canvas approach it replaced, which had to
-convert every pointer event through `devicePixelRatio`. `mousedown` on a
+**Viewport: pan and zoom (`canvas/viewport.ts`).** One CSS transform —
+`translate(panX, panY) scale(zoom)` — on the content layer
+(`#tab1-content`), never on its container (`#canvas-tab1`).
+`transform-origin: 0 0` keeps the math simple: world point `(0, 0)`
+always maps to screen position `(panX, panY)` relative to the container,
+regardless of zoom, so `screenToWorld()`/`visibleWorldRect()` are both a
+few lines. Panning is its own `panX`/`panY` state, not the container's
+native `scrollLeft`/`scrollTop` — tried scroll-based panning first, and
+found by testing it directly that a `transform: scale()`'d child does
+not reliably expand its parent's scrollable overflow region in this
+engine: `scrollLeft` assignments silently clamped to a few dozen px once
+zoomed in, nowhere near enough to reach the rest of the scene.
+`translate()` sidesteps that entirely — `panX`/`panY` are plain state
+this class owns and can move however far it wants.
+
+Zoom is cursor-centered (`setZoomAt()`/`zoomAtBy()`): scrolling in on
+part of the scene keeps that point under the cursor, by solving
+`screen = pan + world * zoom` for the *new* pan while holding the world
+point (derived from the *old* pan/zoom) fixed at the same screen
+position. The `+`/`-` buttons and reset have no particular cursor
+position to anchor on, so `setZoom()` centers on the viewport's own
+center instead of leaving the anchor wherever the world origin happened
+to be on screen. Bounded `0.25`–`2.5`× (`MIN_ZOOM`/`MAX_ZOOM` in
+`canvas/index.ts`) — a floor so "zoom out to see the whole diagram" has
+a limit before everything becomes unreadable, a ceiling so zooming
+doesn't run away to a useless close-up. Background-drag panning
+(left-click-drag on empty canvas) and the wheel binding are wired by
+`CanvasController`, not `Viewport` itself, since the mousedown needs to
+be coordinated with `Scene`'s own background-click deselect on the same
+container element.
+
+**Scene: placement, selection, drag, delete, rotation
+(`canvas/scene.ts`).** Owns the circuit model (`circuit.ts`'s `Circuit`
+— plain, JSON-serializable `CircuitBoard[]`/`PlacedComponent[]`, no DOM
+reference inside it) and a parallel `Map<id, {wrapper, boardEl,
+dispose}>` for the id-keyed DOM lookup, so `JSON.stringify(circuit)`
+never has to filter anything out. Selection and drag are plain DOM/CSS —
+no coordinate math beyond `Viewport.screenToWorld()`. `mousedown` on a
 `.board-item` wrapper calls `stopPropagation()` (so the container's own
-`mousedown` handler doesn't treat it as a background click), toggles
-`.selected` (CSS `outline: 2px dashed`, replacing what used to be a
-canvas-drawn dashed `strokeRect`), and records a drag offset in
-container-relative CSS pixels; `mousemove`/`mouseup` are attached to
-`window` (not the wrapper), so a fast drag that briefly leaves the
-element doesn't get stuck — same reasoning as the pin-panel Button rows'
-`mouseleave` handling elsewhere in `main.ts`. `makeDraggable()` returns a
-dispose function so `showBoard()` can clean up a placed item's listeners
-before replacing it, rather than leaking a new `window` listener pair
-every time Apply is clicked. It also takes the placed `CircuitBoard`
-directly and writes `x`/`y` back onto it on every `mousemove` — the model
-(next section) is updated right alongside the DOM style that renders it,
-not derived from the DOM after the fact.
+mousedown handler doesn't treat it as a background click), toggles
+`.selected` (a CSS outline), and records a drag offset in world
+coordinates; `mousemove`/`mouseup` are attached to `window` (not the
+wrapper), so a fast drag that briefly leaves the element doesn't get
+stuck. `makeDraggable()` returns a dispose function so `clearScene()`/
+delete can clean up a placed item's listeners without leaking a new
+`window` listener pair per item. Dragging keeps `entity.x`/`y` in sync
+on every `mousemove` — the model is updated right alongside the DOM
+style that renders it, not derived from the DOM after the fact — and
+re-renders the wiring layer and notifies the minimap on every move,
+since both need to track an entity's live position.
 
-**The circuit model — `web/shell/src/circuit.ts`.** A small, deliberately
-plain-data model, kept separate from the DOM it's rendered as:
+**Delete** (`deleteSelected()`, wired to Backspace/Delete by
+`CanvasController`) removes whichever board/component is currently
+selected: disposes its drag listeners, removes its DOM, drops it from
+the `Circuit` arrays, and calls `wiring.removeEntity(id)` so any wire
+touching it (and its registered pin offsets) goes with it — a deleted
+board never leaves a dangling wire pointing at nothing. Selecting a pin
+alone doesn't make anything deletable; only a placed board/component
+itself can be removed this way. **Rotate** (`rotateSelected()`, the
+bottom bar's rotate button) turns the selected item 90° clockwise by
+setting `entity.rotation` (`CircuitBoard`/`PlacedComponent`'s newest
+field, one of 0/90/180/270) and applying `transform: rotate(...)` to its
+wrapper — purely visual (CSS transforms don't touch layout: `offsetLeft`/
+`Width`/`Height`, drag math, and centering are all unaffected, exactly
+like zoom's own `scale()` never disturbed them), so nothing about
+placement or dragging needed to change for rotation to exist. The one
+thing rotation *does* have to touch: a rotated entity's pins are no
+longer where their raw, unrotated `{x, y}` offset says they are on
+screen, so `Scene.entityFrame()` — the callback `WiringLayer` uses to
+resolve a wire's endpoints — reports not just an entity's position but
+its rotation and its wrapper's un-transformed layout size
+(`offsetWidth`/`Height`, a plain layout property immune to the CSS
+`rotate()`/`scale()` applied to it or its ancestors), so `WiringLayer`
+can rotate a pin's local offset around the wrapper's own center the same
+way the CSS transform visually does (see "Pin-to-pin wiring" below).
+Verified directly: a wire's drawn endpoint tracks a rotated entity's
+pin correctly at all four angles, and dragging still works normally on a
+rotated item.
+
+**Pin markers.** `overlayPinMarkers()` reads the placed element's own
+`pinInfo` (`@wokwi/elements`' per-pin `{name, x, y}` coordinates) and
+creates one small `.pin-marker` div per pin, positioned in plain CSS
+pixels. Those coordinates are plain CSS pixels of the rendered element,
+*not* the element's own SVG viewBox units — confirmed against
+wokwi-elements' own reference overlay (`utils/show-pins-element.ts`: its
+`<svg>` has no viewBox at all, and uses `pin.x`/`pin.y` directly as CSS
+px) — dividing by the viewBox was tried first and produced markers
+positioned outside the board, which is what exposed this. Since the
+board element is rendered at true intrinsic size (never scaled to fit),
+plain `${pin.x}px`/`${pin.y}px` lines a marker up with the real pin
+regardless of zoom or devicePixelRatio, and — because the markers are
+children of the same wrapper the board illustration is — rotating the
+wrapper rotates them right along with it for free, visually; only the
+wire-endpoint *math* (above) needed to separately account for rotation,
+since that math lives outside the DOM.
+
+**The circuit model — `web/shell/src/circuit.ts`.**
 
 ```ts
 interface CircuitBoard {
   id: string;
-  type: string;        // "arduino-uno" - key into the registries below
-  adapterId: AdapterId; // which SimulatorAdapter this board type is backed by
+  type: string;         // e.g. "arduino-uno" - key into the registries below
+  adapterId: AdapterId;  // which SimulatorAdapter this board type is backed by
   x: number;
   y: number;
   powered: boolean;
+  rotation: number;      // degrees, clockwise: 0/90/180/270
+}
+interface PlacedComponent {
+  id: string;
+  type: string;          // key into component-registry.ts's componentRegistry
+  x: number;
+  y: number;
+  rotation: number;
 }
 interface Circuit {
   boards: CircuitBoard[];
+  components: PlacedComponent[];
 }
 ```
 
-`main.ts` holds `circuit: Circuit` (the JSON-serializable source of truth
-— `JSON.stringify(circuit)` never needs to filter anything out, since no
-DOM reference lives inside it) alongside a separate
-`circuitDom: Map<string, { wrapper, boardEl }>` for the id-keyed DOM
-lookup. One board at a time for now (`showBoard()` replaces both on every
-Apply, same as before); more boards is additively growing these, not
-restructuring them. Three small per-type registries drive everything
-board-specific: `boardTagName` (custom element tag, unchanged from
-before, just moved here), `boardAdapterId` (which `SimulatorAdapter`
-backs a board type — `"arduino-uno" -> "avr8"`, the piece that answers
-"what adapter does this board use"), and `boardPowerSetter` (how to
-reflect powered on/off onto a placed element — board-specific since not
-every future board will expose the same property, or any at all).
-`createBoard(type)` is the factory: resolves `boardAdapterId`, assigns a
-simple incrementing id (`` `board-${n}` `` - no need for
-`crypto.randomUUID()` at one-board scale), returns `null` for an unknown
-type.
+`PlacedComponent` is deliberately lighter than `CircuitBoard` — no
+`adapterId`/`powered`, since sensors/connections aren't backed by any
+`SimulatorAdapter` and have no power state of their own. Board-specific
+behavior lives in per-type registries in `circuit.ts`
+(`boardTagName`/`boardDisplayName`/`boardAdapterId`/`boardPowerSetter`);
+everything placeable that isn't a board (sensors, connections) lives in
+`web/shell/src/component-registry.ts`'s `componentRegistry` — see
+`COMPONENTS.md` for the full list of both and how to add more of either.
+`createBoard(type)`/`createComponent(type)` are the factories: resolve
+the type against its registry, assign a simple incrementing id, return
+`null` for an unknown type.
 
 **Boards vs. adapters: plugging in, then powering on.** `avr8`/`rp2040`/
 `cortex-m` are still parked out of the `#adapter-select` dropdown
 (`index.html`) — not removed from the codebase; `adapter-registry.ts`,
 `worker-rpc.ts`, and both adapter packages are untouched, just unreachable
-from the UI while board work is the focus. But `showBoard()` calls
-`apply(board.adapterId)` right after placing a board — this *is* "plugging
-the board into the adapter": `apply()` already did everything that means
-(`main.ts`'s `activeAdapterId`/`getAdapterClient()`/state-subscription),
-it just never used to be reachable, since nothing tied a placed *board* to
-an *adapter id* before `boardAdapterId` existed. The state readout starts
-working the moment a board is placed — no new UI, the existing machinery
-just gets a real adapter id to point at.
+from the UI while board work is the focus. `Scene.showBoard()`/
+`addBoardAt()` fire an `onBoardPlaced` hook right after placing a board;
+`main.ts` is the only subscriber, and its handler is exactly `apply
+(board.adapterId)` — "plugging the board into the adapter" is `apply()`
+doing everything it already did (`activeAdapterId`/`getAdapterClient()`/
+state-and-serial-subscription), just reached through a hook instead of a
+direct call, so `Scene` never needs to know `SimulatorAdapter`/`apply()`
+exist. Symmetrically, `onEntityDeleted` lets `main.ts` notice when the
+board backing the active adapter gets deleted (Backspace/Delete) and
+reset the state/energy readouts and Serial Monitor rather than leaving
+them pointed at a board that no longer exists.
 
 **Start / Pause / Stop.** Three controls, not four - `step-btn`/`reset-btn`
 were removed entirely (DOM and JS) rather than left disabled, once Pause
@@ -513,31 +616,105 @@ is plugged in yet:
   debugger breakpoint, not a power cut).
 - **Stop** — `call("reset")` (which itself calls `"stop"` first, then
   recreates the CPU/MCU object - wiping registers and cycle count back to
-  power-on defaults) followed by `setPowered(false)`. Verified: `cycles`
-  reads back `0` and `ledPower` is `false` immediately after.
+  power-on defaults) followed by `setPowered(false)` and
+  `terminal.clear()` (stale Serial output from before the reset
+  shouldn't linger as if still relevant). Verified: `cycles` reads back
+  `0` and `ledPower` is `false` immediately after.
 
-`setPowered(on)` (shared by Start and Stop) finds whichever placed board
-is backed by the active adapter (`circuit.boards.find(b => b.adapterId
-=== activeAdapterId)` — today, at most one board can ever match), sets
-its `.powered` flag, and calls `boardPowerSetter[board.type]` to reflect
-it on the real element — for Arduino Uno, `ArduinoUnoElement.ledPower`
-(the power-supply LED, labeled "ON" on the silkscreen; verified by
-checking the rendered shadow DOM directly — a `<circle fill="#80ff80">`
-glow element appears/disappears exactly with `ledPower`). This is
-deliberately *not* the same as `led13`/`ledTX`/`ledRX` (those track real
-GPIO pin state, and aren't wired up yet — see "Not yet wired: per-pin
-LEDs" below): `ledPower` represents whether the board has power at all,
-independent of what any pin is doing, and independent of whether it's
-currently executing (Pause proves that: powered stays `true` throughout).
+`setPowered(on)` (shared by Start and Stop, in `main.ts`) finds whichever
+placed board is backed by the active adapter
+(`canvas.scene.findBoardByAdapter(activeAdapterId)` — today, at most one
+board can ever match), sets its `.powered` flag, and calls
+`boardPowerSetter[board.type]` to reflect it on the real element — for
+Arduino Uno, `ArduinoUnoElement.ledPower` (the power-supply LED, labeled
+"ON" on the silkscreen; verified by checking the rendered shadow DOM
+directly — a `<circle fill="#80ff80">` glow element appears/disappears
+exactly with `ledPower`). This is deliberately *not* the same as
+`led13`/`ledTX`/`ledRX` (those track real GPIO pin state, and aren't
+wired up yet — see "Not yet wired: per-pin LEDs" below): `ledPower`
+represents whether the board has power at all, independent of what any
+pin is doing, and independent of whether it's currently executing (Pause
+proves that: powered stays `true` throughout).
 
-**Not yet wired: per-pin LEDs.** `led13`/`ledTX`/`ledRX` on
-`ArduinoUnoElement` would make the board's own onboard LEDs reflect real
-GPIO activity (pin B5/TX/RX), the same way `web/common/src/circuit/`'s
-`Led` component already can for any `CircuitPin` — a natural, cheap-looking
-follow-up once there's a UI for it again (the sidebar pins panel that
-used to demonstrate this was removed - see "No pins panel in the sidebar
-anymore" above - not the underlying `CircuitPin`/`Led` machinery, which is
-untouched), not conflated with the power-on/off work above.
+**Minimap (`canvas/minimap.ts`).** A small top-down overview, stacked
+above the zoom controls at a rendered width that exactly matches theirs
+(`Minimap.syncSize()`, watching `.zoom-controls` via `ResizeObserver`,
+not a hardcoded number) — height derived from the canvas's own aspect
+ratio so it isn't a distorted view of it. Its "world" bounds are a
+*stable* frame — the container's own base (100%-zoom) viewport unioned
+with every placed item's extent — deliberately *not* re-unioned with the
+live visible viewport on every render. An earlier version did include
+the live viewport in that union, and testing it directly showed the
+whole frame constantly re-centering on wherever you'd just panned to
+(since the live viewport was always one of the extremes defining the
+frame) — the opposite of what a minimap is for. Panning somewhere with
+nothing placed now correctly slides the viewport indicator toward (and
+clips it against, via the panel's own `overflow: hidden`) the edge of a
+frame that stays put. Click or drag anywhere on the panel pans the real
+canvas there (`Viewport.centerOn()`), inverting the same offset/scale the
+last render used.
+
+**Pin-to-pin wiring (`canvas/wiring.ts`).** Click one pin, then another,
+and a connection is drawn between them — a second, separate model from
+the circuit (bridged only by entity id, the same pattern `energy.ts`
+already established: two things that don't need to share a struct stay
+two things). Rendered as one `<svg>` kept as the *last* child of
+`#tab1-content` (`raiseToTop()`, re-asserted every time a new board/
+component is placed) so wires always draw on top of everything they
+connect; being a child of the same transformed content element as every
+board/component wrapper, it inherits pan/zoom for free — a wire's
+endpoints are plain world coordinates, no separate recompute needed for
+that. A small terminal circle marks both ends of every wire, in every
+style.
+
+Three link styles, cycled globally by the bottom bar's link-style
+button (applies to every existing wire immediately, not just ones drawn
+after the click):
+- **Straight** — a plain line.
+- **Elbow** — a 5-segment orthogonal route (`A → (A.x, legAY) →
+  (midX, legAY) → (midX, legBY) → (B.x, legBY) → B`), but only the
+  middle three segments (both horizontal "legs" and the vertical
+  "channel" between them) are ever independently dragged via their own
+  handle — the two short vertical stubs at each end exist purely so a
+  leg's height can move without dragging the (fixed) pin itself, and
+  collapse to zero length at their defaults (`legAY === a.y`, `legBY ===
+  b.y`), which is exactly what makes an un-dragged elbow wire look like
+  a plain 3-segment "Z", not five. Each of the three free values
+  (`ElbowRoute.midX`/`legAY`/`legBY`) stays exactly where dropped once
+  dragged, and is otherwise recomputed against the pins' current
+  positions — verified directly: dragging all three handles
+  independently, then dragging the connected board, leaves the three
+  stored values untouched while only the endpoints (and the stub
+  lengths absorbing the difference) move. Handles only render for the
+  *selected* wire, not every elbow wire on the canvas at once.
+- **Bezier** — an automatic S-curve (control points offset from each
+  endpoint along the horizontal axis, `MaxMSP`/Pd-style), no dragging.
+
+A wire is itself selectable and deletable: each rendered path has a
+wide, invisible twin underneath it (`pointer-events: stroke`, easier to
+click than a 2px visible line) that selects the wire on click and clears
+whatever board/pin was selected (only one kind of thing is ever selected
+at once — a `Scene`↔`WiringLayer` callback pair keeps the two
+selections mutually exclusive without either reaching into the other's
+internals). Backspace/Delete on a selected wire
+(`WiringLayer.deleteSelectedWire()`) removes just that wire, tried by
+`CanvasController` *after* `Scene.deleteSelected()` — a board/component
+delete already takes its own wires with it via `removeEntity()`, so the
+wire-only path only fires when the selection is a wire itself, not one
+of its endpoints.
+
+**Right-click context menu (`canvas/context-menu.ts`).** Three flyout
+submenus — Boards, Sensors, Connections — each one entry per registered
+type (`circuit.ts`'s `boardTagName`/`boardDisplayName` for boards,
+`component-registry.ts`'s `componentRegistry` for the other two; see
+`COMPONENTS.md`), built fresh on each open. Submenus default to opening
+right/down but flip to whichever side actually has room
+(`positionSubmenu()`, run on every hover rather than once at build time,
+since a `display: none` submenu reports zero size to measure before
+it's actually shown) — a row near the right or bottom edge of the window
+no longer runs a submenu off-screen, the bug this exists to fix; the
+top-level menu itself is clamped into the viewport the same way right
+after it opens, for a right-click very close to the window's edge.
 
 **Energy model — `web/shell/src/energy.ts`, deliberately separate from
 the circuit model.** `CircuitBoard.powered` is binary; it says nothing
@@ -548,7 +725,7 @@ fields on `CircuitBoard`, they live in their own file with their own
 This mirrors a pattern confirmed directly in
 [velxio](https://github.com/davidmonterocrespo24/velxio)'s docs
 (`docs/wiki/circuit-emulation*.md` — consulted for architecture ideas
-only, see the licensing note above): their digital MCU harness
+only, see the licensing note below): their digital MCU harness
 (`AVRHarness`, wrapping `avr8js`) and their analog solver never share a
 data structure either — a dedicated `AVRSpiceBridge` is the *only*
 connection point, reading pin/PWM state out of the harness and writing
@@ -570,33 +747,47 @@ confirmed, since its core engine isn't open source: fundamentally
 digital, with per-component behavioral analog approximations bolted on
 where a specific part needs one — not a general topology solver.)
 
-This project is at the "digital simulation solid, one board, no wiring
-between components yet" stage — matching where velxio was *before*
-Pipeline A existed. So `energy.ts` intentionally isn't a solver at all:
-`boardNominalVoltage`/`boardNominalCurrentMa` are fixed, known constants
-per board type (an Arduino Uno's logic level *is* 5V whenever powered,
-not something to compute), and `currentMa` picks between an idle/running
-nominal off the adapter's own `state.running` — approximate, explicitly
-labeled as nominal in code comments, not measured. `power` (mW) is
-derived (`voltage × currentMa`), not stored. Wired into `main.ts` at
-exactly two points: `setPowered()` (voltage/current snapshot the instant
-power state changes) and `renderState()` (already firing on every
-adapter `stateChange` — the natural place to correct current from idle
-to running once ticking is actually confirmed, no new adapter-side
-plumbing). The UI is a second `<dl>` (`#energy-list`, using the same
-`.readout` CSS class `#state-list` was generalized to) sitting next to
-the state readout in `.tab1-simulator-panel` — visually separate blocks,
+This project is at the "digital simulation solid, boards/components can
+be placed and visually wired, no electrical solve across those wires
+yet" stage — matching where velxio was *before* Pipeline A existed. So
+`energy.ts` intentionally isn't a solver at all: everything
+`computeEnergy()` needs for one board type lives in one `PowerProfile`
+per type (`boardPowerProfile: Record<string, PowerProfile>` — collapsing
+what used to be two separate lookup tables, `boardNominalVoltage` and
+`boardNominalCurrentMa`, into one entry per board, so adding a board
+type is one registry line instead of an edit in two places):
+`supplyVoltage` and `currentMa: {idle, running}` are fixed, known
+constants (an Arduino Uno's logic level *is* 5V whenever powered, not
+something to compute), approximate and explicitly labeled as nominal in
+code comments, not measured. A `PowerProfile` can also name the
+`PowerSource`s a board could be fed from (USB, wall adapter, Vin header —
+each with a nominal voltage and, where known, a current limit) —
+informational only today, nothing in `computeEnergy()` branches on it
+yet, but the natural slot for a future "what's this board plugged into"
+control without reshaping `BoardEnergy` again. (`PowerSource` is
+unrelated to `SimulatorAdapter` — the two just happen to share the
+English word "adapter"; one is CPU emulation, the other is a power
+supply.) `currentMa` picks between the idle/running nominal off the
+adapter's own `state.running`. `power` (mW) is derived
+(`voltage × currentMa`), not stored. Wired into `main.ts` at exactly two
+points: `setPowered()` (voltage/current snapshot the instant power state
+changes) and `renderState()` (already firing on every adapter
+`stateChange` — the natural place to correct current from idle to
+running once ticking is actually confirmed, no new adapter-side
+plumbing). The UI is a second `<dl>` (`#energy-list`) sitting next to the
+state readout in `.tab1-simulator-panel` — visually separate blocks,
 matching the code-level split, not merged rows in one table.
 
 **Explicitly out of scope, tracked here on purpose.** Per-pin voltage,
-real circuit-topology solving (Ohm's law across actual wires — there's
-nothing to apply it to without wiring between components), any SPICE/MNA
-solver (hand-rolled or `eecircuit-engine`/ngspice-WASM). All of that is
-the natural Pipeline-A-shaped next step, once there's more than one
-board and real connections between them for a solver to have an actual
-netlist to work with — not guessed at or half-built here.
+real circuit-topology solving (Ohm's law across actual wires), any
+SPICE/MNA solver (hand-rolled or `eecircuit-engine`/ngspice-WASM). Pin-
+to-pin wiring (above) is a *visual* connection model — which pin points
+at which — not an electrical one; nothing propagates a voltage or
+current along a drawn wire yet. All of the above is the natural
+Pipeline-A-shaped next step now that there's an actual netlist (the
+wires) for a solver to work on — not guessed at or half-built here.
 
-**Board elements: real size, not scaled to fit.** `showBoard(name)`
+**Board elements: real size, not scaled to fit.** Placing an element
 creates the wrapper + custom element, then **awaits `updateComplete`**
 before measuring and centering it — LitElement's first render happens on
 a microtask after `connectedCallback`, not synchronously on `appendChild`,
@@ -604,14 +795,14 @@ so measuring immediately would see an empty (zero-size) shadow DOM and
 center against the wrong size (caught during verification: centering was
 silently wrong until this await was added). Once rendered, the element's
 SVG intrinsic size (`width="72.58mm"` etc., browser-computed) is used
-as-is — never scaled up or down to fit the container. Repeated `Apply`
-clicks replace the scene rather than stacking duplicate boards.
+as-is — never scaled up or down to fit the container. `Apply` replaces
+the whole scene rather than stacking duplicate boards; the right-click
+menu's "add" flow adds alongside whatever's already placed instead.
 
-**Supported boards.** One today. Tracked here as more are added:
-
-| Board | Custom element | Adapter | Powered by Start/Pause/Stop? |
-|---|---|---|---|
-| Arduino Uno | `wokwi-arduino-uno` | `avr8` | Yes |
+**Supported boards/components.** See `COMPONENTS.md` for the full,
+maintained list (one board, 13 sensors, 30 connections, and how to add
+more of either) — not duplicated here to avoid two places going stale
+independently of each other.
 
 **Licensing note.** [velxio](https://github.com/davidmonterocrespo24/velxio)
 (a similar from-scratch Wokwi-style simulator, referenced early on for how
@@ -628,16 +819,115 @@ interaction (per-pin click, wiring) would need its own hand-rolled
 hit-region math. Switching to the real components trades a canvas-specific
 dependency-free property for the DOM's native event model — clicks land on
 the actual element under the pointer, no coordinate math required, and it's
-what Wokwi's own app is built on. **Honest limitation carried over, not
-solved by this switch:** `<wokwi-arduino-uno>` does not give per-pin click
-events for free — its pin headers render as a few grouped
-`<rect fill="url(#pins-female)">` strips, not one interactive element per
-pin. `ElementPin`/`pinInfo` (exported by `@wokwi/elements`, per-pin
-`{name, x, y, signals}` coordinates) is positional data for Wokwi's own
-external wiring tool, not baked-in interactivity. Real per-pin clicking is
-still a real follow-up: overlay small positioned marker elements using
-those coordinates, now trivial DOM/CSS positioning instead of canvas math,
-wired to the `CircuitPin` read/write that already exists.
+what Wokwi's own app is built on. The per-pin click events this switch
+didn't give for free on its own — `<wokwi-arduino-uno>`'s pin headers
+render as a few grouped `<rect>` strips, not one interactive element per
+pin — are exactly what "Pin markers" and "Pin-to-pin wiring" above went
+on to build: small positioned marker elements using `pinInfo`'s
+coordinates, wired to click-to-select and click-to-connect.
+
+**Not yet wired: per-pin LEDs.** `led13`/`ledTX`/`ledRX` on
+`ArduinoUnoElement` would make the board's own onboard LEDs reflect real
+GPIO activity (pin B5/TX/RX), the same way `web/common/src/circuit/`'s
+`Led` component already can for any `CircuitPin` — a natural, cheap-
+looking follow-up once there's a reason to read a pin's live value on
+the canvas itself, not conflated with the power-on/off work above.
+
+## Serial Monitor
+
+A read-only terminal panel (`web/shell/src/terminal.ts`), docked below
+the canvas as a flex sibling — not overlaid on top of it, which is why
+`web/shell/index.html`'s `.tab1-canvas-area` grew a `.tab1-canvas-and-
+overlay` wrapper: the zoom-controls/minimap overlay needed a positioning
+context that stays scoped to the canvas itself, so it doesn't need to
+know how tall the terminal panel currently is to avoid overlapping it.
+Two independent ways to get it out of the way: a bottom-bar button
+(`#terminal-toggle-btn`) hides the whole panel, persisted the same way
+as the theme/chrome-hidden toggles; the panel's own header has a second,
+lighter-weight collapse button that just shrinks it to that header
+without hiding it.
+
+**Stage 1 of three, deliberately.** The natural next step after a
+Serial Monitor exists is "let me write and run an Arduino sketch here,"
+and the honest constraint is that nothing about the editor widget is the
+hard part — there is no compiler anywhere in this codebase. `avr8js`
+only emulates a CPU executing whatever's already sitting in its flash;
+turning an Arduino sketch into AVR machine code is a separate, much
+larger undertaking (a WASM-ported `avr-gcc`, or a server-side compile
+step) that a text editor doesn't get you any closer to. So the planned
+progression is:
+
+1. **This** — surface whatever the firmware transmits over UART.
+   Genuinely useful on its own and buildable today, independent of
+   everything below it.
+2. **Firmware loading** — accept a compiled `.hex` (Intel HEX) file,
+   parse it, write it into the emulated flash before Start. No editor
+   needed: compile with the real Arduino CLI/IDE elsewhere and load the
+   result here. This is the step that actually makes the terminal show
+   something, since right now nothing ever writes to `UDR`.
+3. **In-browser editing and compiling** — needs a real AVR toolchain
+   running somewhere. A large, separate project, not a natural extension
+   of adding an editor widget.
+
+**The RPC surface** — three additions, mirroring the pin I/O pipeline
+above almost exactly (`web/common/src/adapter-types.ts`,
+`worker-host.ts`):
+
+- `onSerialData?(cb): () => void` — optional on `SimulatorAdapter`, same
+  reasoning as `onPinChange?`: not every adapter kind has a UART wired up
+  (today, only `avr8` does — `rp2040js` isn't given a UART peripheral in
+  `web/adapters/rp2040/src/adapter.ts`, and `cortex-m`'s QEMU bridge has
+  no serial surface at all).
+- `"subscribeSerial"` — a request-shaped `AdapterMethod`, idempotent via
+  a single `serialSubscribed` boolean in `worker-host.ts` (simpler than
+  `subscribePin`'s per-pin `Map`, since there's only one serial stream
+  per adapter, not one per pin).
+- `{ event: "serialData", byte }` — a new `RpcEvent` member, pushed
+  unsolicited once subscribed, exactly like `pinChange`.
+  `AdapterClient` (`web/shell/src/worker-rpc.ts`) routes it to a third
+  listener set (`serialDataListeners`), parallel to `stateListeners`/
+  `pinChangeListeners`; `SimClient` (`adapter-registry.ts`) declares
+  `onSerialData?` for the same reason it declares `onPinChange?` —
+  `NativeAdapterClient` doesn't implement either.
+
+**Where the byte actually comes from.** `Avr8Adapter.attachPeripherals()`
+already constructed an `AVRUSART` (from `avr8js`) before this feature
+existed — nothing used it. `AVRUSART.onByteTransmit` is a plain nullable
+callback property that fires synchronously, unconditionally (confirmed
+directly in `avr8js`'s `usart.ts`: it doesn't gate on `UCSRB`'s TXEN bit
+— a deliberately simplified, not cycle-accurate, USART model) whenever
+firmware writes to the `UDR` register, which is exactly what
+`Serial.write()`/`Serial.print()` compile down to. `attachPeripherals()`
+now wires `this.usart.onByteTransmit` to fan out to a `serialListeners`
+set the same way `port.addListener()` already fanned pin changes out to
+`pinListeners`. Read-only for now: `AVRUSART.writeByte()` exists for
+injecting an RX byte (the direction a Serial Monitor's input box would
+need), but nothing calls it — Stage 1 is transmit-only, matching what's
+actually built.
+
+**Surviving reset().** `reset()` replaces `this.cpu` and re-runs
+`attachPeripherals()`, which constructs a *new* `AVRUSART` with its own
+blank `onByteTransmit` — the wiring above happens inside
+`attachPeripherals()` itself, not once at construction, specifically so
+Serial output keeps flowing to the same subscribers across a reset
+instead of silently going dark after the first Stop. `serialListeners`
+itself (the outside world's subscriptions) is never cleared on reset,
+the same way `pinListeners` isn't — only `lastPinValues`-style per-run
+caches get wiped; a subscription is not per-run state. Covered directly
+in `web/adapters/avr8/src/adapter.test.ts` (a `describe("Avr8Adapter
+serial output")` block mirroring the existing pin-I/O tests' style:
+`cpu.writeData(UDR_ADDRESS, ...)` drives the exact write hook real AVR
+instructions would, without hand-assembling a firmware image).
+
+**Line buffering.** `Terminal.writeByte()` drops `\r` and treats `\n` as
+"the current line is done," appending characters to a lazily-created
+line `<div>` as they arrive rather than buffering a whole line before
+showing anything — a byte streaming in should read like a live terminal,
+not something that only updates once a newline shows up. Capped at 500
+completed lines (`MAX_LINES`), trimmed from the oldest end, so a
+long-running sketch printing continuously doesn't grow the DOM (and the
+page's memory) without bound — a rolling window, matching the sidebar
+log's own spirit rather than a full transcript.
 
 ## Build pipeline
 

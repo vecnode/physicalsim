@@ -3,6 +3,7 @@ import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { CanvasController } from "./canvas/index.js";
+import { Terminal } from "./terminal.js";
 import "./native-bridge.js";
 // Side-effect only: registers every <wokwi-*> custom element (Lit's
 // @customElement decorator calls customElements.define() when each
@@ -49,7 +50,21 @@ const canvas = new CanvasController({
   minimapWidthReference: document.querySelector(".zoom-controls") as HTMLElement,
 });
 
+// Serial Monitor (web/shell/src/terminal.ts) - Stage 1 of the terminal
+// feature (see ARCHITECTURE.md): read-only display of whatever the
+// active adapter's UART transmits. Constructed here (not inside
+// CanvasController) since it isn't part of the board-placement canvas -
+// it's tied to whichever *adapter* is being watched, the same thing
+// apply()/setPowered() below already are.
+const terminal = new Terminal({
+  panel: document.getElementById("terminal-panel") as HTMLElement,
+  output: document.getElementById("terminal-output") as HTMLElement,
+  collapseBtn: document.getElementById("terminal-collapse-btn") as HTMLButtonElement,
+  clearBtn: document.getElementById("terminal-clear-btn") as HTMLButtonElement,
+});
+
 let unsubscribe: (() => void) | null = null;
+let unsubscribeSerial: (() => void) | null = null;
 // The adapter the Start/Pause/Stop controls act on. Only changes
 // when Apply is clicked - picking a different item in the dropdown alone
 // does not switch anything, so a control click always applies to the
@@ -93,9 +108,21 @@ function renderState(state: SimState): void {
 
 function apply(id: AdapterId): void {
   unsubscribe?.();
+  unsubscribeSerial?.();
   activeAdapterId = id;
   const client = getAdapterClient(id);
   unsubscribe = client.onStateChange(renderState);
+  // onSerialData is optional on SimClient (see adapter-registry.ts) -
+  // only avr8 implements it today. Guarding on the capability itself,
+  // rather than calling "subscribeSerial" unconditionally, avoids an RPC
+  // round-trip to an adapter kind that would just throw
+  // "does not support onSerialData" (see worker-host.ts).
+  if (client.onSerialData) {
+    unsubscribeSerial = client.onSerialData((byte) => terminal.writeByte(byte));
+    void client.call("subscribeSerial");
+  } else {
+    unsubscribeSerial = null;
+  }
   logLine(`watching ${id} (native bridge can drive it too)`);
 }
 
@@ -111,11 +138,14 @@ canvas.scene.onEntityDeleted((entity) => {
   if ("adapterId" in entity && entity.adapterId === activeAdapterId) {
     unsubscribe?.();
     unsubscribe = null;
+    unsubscribeSerial?.();
+    unsubscribeSerial = null;
     activeAdapterId = null;
     stateRunning.textContent = "idle";
     stateCycles.textContent = "0";
     statePc.textContent = "0x0";
     renderEnergy({ boardId: entity.id, voltage: 0, currentMa: 0 });
+    terminal.clear();
     logLine("board removed");
   }
 });
@@ -163,6 +193,10 @@ pauseBtn.addEventListener("click", () => void activeClient()?.call("stop"));
 stopBtn.addEventListener("click", () => {
   void activeClient()?.call("reset");
   setPowered(false);
+  // A real reset wipes CPU state (see the comment above) - stale Serial
+  // output from before the reset shouldn't linger as if it were still
+  // relevant.
+  terminal.clear();
 });
 
 // Powers (or unpowers) whichever placed board is backed by the active
@@ -214,8 +248,26 @@ boardTabs.addEventListener("click", (ev) => {
 showTab("tab1");
 
 // -----------------------------------------------------------------------
-// Bottom bar: rotate, link-style, chrome-visibility, and theme toggles.
+// Bottom bar: terminal, rotate, link-style, chrome-visibility, and theme
+// toggles.
 // -----------------------------------------------------------------------
+
+// Shows/hides the Serial Monitor entirely (visible by default) -
+// persisted like chrome-hidden/theme below, since this is meant to stay
+// set while working, not reset on every reload. Separate from the
+// terminal's own collapse button (Terminal.setCollapsed()): this hides
+// it completely, that just shrinks it to its header.
+const TERMINAL_HIDDEN_STORAGE_KEY = "physicalsim-terminal-hidden";
+const terminalToggleBtn = document.getElementById("terminal-toggle-btn") as HTMLButtonElement;
+
+let terminalHidden = localStorage.getItem(TERMINAL_HIDDEN_STORAGE_KEY) === "true";
+terminal.setVisible(!terminalHidden);
+
+terminalToggleBtn.addEventListener("click", () => {
+  terminalHidden = !terminalHidden;
+  localStorage.setItem(TERMINAL_HIDDEN_STORAGE_KEY, String(terminalHidden));
+  terminal.setVisible(!terminalHidden);
+});
 
 // Rotates whichever board/component is currently selected 90 degrees
 // clockwise (canvas/scene.ts's rotateSelected()) - works for sensors and

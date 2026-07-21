@@ -12,6 +12,15 @@ function portBOf(adapter: Avr8Adapter) {
   return (adapter as unknown as { portB: { portConfig: { DDR: number; PORT: number } } }).portB;
 }
 
+// AVRUSART's UDR register address (usart0Config.UDR from avr8js) - writing
+// to it is exactly what Serial.write()/Serial.print() compile down to on
+// real firmware, and AVRUSART's writeHooks[UDR] fires onByteTransmit
+// unconditionally on any write regardless of UCSRB's TXEN bit (confirmed
+// directly in avr8js's usart.ts - a deliberately simplified, not cycle-
+// accurate, USART model), so no register setup beyond this one write is
+// needed to exercise onSerialData.
+const UDR_ADDRESS = 0xc6;
+
 describe("Avr8Adapter pin I/O", () => {
   let adapter: Avr8Adapter;
 
@@ -63,5 +72,51 @@ describe("Avr8Adapter pin I/O", () => {
   it("resolvePin rejects unknown ports and out-of-range bits", () => {
     expect(() => adapter.readPin("Z0")).toThrow();
     expect(() => adapter.readPin("B8")).toThrow();
+  });
+});
+
+describe("Avr8Adapter serial output", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  it("onSerialData fires with each byte the firmware writes to UDR", () => {
+    const cb = vi.fn();
+    adapter.onSerialData(cb);
+
+    const cpu = cpuOf(adapter);
+    cpu.writeData(UDR_ADDRESS, "A".charCodeAt(0));
+    cpu.writeData(UDR_ADDRESS, "B".charCodeAt(0));
+
+    expect(cb).toHaveBeenCalledTimes(2);
+    expect(cb).toHaveBeenNthCalledWith(1, "A".charCodeAt(0));
+    expect(cb).toHaveBeenNthCalledWith(2, "B".charCodeAt(0));
+  });
+
+  it("unsubscribing onSerialData stops further callbacks", () => {
+    const cb = vi.fn();
+    const unsubscribe = adapter.onSerialData(cb);
+
+    const cpu = cpuOf(adapter);
+    cpu.writeData(UDR_ADDRESS, 1);
+    unsubscribe();
+    cpu.writeData(UDR_ADDRESS, 2);
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    expect(cb).toHaveBeenCalledWith(1);
+  });
+
+  it("keeps forwarding serial output to the same subscriber across reset()", () => {
+    const cb = vi.fn();
+    adapter.onSerialData(cb);
+
+    adapter.reset();
+    const cpu = cpuOf(adapter); // a fresh CPU instance after reset()
+    cpu.writeData(UDR_ADDRESS, 42);
+
+    expect(cb).toHaveBeenCalledWith(42);
   });
 });

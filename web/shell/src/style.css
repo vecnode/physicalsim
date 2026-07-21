@@ -110,6 +110,16 @@ button {
   cursor: pointer;
 }
 
+/* Inline SVG icons (Phosphor, see assets/icons/phosphor/) inside buttons -
+   fill="currentColor" on the SVG itself makes these follow button:hover's
+   color inversion automatically. */
+.icon {
+  width: 12px;
+  height: 12px;
+  vertical-align: -2px;
+  margin-right: 4px;
+}
+
 button:hover:not(:disabled) {
   background: var(--fg);
   color: var(--bg);
@@ -281,8 +291,27 @@ button:disabled {
   height: 100%;
 }
 
-/* Only the canvas holding actual placed elements (tab 1) gets a border and
-   drag/select behavior - tabs 2/3 stay plain placeholder surfaces. */
+/* Only the surface holding actual placed elements (tab 1) gets a border
+   and drag/select behavior - tabs 2/3 stay plain placeholder <canvas>
+   elements. Tab 1's is a real <div> (see index.html), not a <canvas> -
+   positioned board items are real DOM/SVG (@wokwi/elements), not drawn
+   pixels. */
 .board-canvas-interactive {
+  position: relative;
+  overflow: hidden;
   border: 1px solid var(--border);
+}
+
+.board-item {
+  position: absolute;
+  cursor: grab;
+}
+
+.board-item.dragging {
+  cursor: grabbing;
+}
+
+.board-item.selected {
+  outline: 2px dashed var(--border);
+  outline-offset: 1px;
 }

@@ -2,8 +2,24 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "experimentalDecorators": true,
+    "useDefineForClassFields": false,
     "paths": {
-      "@physicalsim/common": ["../common/src/index.ts"]
+      "@physicalsim/common": ["../common/src/index.ts"],
+      "@wokwi/elements": ["../../simulators/wokwi-elements/src/index.ts"],
+      // wokwi-elements imports "lit" as a real npm package, but it lives
+      // outside web/'s npm workspace (simulators/ is a sibling of web/,
+      // not nested under it), so plain node resolution walking up from
+      // simulators/wokwi-elements/src never finds web/node_modules/lit.
+      // Point both the bare specifier and every subpath (lit/decorators.js
+      // etc.) at web/node_modules/lit directly - mirrored in vite.config.ts.
+      "lit": ["../node_modules/lit"],
+      "lit/*": ["../node_modules/lit/*"],
+      // Same cross-directory issue for the type-only "react" import in
+      // wokwi-elements' react-types.ts (JSX.IntrinsicElements
+      // augmentation for React consumers - this project doesn't use
+      // React/JSX, but the file is imported unconditionally by index.ts).
+      "react": ["../node_modules/@types/react"]
     }
   },
   "include": ["src"]

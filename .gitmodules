@@ -4,3 +4,6 @@
 [submodule "simulators/avr8js"]
 	path = simulators/avr8js
 	url = https://github.com/vecnode/avr8js.git
+[submodule "simulators/wokwi-elements"]
+	path = simulators/wokwi-elements
+	url = https://github.com/vecnode/wokwi-elements.git

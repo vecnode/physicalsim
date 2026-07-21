@@ -91,6 +91,13 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
           }
           result = undefined;
           break;
+        case "loadFirmware":
+          if (!adapter.loadFirmware) {
+            throw new Error(`Adapter "${adapter.id}" does not support loadFirmware`);
+          }
+          adapter.loadFirmware(params as Uint8Array);
+          result = undefined;
+          break;
         default:
           throw new Error(`Unknown method: ${method as string}`);
       }

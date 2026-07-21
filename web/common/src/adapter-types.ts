@@ -25,6 +25,14 @@ export interface SimulatorAdapter {
   // transmits"), not Serial.read() support. Only avr8 implements it today
   // (rp2040/cortex-m have no UART peripheral wired up yet).
   onSerialData?(cb: (byte: number) => void): () => void;
+  // Stage 2 of the terminal feature: writes a flash image (already
+  // parsed from Intel HEX - see intel-hex.ts - into plain bytes) into
+  // the adapter's own program memory and resets, so it actually runs.
+  // Optional and adapter-specific in what "bytes" means (for avr8, the
+  // little-endian word-packed contents of flash) - a future rp2040
+  // equivalent would interpret the same raw-bytes shape differently, not
+  // share this method's exact semantics.
+  loadFirmware?(bytes: Uint8Array): void;
 }
 
 // ---- Worker RPC protocol -------------------------------------------------
@@ -41,7 +49,8 @@ export type AdapterMethod =
   | "readPin"
   | "writePin"
   | "subscribePin"
-  | "subscribeSerial";
+  | "subscribeSerial"
+  | "loadFirmware";
 
 export interface ReadPinParams {
   pin: string;

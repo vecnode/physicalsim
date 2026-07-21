@@ -1,4 +1,4 @@
-import type { SimState } from "@physicalsim/common";
+import { IntelHexParseError, parseIntelHex, type SimState } from "@physicalsim/common";
 import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
@@ -213,6 +213,67 @@ function setPowered(on: boolean): void {
   // next stateChange (renderState -> updateEnergy) corrects it once the
   // adapter actually confirms it's ticking.
   updateEnergy(false);
+}
+
+// -----------------------------------------------------------------------
+// Firmware loading (Stage 2 of the terminal feature - see
+// ARCHITECTURE.md's "Firmware loading" section): load a compiled Intel
+// HEX file into the active adapter's flash and reboot into it.
+// -----------------------------------------------------------------------
+
+const loadFirmwareBtn = document.getElementById("load-firmware-btn") as HTMLButtonElement;
+const firmwareFileInput = document.getElementById("firmware-file-input") as HTMLInputElement;
+
+// A generous sanity ceiling for *parsing* - not a real hardware limit.
+// The adapter itself (Avr8Adapter.loadFirmware()) is the sole authority
+// on the actual flash size and rejects with a specific error if the
+// parsed image is too large for it; this just keeps parseIntelHex()
+// from being handed an unbounded size for a pathological input file.
+const FIRMWARE_PARSE_SANITY_LIMIT_BYTES = 1024 * 1024;
+
+loadFirmwareBtn.addEventListener("click", () => {
+  if (!activeClient()) {
+    logLine("place a board (Apply) before loading firmware");
+    return;
+  }
+  firmwareFileInput.click();
+});
+
+firmwareFileInput.addEventListener("change", () => {
+  const file = firmwareFileInput.files?.[0];
+  firmwareFileInput.value = ""; // allow re-selecting the same file next time
+  if (file) void loadFirmwareFile(file);
+});
+
+async function loadFirmwareFile(file: File): Promise<void> {
+  const client = activeClient();
+  if (!client) {
+    logLine("place a board (Apply) before loading firmware");
+    return;
+  }
+
+  let bytes: Uint8Array;
+  try {
+    const text = await file.text();
+    const parsed = parseIntelHex(text, FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
+    // parseIntelHex() always returns a buffer the full sanity-limit size,
+    // padded with 0xff past whatever the file actually specified -
+    // trimmed here so the adapter only ever sees the meaningful part
+    // (and doesn't reject a small, valid file for looking "too large"
+    // because of that padding).
+    bytes = parsed.bytes.slice(0, parsed.usedBytes);
+  } catch (err) {
+    logLine(err instanceof IntelHexParseError ? err.message : `couldn't read "${file.name}"`);
+    return;
+  }
+
+  try {
+    await client.call("loadFirmware", bytes);
+    terminal.clear();
+    logLine(`${file.name} loaded (${bytes.length} bytes)`);
+  } catch (err) {
+    logLine(err instanceof Error ? err.message : "firmware load failed");
+  }
 }
 
 // -----------------------------------------------------------------------

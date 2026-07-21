@@ -1,5 +1,4 @@
-import type { BoardPinMap, SimState } from "@physicalsim/common";
-import { arduinoUno, Button, CircuitPin, Led, rp2040Board } from "@physicalsim/common";
+import type { SimState } from "@physicalsim/common";
 import type { LitElement } from "lit";
 import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import {
@@ -9,6 +8,7 @@ import {
   type Circuit,
   type CircuitBoard,
 } from "./circuit.js";
+import { computeEnergy, type BoardEnergy } from "./energy.js";
 import "./native-bridge.js";
 // Side-effect only: registers every <wokwi-*> custom element (Lit's
 // @customElement decorator calls customElements.define() when each
@@ -21,16 +21,18 @@ import "@wokwi/elements";
 const adapterSelect = document.getElementById("adapter-select") as HTMLSelectElement;
 const applyBtn = document.getElementById("apply-btn") as HTMLButtonElement;
 const startBtn = document.getElementById("start-btn") as HTMLButtonElement;
+const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
 const stopBtn = document.getElementById("stop-btn") as HTMLButtonElement;
-const stepBtn = document.getElementById("step-btn") as HTMLButtonElement;
-const resetBtn = document.getElementById("reset-btn") as HTMLButtonElement;
 const stateRunning = document.getElementById("state-running") as HTMLElement;
 const stateCycles = document.getElementById("state-cycles") as HTMLElement;
 const statePc = document.getElementById("state-pc") as HTMLElement;
+const energyVoltage = document.getElementById("energy-voltage") as HTMLElement;
+const energyCurrent = document.getElementById("energy-current") as HTMLElement;
+const energyPower = document.getElementById("energy-power") as HTMLElement;
 const log = document.getElementById("log") as HTMLElement;
 
 let unsubscribe: (() => void) | null = null;
-// The adapter the Start/Stop/Step/Reset controls act on. Only changes
+// The adapter the Start/Pause/Stop controls act on. Only changes
 // when Apply is clicked - picking a different item in the dropdown alone
 // does not switch anything, so a control click always applies to the
 // adapter you last confirmed, not whatever the select happens to show.
@@ -44,6 +46,10 @@ function renderState(state: SimState): void {
   stateCycles.textContent = String(state.cycles);
   const pc = typeof state.pc === "number" ? state.pc : 0;
   statePc.textContent = "0x" + pc.toString(16);
+  // Every stateChange already fires continuously while running - the
+  // natural place to nudge current draw from "idle" to "running" once
+  // ticking actually starts, no new adapter-side plumbing needed.
+  updateEnergy(state.running);
 }
 
 function logLine(text: string): void {
@@ -56,7 +62,6 @@ function apply(id: AdapterId): void {
   const client = getAdapterClient(id);
   unsubscribe = client.onStateChange(renderState);
   logLine(`watching ${id} (native bridge can drive it too)`);
-  refreshPinPanel();
 }
 
 applyBtn.addEventListener("click", () => {
@@ -64,7 +69,7 @@ applyBtn.addEventListener("click", () => {
   // "Arduino Uno" is a board illustration, not a running SimulatorAdapter -
   // it isn't in the AdapterId union and never reaches getAdapterClient().
   // Selecting it just places the board on tab 1; it doesn't touch
-  // start/stop/step/reset or any of the avr8/rp2040/cortex-m machinery.
+  // start/pause/stop or any of the avr8/rp2040/cortex-m machinery.
   if (value === "arduino-uno") {
     void showBoard("arduino-uno");
     return;
@@ -76,188 +81,32 @@ function activeClient() {
   return activeAdapterId ? getAdapterClient(activeAdapterId) : null;
 }
 
-// Start/Stop double as "power the circuit": beyond calling the adapter's
-// own start()/stop(), they flip .powered on whichever placed board is
-// backed by the active adapter and reflect that on its element (the
-// board's power-supply LED, independent of any GPIO pin - see circuit.ts).
-// No-ops safely via activeClient()'s null check if nothing is plugged in
-// yet (see setPowered below, defined near the circuit model further down).
+// Start/Pause/Stop are "power the circuit": Start and Stop flip .powered
+// on whichever placed board is backed by the active adapter and reflect
+// that on its element (the board's power-supply LED, independent of any
+// GPIO pin - see circuit.ts); Pause doesn't touch power at all. No-ops
+// safely via activeClient()'s null check if nothing is plugged in yet.
+//
+// Pause vs. Stop is a real distinction, not just two names for the same
+// thing: the adapter's own "stop" RPC method only halts ticking - it
+// never resets CPU state (see e.g. Avr8Adapter.stop() in
+// web/adapters/avr8/src/adapter.ts, which just clears the tick timer).
+// So Pause = call "stop" and leave it there: execution halts mid-program,
+// state intact, Start resumes exactly where it left off - like a real
+// board's power staying on while halted at a breakpoint. Stop = call
+// "reset" instead (which itself calls "stop" first, then wipes the CPU
+// back to power-on defaults) *and* turn the power LED off - matching
+// what actually happens to a real board's SRAM when it loses power for
+// real, not just pauses.
 startBtn.addEventListener("click", () => {
   void activeClient()?.call("start");
   setPowered(true);
 });
+pauseBtn.addEventListener("click", () => void activeClient()?.call("stop"));
 stopBtn.addEventListener("click", () => {
-  void activeClient()?.call("stop");
+  void activeClient()?.call("reset");
   setPowered(false);
 });
-// Step/Reset stay disabled (see index.html) - not part of "power the
-// circuit", left wired rather than removed for whenever they're needed.
-stepBtn.addEventListener("click", () => void activeClient()?.call("step", 1));
-resetBtn.addEventListener("click", () => void activeClient()?.call("reset"));
-
-// -----------------------------------------------------------------------
-// Pins panel: read/attach/detach individual pins on the active adapter.
-// No board/canvas view - just a list of rows, each backed by a CircuitPin.
-// See ARCHITECTURE.md's "Pin I/O pipeline" section for what's underneath.
-// -----------------------------------------------------------------------
-
-const pinSelect = document.getElementById("pin-select") as HTMLSelectElement;
-const pinKindSelect = document.getElementById("pin-kind-select") as HTMLSelectElement;
-const pinReadBtn = document.getElementById("pin-read-btn") as HTMLButtonElement;
-const pinAttachBtn = document.getElementById("pin-attach-btn") as HTMLButtonElement;
-const pinUnsupported = document.getElementById("pin-unsupported") as HTMLElement;
-const pinRows = document.getElementById("pin-rows") as HTMLElement;
-const pinLog = document.getElementById("pin-log") as HTMLElement;
-
-// Only avr8/rp2040 have real pin I/O today - cortex-m's QemuInstance always
-// throws (see src/qemu_adapter.cpp), so there's no board map for it and the
-// panel disables itself entirely rather than let you hit that error blind.
-const boardFor: Record<AdapterId, BoardPinMap | null> = {
-  avr8: arduinoUno,
-  rp2040: rp2040Board,
-  "cortex-m": null,
-};
-
-const MAX_PIN_LOG_LINES = 200;
-const pinLogLines: string[] = [];
-
-function pinLogLine(text: string): void {
-  const time = new Date().toLocaleTimeString();
-  pinLogLines.push(`[${time}] ${text}`);
-  if (pinLogLines.length > MAX_PIN_LOG_LINES) pinLogLines.shift();
-  pinLog.textContent = pinLogLines.join("\n");
-  pinLog.scrollTop = pinLog.scrollHeight;
-}
-
-interface PinRow {
-  el: HTMLElement;
-  dispose: () => void;
-}
-
-let pinRowsById = new Map<string, PinRow>();
-
-function clearPinRows(): void {
-  for (const row of pinRowsById.values()) row.dispose();
-  pinRowsById = new Map();
-  pinRows.replaceChildren();
-}
-
-function refreshPinPanel(): void {
-  // Switching the active adapter invalidates every attached row - each one
-  // held a CircuitPin bound to the *previous* adapter's client.
-  clearPinRows();
-
-  const board = activeAdapterId ? boardFor[activeAdapterId] : null;
-  pinUnsupported.hidden = board !== null;
-  pinSelect.disabled = board === null;
-  pinKindSelect.disabled = board === null;
-  pinReadBtn.disabled = board === null;
-  pinAttachBtn.disabled = board === null;
-
-  pinSelect.replaceChildren();
-  if (board) {
-    for (const name of Object.keys(board)) {
-      const option = document.createElement("option");
-      option.value = name;
-      option.textContent = `${name} (${board[name]})`;
-      pinSelect.appendChild(option);
-    }
-  }
-}
-
-function addPinRow(name: string, kind: "led" | "button"): void {
-  const board = activeAdapterId ? boardFor[activeAdapterId] : null;
-  const client = activeClient();
-  if (!board || !client) return;
-  const rowId = `${activeAdapterId}:${name}:${pinRowsById.size}:${Date.now()}`;
-  const pin = CircuitPin.forBoardPin(client, board, name);
-
-  const el = document.createElement("div");
-  el.className = "pin-row";
-
-  const label = document.createElement("span");
-  label.className = "pin-row-name";
-  label.innerHTML = `${name} <span class="pin-row-id">(${pin.pin})</span>`;
-  el.appendChild(label);
-
-  let dispose: () => void;
-
-  if (kind === "led") {
-    const led = new Led(pin);
-    const dot = document.createElement("span");
-    dot.className = "led-dot";
-    el.appendChild(dot);
-    const unsubscribe = pin.onChange((value) => {
-      dot.classList.toggle("on", !!value);
-      pinLogLine(`${activeAdapterId}:${pin.pin} -> ${value}`);
-    });
-    dispose = () => {
-      unsubscribe();
-      led.dispose();
-    };
-  } else {
-    const button = new Button(pin);
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.textContent = "hold to press";
-    const pressed = async (): Promise<void> => {
-      await button.press();
-      const readBack = await pin.read();
-      pinLogLine(`${activeAdapterId}:${pin.pin} wrote 1, read back ${readBack}`);
-    };
-    const released = async (): Promise<void> => {
-      await button.release();
-      const readBack = await pin.read();
-      pinLogLine(`${activeAdapterId}:${pin.pin} wrote 0, read back ${readBack}`);
-    };
-    btn.addEventListener("mousedown", () => void pressed());
-    btn.addEventListener("mouseup", () => void released());
-    btn.addEventListener("mouseleave", () => void released());
-    el.appendChild(btn);
-    dispose = () => {
-      /* Button holds no subscription of its own to release. */
-    };
-  }
-
-  const detachBtn = document.createElement("button");
-  detachBtn.type = "button";
-  detachBtn.className = "pin-row-detach";
-  detachBtn.textContent = "✕";
-  detachBtn.title = "Detach";
-  detachBtn.addEventListener("click", () => {
-    dispose();
-    pinRowsById.delete(rowId);
-    el.remove();
-    pinLogLine(`detached ${activeAdapterId}:${pin.pin}`);
-  });
-  el.appendChild(detachBtn);
-
-  pinRowsById.set(rowId, { el, dispose });
-  pinRows.appendChild(el);
-  pinLogLine(`attached ${activeAdapterId}:${pin.pin} as ${kind}`);
-}
-
-pinReadBtn.addEventListener("click", () => {
-  const board = activeAdapterId ? boardFor[activeAdapterId] : null;
-  const client = activeClient();
-  if (!board || !client || !pinSelect.value) return;
-  const pin = CircuitPin.forBoardPin(client, board, pinSelect.value);
-  void pin.read().then((value) => {
-    pinLogLine(`${activeAdapterId}:${pin.pin} read -> ${value}`);
-  });
-});
-
-pinAttachBtn.addEventListener("click", () => {
-  if (!pinSelect.value) return;
-  addPinRow(pinSelect.value, pinKindSelect.value as "led" | "button");
-});
-
-// Deferred until here (not right after `apply` is defined above) because
-// refreshPinPanel() reads the pin-panel elements declared in this
-// section - calling it any earlier would hit them before their `const`
-// declarations run. Renders the "no running adapter" disabled state
-// correctly on load, since activeAdapterId starts null (see above).
-refreshPinPanel();
 
 // -----------------------------------------------------------------------
 // Board workspace: a tab bar on the right, one pane per tab - generic
@@ -283,11 +132,35 @@ for (const pane of document.querySelectorAll<HTMLElement>(".tab-pane")) {
   if (canvas) boardCanvases.set(tab, canvas);
 }
 
+// Matches .board-canvas-interactive's CSS grid in style.css (tab 1, a
+// <div>) - kept as pixel-drawn grid lines here since tabs 2/3 are real
+// <canvas> elements using an opaque (alpha: false) context, which paints
+// over any CSS background applied to the element itself. Keep in sync
+// with style.css's background-size if either changes.
+const CANVAS_BG = "#2b2b2b";
+const CANVAS_GRID = "#3a3a3a";
+const GRID_SIZE_CSS_PX = 20;
+
 function drawPlaceholder(canvas: HTMLCanvasElement): void {
   const ctx = canvas.getContext("2d", { alpha: false });
   if (!ctx) return;
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = CANVAS_BG;
   ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const dpr = window.devicePixelRatio || 1;
+  const gridSize = GRID_SIZE_CSS_PX * dpr;
+  ctx.strokeStyle = CANVAS_GRID;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x <= canvas.width; x += gridSize) {
+    ctx.moveTo(x + 0.5, 0);
+    ctx.lineTo(x + 0.5, canvas.height);
+  }
+  for (let y = 0; y <= canvas.height; y += gridSize) {
+    ctx.moveTo(0, y + 0.5);
+    ctx.lineTo(canvas.width, y + 0.5);
+  }
+  ctx.stroke();
 }
 
 function resizeCanvas(canvas: HTMLCanvasElement): void {
@@ -353,6 +226,30 @@ const tab1Container = document.getElementById("canvas-tab1") as HTMLElement;
 // replaces rather than appends), same as the DOM scene it mirrors.
 let circuit: Circuit = { boards: [] };
 const circuitDom = new Map<string, { wrapper: HTMLElement; boardEl: HTMLElement }>();
+
+// A second, separate model from `circuit` above - see energy.ts. Keyed
+// the same way circuitDom is (by CircuitBoard.id), for the same reason:
+// keeps this out of the JSON-serializable Circuit/CircuitBoard shape.
+const energy = new Map<string, BoardEnergy>();
+
+function renderEnergy(e: BoardEnergy): void {
+  energyVoltage.textContent = `${e.voltage.toFixed(1)} V`;
+  energyCurrent.textContent = `${e.currentMa} mA`;
+  energyPower.textContent = `${Math.round(e.voltage * e.currentMa)} mW`;
+}
+
+// Recomputes and re-renders energy for whichever placed board is backed
+// by the active adapter - same "find the active board" shape as
+// setPowered() below, called from there (on power change) and from
+// renderState() (on every stateChange, so current draw tracks running
+// vs. idle without any new adapter-side plumbing).
+function updateEnergy(running: boolean): void {
+  const board = circuit.boards.find((b) => b.adapterId === activeAdapterId);
+  if (!board) return;
+  const e = computeEnergy(board, running);
+  energy.set(board.id, e);
+  renderEnergy(e);
+}
 
 let tab1Selected: HTMLElement | null = null;
 
@@ -474,6 +371,41 @@ function setPowered(on: boolean): void {
   board.powered = on;
   const dom = circuitDom.get(board.id);
   if (dom) boardPowerSetter[board.type]?.(dom.boardEl, on);
+  // Running state isn't known yet here - start()/reset() are async RPC
+  // calls that haven't resolved. Snapshot as "not running" for now; the
+  // next stateChange (renderState -> updateEnergy) corrects it once the
+  // adapter actually confirms it's ticking.
+  updateEnergy(false);
 }
 
 showTab("tab1");
+
+// -----------------------------------------------------------------------
+// Theme toggle (bottom bar): light/dark for the chrome only - the canvas
+// stays --canvas-bg regardless (see style.css). Persisted so it survives
+// a reload, since this is meant to stay set while developing against the
+// app repeatedly, not reset itself every time.
+// -----------------------------------------------------------------------
+
+const THEME_STORAGE_KEY = "physicalsim-theme";
+const themeToggleBtn = document.getElementById("theme-toggle-btn") as HTMLButtonElement;
+const themeIconLight = document.getElementById("theme-icon-light") as HTMLElement;
+const themeIconDark = document.getElementById("theme-icon-dark") as HTMLElement;
+
+function applyTheme(theme: "light" | "dark"): void {
+  if (theme === "dark") document.documentElement.dataset.theme = "dark";
+  else delete document.documentElement.dataset.theme;
+  // Icon shows what clicking the button switches *to*, not the current
+  // state - a moon while light (click to go dark), a sun while dark.
+  themeIconLight.hidden = theme === "dark";
+  themeIconDark.hidden = theme !== "dark";
+}
+
+const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+applyTheme(storedTheme === "dark" ? "dark" : "light");
+
+themeToggleBtn.addEventListener("click", () => {
+  const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+  localStorage.setItem(THEME_STORAGE_KEY, next);
+  applyTheme(next);
+});

@@ -5,46 +5,20 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'">
   <meta name="referrer" content="no-referrer">
-  <title>physicalsim</title>
+  <title>physicalsim - v0.1.0</title>
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
   <div class="app">
     <header class="topbar">
-      <h1>physicalsim</h1>
+      <!-- Version is hardcoded, not build-injected - keep in sync with
+           PHYSICALSIM_VERSION in src/main.cpp when it changes. -->
+      <h1>physicalsim <span class="version">v0.1.0</span></h1>
     </header>
 
     <div class="body">
       <aside class="sidebar">
-        <section class="panel state">
-          <dl id="state-list">
-            <dt>status</dt><dd id="state-running">idle</dd>
-            <dt>cycles</dt><dd id="state-cycles">0</dd>
-            <dt>pc</dt><dd id="state-pc">0x0</dd>
-          </dl>
-        </section>
-
         <output id="log" aria-live="polite"></output>
-
-        <section class="panel pins">
-          <label for="pin-select">Pins (active simulator)</label>
-          <div class="select-row">
-            <select id="pin-select"></select>
-            <select id="pin-kind-select">
-              <option value="led">LED (display)</option>
-              <option value="button">Button (control)</option>
-            </select>
-            <button id="pin-read-btn" type="button">Read</button>
-            <button id="pin-attach-btn" type="button">Attach</button>
-          </div>
-          <p id="pin-unsupported" class="hint" hidden>
-            This simulator has no pin I/O yet.
-          </p>
-
-          <div id="pin-rows" class="pin-rows"></div>
-
-          <output id="pin-log" class="pin-log" aria-live="polite"></output>
-        </section>
       </aside>
 
       <main class="workspace">
@@ -67,19 +41,44 @@
             <!--
               avr8/rp2040/cortex-m removed from the dropdown - not gone,
               just parked (see adapter-registry.ts, worker-rpc.ts, the
-              adapter packages: all untouched). Start/Stop now double as
+              adapter packages: all untouched). Start/Pause/Stop are
               "power the circuit" for whatever board is placed (see
-              main.ts's setPowered()); Step/Reset stay disabled - not
-              part of that, no adapter path re-enables them yet.
+              main.ts's setPowered()): Start powers on and runs, Pause
+              halts execution without losing power (CPU state preserved -
+              the adapter's own stop() RPC method never wipes state, only
+              halts ticking), Stop powers off for real (adapter reset() -
+              which itself calls stop() first - wipes CPU state back to
+              power-on defaults, matching what a real board losing power
+              would do). Step/Reset buttons removed - Stop now covers
+              Reset's job as part of powering off; Step never fit the
+              power model.
               Icons: Phosphor Icons (MIT), vendored at
-              assets/icons/phosphor/{play,stop}.svg.
+              assets/icons/phosphor/{play,pause,stop}.svg.
             -->
             <div class="controls">
               <button id="start-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>Start</button>
+              <button id="pause-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z"/></svg>Pause</button>
               <button id="stop-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></svg>Stop</button>
-              <button id="step-btn" type="button" disabled title="No running CPU adapter selected">Step</button>
-              <button id="reset-btn" type="button" disabled title="No running CPU adapter selected">Reset</button>
             </div>
+
+            <dl id="state-list" class="readout">
+              <dt>status</dt><dd id="state-running">idle</dd>
+              <dt>cycles</dt><dd id="state-cycles">0</dd>
+              <dt>pc</dt><dd id="state-pc">0x0</dd>
+            </dl>
+
+            <!--
+              A second, separate model from the state readout above - see
+              ARCHITECTURE.md's "Energy model" section. Nominal values
+              only (not a real circuit-topology solve): 0 whenever the
+              board isn't powered, a fixed per-board-type voltage and an
+              idle/running current estimate otherwise.
+            -->
+            <dl id="energy-list" class="readout">
+              <dt>voltage</dt><dd id="energy-voltage">0.0 V</dd>
+              <dt>current</dt><dd id="energy-current">0 mA</dd>
+              <dt>power</dt><dd id="energy-power">0 mW</dd>
+            </dl>
           </section>
 
           <div class="tab1-canvas-area">
@@ -93,6 +92,16 @@
 
         <div class="tab-pane" data-tab="tab3">
           <canvas id="canvas-tab3" class="board-canvas board-canvas-full"></canvas>
+        </div>
+
+        <!-- Same height as .tabs (the top tab bar) - a home for canvas-
+             wide controls that aren't per-tab. Just the light/dark
+             toggle for now; a natural place for more later. -->
+        <div class="bottombar">
+          <button id="theme-toggle-btn" type="button" title="Toggle light/dark interface">
+            <svg id="theme-icon-light" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg>
+            <svg id="theme-icon-dark" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" hidden><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg>
+          </button>
         </div>
       </main>
     </div>

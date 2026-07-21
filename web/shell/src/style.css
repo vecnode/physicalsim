@@ -244,6 +244,7 @@ button:disabled {
 }
 
 .tab1-canvas-area {
+  position: relative;
   flex: 1;
   min-width: 0;
   display: flex;
@@ -261,24 +262,125 @@ button:disabled {
   height: 100%;
 }
 
-/* Only the surface holding actual placed elements (tab 1) gets a border
-   and drag/select behavior - tabs 2/3 stay plain placeholder <canvas>
-   elements. Tab 1's is a real <div> (see index.html), not a <canvas> -
-   positioned board items are real DOM/SVG (@wokwi/elements), not drawn
-   pixels. Grid is a CSS background here (cheap, just a <div>); tabs 2/3
-   draw the equivalent grid as canvas pixels in main.ts's
-   drawPlaceholder(), since an opaque-context <canvas> paints over any
-   CSS background applied to the element itself. Keep GRID_SIZE in sync
-   with main.ts if either changes. */
+/* Tabs 2/3's entire content - deliberately empty (see index.html), just
+   filling the pane so the tab doesn't look broken/collapsed. */
+.tab-blank {
+  flex: 1;
+}
+
+/* Only tab 1's surface gets a border, grid, and drag/select behavior - a
+   real <div> (see index.html), not a <canvas>: positioned board items
+   are real DOM/SVG (@wokwi/elements), not drawn pixels. Grid is a CSS
+   background here (cheap, just a <div>). Keep GRID_SIZE_CSS_PX in
+   canvas/index.ts in sync with this if either changes. */
 .board-canvas-interactive {
   position: relative;
+  /* hidden, not auto - panning is done entirely via tab1Content's own
+     CSS transform (main.ts's panX/panY + applyTransform()), not native
+     scrollLeft/scrollTop, so there's no scrollable overflow to expose
+     here (and no scrollbars fighting the drag-to-pan gesture). */
   overflow: hidden;
+  /* grab/grabbing (not the browser default) signals "drag the background
+     to pan" - .board-item's own cursor (grab/grabbing while dragging a
+     placed item) wins over this wherever an item actually sits on top. */
+  cursor: grab;
   border: 1px solid var(--border);
   background-color: var(--canvas-bg);
   background-image:
     linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
     linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
   background-size: 20px 20px;
+}
+
+/* The zoomable/pannable layer: every placed board/component (and the
+   wire layer connecting their pins - canvas/wiring.ts) lives inside
+   this, never directly in .board-canvas-interactive - canvas/
+   viewport.ts's Viewport moves/scales only this element (transform-
+   origin 0 0, so world (0,0) maps to screen (panX, panY)), leaving the
+   viewport's own border/grid background alone. */
+.tab1-content {
+  position: absolute;
+  inset: 0;
+  transform-origin: 0 0;
+}
+
+/* Set on .board-canvas-interactive while a background drag is panning it
+   (canvas/index.ts's CanvasController.bindBackgroundPan()) - grabbing
+   cursor feedback, and user-select:none so a fast drag doesn't also
+   select page text along the way. */
+.board-canvas-interactive.panning {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* Positions both the minimap and the zoom controls as one stacked unit,
+   bottom-right of the canvas area - the minimap no longer needs its own
+   absolute positioning, it just sits above the controls row in this
+   column. */
+.canvas-overlay {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+}
+
+/* A miniature top-down view of the whole scene (canvas/minimap.ts) -
+   width is set to match .zoom-controls' own rendered width exactly
+   (Minimap.syncSize(), not a hardcoded value here, since the controls'
+   width is itself just "as wide as its three buttons need to be");
+   height is derived from the canvas area's own aspect ratio so the
+   minimap isn't a distorted view of it. */
+.minimap {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  background: var(--canvas-bg);
+  cursor: pointer;
+}
+
+/* One per placed board/component (canvas/minimap.ts's render()) -
+   deliberately plain filled rectangles, not miniature renders of the
+   real SVG (cheap, and legible at this size in a way a tiny board
+   illustration wouldn't be). */
+.minimap-item {
+  position: absolute;
+  background: var(--muted);
+  opacity: 0.85;
+}
+
+/* The portion of the world currently visible in the real canvas -
+   pointer-events: none so clicks/drags land on .minimap itself (which
+   does the actual panning), not this indicator. */
+.minimap-viewport-rect {
+  position: absolute;
+  border: 1px solid #ffd54a;
+  background: rgba(255, 213, 74, 0.15);
+  pointer-events: none;
+}
+
+.zoom-controls {
+  display: flex;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.zoom-controls button {
+  border: none;
+  padding: 3px 8px;
+  min-width: 28px;
+  flex: 1;
+}
+
+.zoom-controls button + button {
+  border-left: 1px solid var(--border);
+}
+
+#zoom-level {
+  font-size: 0.7rem;
 }
 
 .board-item {
@@ -295,9 +397,155 @@ button:disabled {
   outline-offset: 1px;
 }
 
+/* One per pin (see canvas/scene.ts's overlayPinMarkers()), positioned in
+   plain CSS px matching the board element's own rendered pin coordinates
+   - absolute within .board-item, which is itself position:absolute (its
+   own containing block). Small and mostly invisible until hovered/
+   selected so it doesn't visually compete with the board illustration
+   underneath. */
+.pin-marker {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+
+.pin-marker:hover {
+  border-color: #ffd54a;
+  background: rgba(255, 213, 74, 0.35);
+}
+
+.pin-marker.selected {
+  border-color: #ffd54a;
+  background: #ffd54a;
+}
+
+/* The source pin of an in-progress connection (canvas/wiring.ts's
+   handlePinClick() - set on the first click, cleared once a second pin
+   completes or cancels it) - a solid ring distinct from .selected's
+   filled dot, so "waiting for a second click" reads differently from
+   "this is just selected". */
+.pin-marker.connecting {
+  border-color: #ffd54a;
+  border-width: 2px;
+  background: transparent;
+}
+
+/* The pin-to-pin connection layer (canvas/wiring.ts) - an <svg> appended
+   as the first child of .tab1-content, so it inherits the exact same
+   pan/zoom CSS transform every board/component wrapper does and never
+   needs its own recompute for that. overflow: visible so a wire whose
+   endpoint sits outside the nominal content box (an item dragged to a
+   negative position, say) still draws instead of clipping.
+   pointer-events: none keeps it out of the way of drags/clicks on the
+   boards and pins underneath. */
+.wire-layer {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.wire-line {
+  stroke: #ffd54a;
+  stroke-width: 2;
+}
+
+/* Right-click "Boards/Sensors/Connections" menu (canvas/context-menu.ts)
+   - fixed positioning at the click point, plain buttons stacked in a
+   column, matching the app's flat black/white aesthetic rather than a
+   themed dropdown. */
+.context-menu {
+  position: fixed;
+  z-index: 100;
+  min-width: 160px;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.context-menu-label {
+  padding: 3px 10px;
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+
+.context-menu-item {
+  border: none;
+  background: transparent;
+  color: var(--fg);
+  text-align: left;
+  padding: 4px 10px;
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+
+.context-menu-item:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* A category row (Boards/Sensors/Connections) - not a button itself,
+   just a hover target that reveals its .context-submenu, same
+   convention as a native OS context menu's flyout submenus. */
+.context-menu-item.has-submenu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.context-menu-item.has-submenu:hover {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+.context-menu-item.has-submenu .submenu-arrow {
+  color: var(--muted);
+}
+
+.context-menu-item.has-submenu:hover .submenu-arrow {
+  color: var(--bg);
+}
+
+.context-submenu {
+  display: none;
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+.context-menu-item.has-submenu:hover > .context-submenu {
+  display: flex;
+}
+
+/* Toggled by main.ts's panel-visibility button (persisted in
+   localStorage, same convention as the theme toggle) - hides the
+   simulator panel and the zoom-controls/minimap overlay, leaving just
+   the bare canvas. On <html>, not .app, so it can hide elements
+   regardless of which tab-pane they live in without a second selector
+   per pane. */
+.chrome-hidden .tab1-simulator-panel,
+.chrome-hidden .canvas-overlay {
+  display: none;
+}
+
 /* Bottom bar: same height as .tabs (matching padding/border-width), a
-   home for canvas-wide controls that aren't per-tab - just the theme
-   toggle for now. */
+   home for canvas-wide controls that aren't per-tab - the panel-
+   visibility and light/dark toggles. */
 /* No padding on .bottombar itself, height instead comes purely from its
    button's own box model - deliberately mirroring .tabs (also unpadded,
    height set by .tab-btn's padding+border) rather than a hardcoded

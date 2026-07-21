@@ -82,22 +82,59 @@
           </section>
 
           <div class="tab1-canvas-area">
-            <div id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive"></div>
+            <div id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive">
+              <!-- Placed boards/components live inside this inner layer,
+                   not directly in #canvas-tab1 - canvas/viewport.ts pans/
+                   scales this element alone via CSS transform, leaving
+                   #canvas-tab1 itself (border, grid background) fixed. -->
+              <div id="tab1-content" class="tab1-content"></div>
+            </div>
+            <!-- Pinned bottom-right of the canvas area, stacked: minimap
+                 on top of the zoom controls, same rendered width as the
+                 controls row (main.ts sizes #minimap to match). -->
+            <div class="canvas-overlay">
+              <!-- A miniature top-down view of the whole scene
+                   (canvas/minimap.ts) - #minimap-items holds one small
+                   marker per placed board/component, #minimap-viewport is
+                   the rectangle showing what's currently visible in the
+                   real canvas. Click/drag anywhere on it to pan the main
+                   view. -->
+              <div id="minimap" class="minimap" title="Click or drag to pan">
+                <div id="minimap-items"></div>
+                <div id="minimap-viewport" class="minimap-viewport-rect"></div>
+              </div>
+              <!-- Zoom controls: -/reset/+. Percentage label doubles as a
+                   reset-to-100% button. -->
+              <div class="zoom-controls">
+                <button id="zoom-out-btn" type="button" title="Zoom out">-</button>
+                <button id="zoom-reset-btn" type="button" title="Reset zoom">
+                  <span id="zoom-level">100%</span>
+                </button>
+                <button id="zoom-in-btn" type="button" title="Zoom in">+</button>
+              </div>
+            </div>
           </div>
         </div>
 
+        <!-- Deliberately empty - future workspaces with nothing built
+             yet, not placeholder canvases drawing a grid no one used. -->
         <div class="tab-pane" data-tab="tab2">
-          <canvas id="canvas-tab2" class="board-canvas board-canvas-full"></canvas>
+          <div class="tab-blank"></div>
         </div>
 
         <div class="tab-pane" data-tab="tab3">
-          <canvas id="canvas-tab3" class="board-canvas board-canvas-full"></canvas>
+          <div class="tab-blank"></div>
         </div>
 
         <!-- Same height as .tabs (the top tab bar) - a home for canvas-
-             wide controls that aren't per-tab. Just the light/dark
-             toggle for now; a natural place for more later. -->
+             wide controls that aren't per-tab: the chrome-visibility
+             toggle (hides the simulator panel + zoom-controls/minimap,
+             leaving just the bare canvas) and light/dark. -->
         <div class="bottombar">
+          <button id="panel-toggle-btn" type="button" title="Show/hide panel and zoom controls">
+            <svg id="panel-icon-visible" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M247.31,124.76c-.35-.79-8.82-19.58-27.65-38.41C194.57,61.26,162.88,48,128,48S61.43,61.26,36.34,86.35C17.51,105.18,9,124,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208s66.57-13.26,91.66-38.34c18.83-18.83,27.3-37.61,27.65-38.4A8,8,0,0,0,247.31,124.76ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.47,133.47,0,0,1,25,128,133.33,133.33,0,0,1,48.07,97.25C70.33,75.19,97.22,64,128,64s57.67,11.19,79.93,33.25A133.46,133.46,0,0,1,231.05,128C223.84,141.46,192.43,192,128,192Zm0-112a48,48,0,1,0,48,48A48.05,48.05,0,0,0,128,80Zm0,80a32,32,0,1,1,32-32A32,32,0,0,1,128,160Z"/></svg>
+            <svg id="panel-icon-hidden" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" hidden><path d="M53.92,34.62A8,8,0,1,0,42.08,45.38L61.32,66.55C25,88.84,9.38,123.2,8.69,124.76a8,8,0,0,0,0,6.5c.35.79,8.82,19.57,27.65,38.4C61.43,194.74,93.12,208,128,208a127.11,127.11,0,0,0,52.07-10.83l22,24.21a8,8,0,1,0,11.84-10.76Zm47.33,75.84,41.67,45.85a32,32,0,0,1-41.67-45.85ZM128,192c-30.78,0-57.67-11.19-79.93-33.25A133.16,133.16,0,0,1,25,128c4.69-8.79,19.66-33.39,47.35-49.38l18,19.75a48,48,0,0,0,63.66,70l14.73,16.2A112,112,0,0,1,128,192Zm6-95.43a8,8,0,0,1,3-15.72,48.16,48.16,0,0,1,38.77,42.64,8,8,0,0,1-7.22,8.71,6.39,6.39,0,0,1-.75,0,8,8,0,0,1-8-7.26A32.09,32.09,0,0,0,134,96.57Zm113.28,34.69c-.42.94-10.55,23.37-33.36,43.8a8,8,0,1,1-10.67-11.92A132.77,132.77,0,0,0,231.05,128a133.15,133.15,0,0,0-23.12-30.77C185.67,75.19,158.78,64,128,64a118.37,118.37,0,0,0-19.36,1.57A8,8,0,1,1,106,49.79,134,134,0,0,1,128,48c34.88,0,66.57,13.26,91.66,38.35,18.83,18.83,27.3,37.62,27.65,38.41A8,8,0,0,1,247.31,131.26Z"/></svg>
+          </button>
           <button id="theme-toggle-btn" type="button" title="Toggle light/dark interface">
             <svg id="theme-icon-light" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg>
             <svg id="theme-icon-dark" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" hidden><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg>

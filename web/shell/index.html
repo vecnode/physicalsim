@@ -82,36 +82,62 @@
           </section>
 
           <div class="tab1-canvas-area">
-            <div id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive">
-              <!-- Placed boards/components live inside this inner layer,
-                   not directly in #canvas-tab1 - canvas/viewport.ts pans/
-                   scales this element alone via CSS transform, leaving
-                   #canvas-tab1 itself (border, grid background) fixed. -->
-              <div id="tab1-content" class="tab1-content"></div>
+            <!-- The canvas proper and its overlay (minimap/zoom) - a
+                 separate positioning context from the terminal panel
+                 below, so .canvas-overlay's bottom-right pin stays
+                 relative to *this* (the canvas), not shifted by however
+                 tall the terminal panel happens to be. -->
+            <div class="tab1-canvas-and-overlay">
+              <div id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive">
+                <!-- Placed boards/components live inside this inner layer,
+                     not directly in #canvas-tab1 - canvas/viewport.ts pans/
+                     scales this element alone via CSS transform, leaving
+                     #canvas-tab1 itself (border, grid background) fixed. -->
+                <div id="tab1-content" class="tab1-content"></div>
+              </div>
+              <!-- Pinned bottom-right of the canvas, stacked: minimap on
+                   top of the zoom controls, same rendered width as the
+                   controls row (main.ts sizes #minimap to match). -->
+              <div class="canvas-overlay">
+                <!-- A miniature top-down view of the whole scene
+                     (canvas/minimap.ts) - #minimap-items holds one small
+                     marker per placed board/component, #minimap-viewport is
+                     the rectangle showing what's currently visible in the
+                     real canvas. Click/drag anywhere on it to pan the main
+                     view. -->
+                <div id="minimap" class="minimap" title="Click or drag to pan">
+                  <div id="minimap-items"></div>
+                  <div id="minimap-viewport" class="minimap-viewport-rect"></div>
+                </div>
+                <!-- Zoom controls: -/reset/+. Percentage label doubles as a
+                     reset-to-100% button. -->
+                <div class="zoom-controls">
+                  <button id="zoom-out-btn" type="button" title="Zoom out">-</button>
+                  <button id="zoom-reset-btn" type="button" title="Reset zoom">
+                    <span id="zoom-level">100%</span>
+                  </button>
+                  <button id="zoom-in-btn" type="button" title="Zoom in">+</button>
+                </div>
+              </div>
             </div>
-            <!-- Pinned bottom-right of the canvas area, stacked: minimap
-                 on top of the zoom controls, same rendered width as the
-                 controls row (main.ts sizes #minimap to match). -->
-            <div class="canvas-overlay">
-              <!-- A miniature top-down view of the whole scene
-                   (canvas/minimap.ts) - #minimap-items holds one small
-                   marker per placed board/component, #minimap-viewport is
-                   the rectangle showing what's currently visible in the
-                   real canvas. Click/drag anywhere on it to pan the main
-                   view. -->
-              <div id="minimap" class="minimap" title="Click or drag to pan">
-                <div id="minimap-items"></div>
-                <div id="minimap-viewport" class="minimap-viewport-rect"></div>
+
+            <!-- Serial Monitor (web/shell/src/terminal.ts) - docked below
+                 the canvas, above the app's own bottombar. Visible by
+                 default (main.ts's #terminal-toggle-btn hides it
+                 entirely); its own collapse button shrinks it to just
+                 this header without hiding it, a second, lighter-weight
+                 level of "get it out of the way". -->
+            <div id="terminal-panel" class="terminal-panel">
+              <div class="terminal-header">
+                <span class="terminal-title">Serial Monitor</span>
+                <div class="terminal-header-actions">
+                  <button id="terminal-clear-btn" type="button" title="Clear">Clear</button>
+                  <button id="terminal-collapse-btn" type="button" title="Collapse Serial Monitor">
+                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>
+                  </button>
+                </div>
               </div>
-              <!-- Zoom controls: -/reset/+. Percentage label doubles as a
-                   reset-to-100% button. -->
-              <div class="zoom-controls">
-                <button id="zoom-out-btn" type="button" title="Zoom out">-</button>
-                <button id="zoom-reset-btn" type="button" title="Reset zoom">
-                  <span id="zoom-level">100%</span>
-                </button>
-                <button id="zoom-in-btn" type="button" title="Zoom in">+</button>
-              </div>
+              <div id="terminal-output" class="terminal-output"></div>
             </div>
           </div>
         </div>
@@ -127,11 +153,15 @@
         </div>
 
         <!-- Same height as .tabs (the top tab bar) - a home for canvas-
-             wide controls that aren't per-tab: rotate-selected, the
-             link-style toggle (cycles how wires are drawn), the chrome-
-             visibility toggle (hides the simulator panel + zoom-controls/
-             minimap, leaving just the bare canvas), and light/dark. -->
+             wide controls that aren't per-tab: the Serial Monitor
+             visibility toggle, rotate-selected, the link-style toggle
+             (cycles how wires are drawn), the chrome-visibility toggle
+             (hides the simulator panel + zoom-controls/minimap, leaving
+             just the bare canvas), and light/dark. -->
         <div class="bottombar">
+          <button id="terminal-toggle-btn" type="button" title="Show/hide Serial Monitor">
+            <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M117.31,134l-72,64a8,8,0,1,1-10.63-12L100,128,34.69,70A8,8,0,1,1,45.32,58l72,64a8,8,0,0,1,0,12ZM216,184H120a8,8,0,0,0,0,16h96a8,8,0,0,0,0-16Z"/></svg>
+          </button>
           <button id="rotate-btn" type="button" title="Rotate selected element 90° clockwise">
             <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M240,56v48a8,8,0,0,1-8,8H184a8,8,0,0,1,0-16H211.4L184.81,71.64l-.25-.24a80,80,0,1,0-1.67,114.78,8,8,0,0,1,11,11.63A95.44,95.44,0,0,1,128,224h-1.32A96,96,0,1,1,195.75,60L224,85.8V56a8,8,0,1,1,16,0Z"/></svg>
           </button>

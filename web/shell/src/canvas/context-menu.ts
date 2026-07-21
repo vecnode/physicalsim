@@ -39,6 +39,21 @@ function componentMenuEntries(
     }));
 }
 
+// Flips a submenu to open on whichever side of its parent row actually
+// has room, instead of always flying out to the right - a submenu whose
+// parent row sits near the right edge of the window would otherwise run
+// off-screen (the bug this exists to fix). Called on every hover rather
+// than once at menu-build time because .context-submenu is display:none
+// until :hover applies (style.css) - getBoundingClientRect() on a
+// display:none element reports zero size, so there's nothing correct to
+// measure before the row is actually hovered.
+function positionSubmenu(row: HTMLElement, submenu: HTMLElement): void {
+  const rowRect = row.getBoundingClientRect();
+  const submenuRect = submenu.getBoundingClientRect();
+  submenu.classList.toggle("open-left", rowRect.right + submenuRect.width > window.innerWidth);
+  submenu.classList.toggle("open-up", rowRect.top + submenuRect.height > window.innerHeight);
+}
+
 function buildMenuDom(entries: MenuEntry[], onAnySelect: () => void): HTMLElement {
   const menu = document.createElement("div");
   menu.className = "context-menu";
@@ -54,10 +69,14 @@ function buildMenuDom(entries: MenuEntry[], onAnySelect: () => void): HTMLElemen
       row.append(label, arrow);
       const submenu = buildMenuDom(entry.submenu, onAnySelect);
       // Same base look as a top-level menu (.context-menu), plus
-      // .context-submenu for the CSS that positions it as a flyout to
-      // the right, hidden until the row is hovered (style.css).
+      // .context-submenu for the CSS that positions it as a flyout,
+      // hidden until the row is hovered (style.css). Defaults to
+      // opening right/down; positionSubmenu() flips either direction
+      // that would run off-screen, re-checked on every hover since the
+      // window can be resized while the menu isn't even open.
       submenu.classList.add("context-submenu");
       row.appendChild(submenu);
+      row.addEventListener("mouseenter", () => positionSubmenu(row, submenu));
       menu.appendChild(row);
     } else {
       const row = document.createElement("button");
@@ -119,5 +138,17 @@ export class ContextMenu {
 
     document.body.appendChild(menu);
     this.el = menu;
+
+    // Clamps the top-level menu itself into the viewport - a right-click
+    // near the window's right/bottom edge would otherwise still open at
+    // exactly the cursor position and run off-screen, the same class of
+    // bug positionSubmenu() fixes for nested submenus.
+    const rect = menu.getBoundingClientRect();
+    if (rect.right > window.innerWidth) {
+      menu.style.left = `${Math.max(0, window.innerWidth - rect.width)}px`;
+    }
+    if (rect.bottom > window.innerHeight) {
+      menu.style.top = `${Math.max(0, window.innerHeight - rect.height)}px`;
+    }
   }
 }

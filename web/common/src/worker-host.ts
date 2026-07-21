@@ -22,6 +22,11 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
   // Idempotent per pin: re-subscribing is a no-op rather than double-firing.
   const pinSubscriptions = new Map<string, () => void>();
 
+  // Same idea as pinSubscriptions, but there's only ever one serial stream
+  // per adapter (not one per pin), so a single flag is enough to make
+  // "subscribeSerial" idempotent.
+  let serialSubscribed = false;
+
   self.addEventListener("message", async (ev: MessageEvent<RpcRequest>) => {
     const { id, method, params } = ev.data;
     try {
@@ -72,6 +77,19 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
             }
             result = undefined;
           }
+          break;
+        case "subscribeSerial":
+          if (!adapter.onSerialData) {
+            throw new Error(`Adapter "${adapter.id}" does not support onSerialData`);
+          }
+          if (!serialSubscribed) {
+            serialSubscribed = true;
+            adapter.onSerialData((byte) => {
+              const event: RpcResponse = { event: "serialData", byte };
+              postMessage(event);
+            });
+          }
+          result = undefined;
           break;
         default:
           throw new Error(`Unknown method: ${method as string}`);

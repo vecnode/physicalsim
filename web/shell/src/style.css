@@ -243,10 +243,30 @@ button:disabled {
   margin: 10px;
 }
 
+/* A column: the canvas (+ its own overlay) on top, the terminal panel
+   docked below it - flex-direction: column so the terminal is a true
+   layout sibling of the canvas, not something absolutely positioned over
+   it (which is what let the zoom-controls/minimap sort itself out
+   independently on the canvas's own positioning context - see
+   .tab1-canvas-and-overlay below - rather than needing to know the
+   terminal's height to avoid overlapping it). */
 .tab1-canvas-area {
-  position: relative;
   flex: 1;
   min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* What .tab1-canvas-area used to be on its own, before the terminal
+   panel became a layout sibling below it - the canvas fills this, and
+   .canvas-overlay (minimap/zoom controls) is positioned relative to it,
+   not to .tab1-canvas-area as a whole. */
+.tab1-canvas-and-overlay {
+  position: relative;
+  flex: 1;
+  min-height: 0;
   display: flex;
   justify-content: center;
   overflow: hidden;
@@ -381,6 +401,112 @@ button:disabled {
 
 #zoom-level {
   font-size: 0.7rem;
+}
+
+/* Serial Monitor (web/shell/src/terminal.ts) - docked below the canvas
+   as a flex sibling (see .tab1-canvas-area above), not overlaid on top
+   of it. Dark, theme-independent chrome matching --canvas-bg/
+   --canvas-grid's own reasoning (this is conceptually an extension of
+   the canvas, not part of the app's light/dark UI) rather than using
+   var(--bg)/var(--fg), which would make it invert with the theme toggle
+   while the canvas above it stays dark. */
+.terminal-panel {
+  flex: none;
+  height: 160px;
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--border);
+  background: var(--canvas-bg);
+}
+
+.terminal-panel[hidden] {
+  display: none;
+}
+
+/* Set by Terminal.setCollapsed() - shrinks to just the header, same
+   convention as a real terminal emulator's minimize. Not the same as
+   [hidden] above: collapsed still shows the header (and its own
+   Clear/expand controls), hidden shows nothing at all. */
+.terminal-panel.collapsed {
+  height: auto;
+}
+
+.terminal-panel.collapsed .terminal-output {
+  display: none;
+}
+
+.terminal-header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  border-bottom: 1px solid var(--canvas-grid);
+}
+
+.terminal-title {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #999;
+}
+
+.terminal-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.terminal-header-actions button {
+  border: 1px solid #444;
+  background: transparent;
+  color: #ccc;
+  padding: 1px 6px;
+  font: inherit;
+  font-size: 0.65rem;
+  cursor: pointer;
+}
+
+.terminal-header-actions button:hover {
+  background: var(--canvas-grid);
+}
+
+.terminal-header-actions .icon {
+  width: 10px;
+  height: 10px;
+  margin-right: 0;
+  vertical-align: -1px;
+}
+
+/* Rotated 180deg when collapsed (Terminal.setCollapsed() toggles this
+   same .collapsed class the panel itself gets) - a caret that points
+   "the direction clicking it will move the panel", same convention the
+   theme/panel-visibility icons already use elsewhere in this file. */
+.terminal-panel.collapsed #terminal-collapse-btn .icon {
+  transform: rotate(180deg);
+}
+
+.terminal-output {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
+  font-size: 0.7rem;
+  color: #ddd;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-output div {
+  line-height: 1.4;
+}
+
+/* Shown only via :empty, so it disappears the instant real output
+   arrives rather than needing JS to remove a placeholder element. */
+.terminal-output:empty::before {
+  content: "No serial data yet - waiting for the board to write to Serial.";
+  color: #777;
+  font-style: italic;
 }
 
 .board-item {
@@ -602,6 +728,19 @@ button:disabled {
 
 .context-menu-item.has-submenu:hover > .context-submenu {
   display: flex;
+}
+
+/* Set by context-menu.ts's positionSubmenu() when the default right/
+   down flyout direction would run off the edge of the window - flips to
+   the opposite side instead of clipping or forcing the page to scroll. */
+.context-submenu.open-left {
+  left: auto;
+  right: 100%;
+}
+
+.context-submenu.open-up {
+  top: auto;
+  bottom: -4px;
 }
 
 /* Toggled by main.ts's panel-visibility button (persisted in

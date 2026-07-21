@@ -20,6 +20,11 @@ export interface SimulatorAdapter {
   readPin?(pin: string): number | undefined;
   writePin?(pin: string, value: number): void;
   onPinChange?(pin: string, cb: (value: number) => void): () => void;
+  // Serial (UART TX) output - also optional, and read-only for now: this
+  // is Stage 1 of the terminal feature ("show whatever the firmware
+  // transmits"), not Serial.read() support. Only avr8 implements it today
+  // (rp2040/cortex-m have no UART peripheral wired up yet).
+  onSerialData?(cb: (byte: number) => void): () => void;
 }
 
 // ---- Worker RPC protocol -------------------------------------------------
@@ -35,7 +40,8 @@ export type AdapterMethod =
   | "reset"
   | "readPin"
   | "writePin"
-  | "subscribePin";
+  | "subscribePin"
+  | "subscribeSerial";
 
 export interface ReadPinParams {
   pin: string;
@@ -77,7 +83,12 @@ export interface PinChangeEvent {
   value: number;
 }
 
-export type RpcEvent = StateChangeEvent | PinChangeEvent;
+export interface SerialDataEvent {
+  event: "serialData";
+  byte: number;
+}
+
+export type RpcEvent = StateChangeEvent | PinChangeEvent | SerialDataEvent;
 
 export type RpcResponse = RpcResult | RpcError | RpcEvent;
 

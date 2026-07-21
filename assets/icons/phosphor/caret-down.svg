@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Phosphor Icons "CaretDown" (regular weight), from
+  https://github.com/phosphor-icons/core (MIT License).
+  Used in web/shell/index.html (Serial Monitor collapse/expand button,
+  rotated 180deg via CSS when collapsed); vendored here as the canonical
+  source (same convention as play.svg etc.) since it's inlined directly
+  into that button's markup for currentColor theming, not fetched at
+  runtime.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M213.66,101.66l-80,80a8,8,0,0,1-11.32,0l-80-80A8,8,0,0,1,53.66,90.34L128,164.69l74.34-74.35a8,8,0,0,1,11.32,11.32Z"/></svg>

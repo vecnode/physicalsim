@@ -13,6 +13,7 @@ export class AdapterClient {
   private pending = new Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void }>();
   private stateListeners = new Set<(state: SimState) => void>();
   private pinChangeListeners = new Set<(pin: string, value: number) => void>();
+  private serialDataListeners = new Set<(byte: number) => void>();
 
   constructor(private worker: Worker) {
     this.worker.addEventListener("message", (ev: MessageEvent<RpcResponse>) => {
@@ -20,8 +21,10 @@ export class AdapterClient {
       if (isRpcEvent(msg)) {
         if (msg.event === "stateChange") {
           for (const listener of this.stateListeners) listener(msg.state);
-        } else {
+        } else if (msg.event === "pinChange") {
           for (const listener of this.pinChangeListeners) listener(msg.pin, msg.value);
+        } else {
+          for (const listener of this.serialDataListeners) listener(msg.byte);
         }
         return;
       }
@@ -55,10 +58,16 @@ export class AdapterClient {
     return () => this.pinChangeListeners.delete(cb);
   }
 
+  onSerialData(cb: (byte: number) => void): () => void {
+    this.serialDataListeners.add(cb);
+    return () => this.serialDataListeners.delete(cb);
+  }
+
   terminate(): void {
     this.worker.terminate();
     this.pending.clear();
     this.stateListeners.clear();
     this.pinChangeListeners.clear();
+    this.serialDataListeners.clear();
   }
 }

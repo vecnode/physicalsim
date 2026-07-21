@@ -41,7 +41,12 @@ start/stop/reset, a minimal GDB Remote Serial Protocol client for
 step/PC readback) and it's reached only through the HTTP bridge below,
 never a Worker. In the shell UI, picking a different simulator in the
 dropdown doesn't switch anything by itself — click **Apply** to actually
-switch which adapter Start/Stop/Step/Reset act on.
+switch which adapter Start/Stop/Step/Reset act on. (`avr8`/`rp2040`/
+`cortex-m` are currently parked out of that dropdown — see
+ARCHITECTURE.md's "The board canvas" — while board-level work focuses on
+Arduino Uno; Start/Stop/Step/Reset are disabled in the UI until a board
+picks up a real adapter again. The bridge itself is unaffected — every
+`curl` example below still works exactly as shown.)
 
 ## Reproduce
 

@@ -543,7 +543,7 @@ int main(int argc, char **argv) {
       w.dispatch([&w]() { w.terminate(); });
     });
   } else {
-    w.set_size(900, 640, WEBVIEW_HINT_NONE);
+    w.set_size(1280, 720, WEBVIEW_HINT_NONE);
 #ifdef _WIN32
     apply_windows_icons(w);
 #endif

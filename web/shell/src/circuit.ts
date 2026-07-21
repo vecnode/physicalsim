@@ -20,6 +20,7 @@ export interface CircuitBoard {
   x: number;
   y: number;
   powered: boolean;
+  rotation: number; // degrees, clockwise, one of 0/90/180/270 - see canvas/scene.ts's rotateSelected()
 }
 
 // A placed sensor/connection part (component-registry.ts) - deliberately
@@ -35,6 +36,7 @@ export interface PlacedComponent {
   type: string; // key into component-registry.ts's componentRegistry
   x: number;
   y: number;
+  rotation: number; // degrees, clockwise, one of 0/90/180/270 - see canvas/scene.ts's rotateSelected()
 }
 
 export interface Circuit {
@@ -87,6 +89,7 @@ export function createBoard(type: string): CircuitBoard | null {
     x: 0,
     y: 0,
     powered: false,
+    rotation: 0,
   };
 }
 
@@ -97,5 +100,5 @@ let nextComponentId = 1;
 // way.
 export function createComponent(type: string): PlacedComponent | null {
   if (!componentRegistry[type]) return null;
-  return { id: `component-${nextComponentId++}`, type, x: 0, y: 0 };
+  return { id: `component-${nextComponentId++}`, type, x: 0, y: 0, rotation: 0 };
 }

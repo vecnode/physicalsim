@@ -214,8 +214,40 @@ boardTabs.addEventListener("click", (ev) => {
 showTab("tab1");
 
 // -----------------------------------------------------------------------
-// Bottom bar: chrome-visibility and theme toggles.
+// Bottom bar: rotate, link-style, chrome-visibility, and theme toggles.
 // -----------------------------------------------------------------------
+
+// Rotates whichever board/component is currently selected 90 degrees
+// clockwise (canvas/scene.ts's rotateSelected()) - works for sensors and
+// connections the same way it does for boards, since rotation lives on
+// the shared CircuitBoard/PlacedComponent shape, not anything board-
+// specific.
+const rotateBtn = document.getElementById("rotate-btn") as HTMLButtonElement;
+rotateBtn.addEventListener("click", () => canvas.scene.rotateSelected());
+
+// Cycles how every wire is drawn (straight/elbow/bezier - see
+// canvas/wiring.ts's LinkStyle) - a global setting, applying to every
+// existing wire immediately, not just ones drawn after the click. Not
+// persisted (unlike chrome-hidden/theme below) - this one's more of an
+// in-session drawing preference than a lasting UI setting.
+const linkStyleBtn = document.getElementById("link-style-btn") as HTMLButtonElement;
+const linkStyleIcons = {
+  straight: document.getElementById("link-icon-straight") as HTMLElement,
+  elbow: document.getElementById("link-icon-elbow") as HTMLElement,
+  bezier: document.getElementById("link-icon-bezier") as HTMLElement,
+};
+
+function renderLinkStyleIcon(): void {
+  const style = canvas.scene.wiring.getStyle();
+  for (const [name, icon] of Object.entries(linkStyleIcons)) icon.hidden = name !== style;
+  linkStyleBtn.title = `Link style: ${style} (click to cycle)`;
+}
+
+renderLinkStyleIcon();
+linkStyleBtn.addEventListener("click", () => {
+  canvas.scene.wiring.cycleStyle();
+  renderLinkStyleIcon();
+});
 
 // Hides/shows the simulator panel and the zoom-controls/minimap overlay,
 // leaving just the bare canvas - useful once a circuit is laid out and

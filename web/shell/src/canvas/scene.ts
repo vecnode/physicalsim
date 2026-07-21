@@ -51,13 +51,31 @@ export class Scene {
     private readonly content: HTMLElement,
     private readonly viewport: Viewport,
   ) {
-    this.wiring = new WiringLayer(content, (id) => this.entityPosition(id));
+    this.wiring = new WiringLayer(
+      content,
+      (id) => this.entityFrame(id),
+      viewport,
+      // A wire being selected clears whatever board/pin was selected -
+      // only one kind of thing is ever selected at a time. Pure state
+      // updates only (no wiring.clearSelection() call here), unlike
+      // selectItem()/selectPin() below - this callback runs *from
+      // inside* a wire selection, so clearing the wire's own selection
+      // back out again would immediately undo it.
+      () => {
+        this.selectedWrapper?.classList.remove("selected");
+        this.selectedWrapper = null;
+        this.selectedPin?.classList.remove("selected");
+        this.selectedPin = null;
+      },
+    );
     // Click on the container background (not a placed item - its own
-    // onMouseDown in makeDraggable() stops propagation) deselects both
-    // the board/component and whatever pin marker might be selected.
+    // onMouseDown in makeDraggable() stops propagation) deselects
+    // everything: the board/component, whatever pin marker might be
+    // selected, and any selected wire.
     container.addEventListener("mousedown", () => {
       this.selectItem(null);
       this.selectPin(null);
+      this.wiring.clearSelection();
     });
   }
 
@@ -96,9 +114,26 @@ export class Scene {
     return [...this.circuit.boards, ...this.circuit.components];
   }
 
-  private entityPosition(id: string): { x: number; y: number } | undefined {
+  // What WiringLayer needs to place a pin's rotated world position: the
+  // entity's own (unrotated) top-left position and rotation, plus its
+  // wrapper's un-transformed layout size (offsetWidth/Height - a plain
+  // layout property, unaffected by the CSS rotate()/scale() applied to
+  // the wrapper or its ancestors, unlike getBoundingClientRect()) so
+  // WiringLayer can rotate a pin's local offset around the wrapper's own
+  // center the same way the CSS transform visually does.
+  private entityFrame(
+    id: string,
+  ): { x: number; y: number; rotation: number; width: number; height: number } | undefined {
     const entity = this.allEntities().find((e) => e.id === id);
-    return entity ? { x: entity.x, y: entity.y } : undefined;
+    const dom = this.dom.get(id);
+    if (!entity || !dom) return undefined;
+    return {
+      x: entity.x,
+      y: entity.y,
+      rotation: entity.rotation,
+      width: dom.wrapper.offsetWidth,
+      height: dom.wrapper.offsetHeight,
+    };
   }
 
   getDom(id: string): DomEntry | undefined {
@@ -148,6 +183,28 @@ export class Scene {
     const entry = [...this.dom.entries()].find(([, dom]) => dom.wrapper === this.selectedWrapper);
     if (!entry) return false;
     this.deleteEntity(entry[0]);
+    return true;
+  }
+
+  // Rotates whichever board/component is currently selected 90 degrees
+  // clockwise (the rotate button's whole job) - a no-op if nothing is
+  // selected. Purely a CSS transform on the wrapper (rotation is stored
+  // on the entity so it survives re-renders, but nothing about layout -
+  // offsetLeft/Top/Width/Height, drag math, centering - changes; CSS
+  // transforms are visual-only). The wire layer needs an explicit
+  // render() afterward since a rotated pin's world position moves even
+  // though the entity's own x/y didn't (see wiring.ts's endpoint()).
+  rotateSelected(): boolean {
+    if (!this.selectedWrapper) return false;
+    const entry = [...this.dom.entries()].find(([, dom]) => dom.wrapper === this.selectedWrapper);
+    if (!entry) return false;
+    const [id] = entry;
+    const entity = this.allEntities().find((e) => e.id === id);
+    if (!entity) return false;
+    entity.rotation = (entity.rotation + 90) % 360;
+    this.selectedWrapper.style.transform = `rotate(${entity.rotation}deg)`;
+    this.wiring.render();
+    this.notifyChange();
     return true;
   }
 
@@ -204,6 +261,7 @@ export class Scene {
       marker.addEventListener("click", (ev) => {
         ev.stopPropagation();
         this.selectPin(marker);
+        this.wiring.clearSelection();
         this.wiring.handlePinClick(entityId, pin.name, marker);
       });
       wrapper.appendChild(marker);
@@ -224,6 +282,7 @@ export class Scene {
       // background click and deselecting what we're about to select.
       ev.stopPropagation();
       this.selectItem(wrapper);
+      this.wiring.clearSelection();
       const { x, y } = this.viewport.screenToWorld(ev.clientX, ev.clientY);
       dragOffset = { dx: x - wrapper.offsetLeft, dy: y - wrapper.offsetTop };
       wrapper.classList.add("dragging");
@@ -275,6 +334,11 @@ export class Scene {
     const boardEl = document.createElement(tagName);
     wrapper.appendChild(boardEl);
     this.content.appendChild(wrapper);
+    // A newly-appended wrapper is now the content layer's last child,
+    // which would otherwise paint over the wire layer - re-assert that
+    // wires stay drawn on top of every board/component, not just the
+    // ones placed before this one.
+    this.wiring.raiseToTop();
 
     // LitElement's first render happens on a microtask after connect,
     // not synchronously on appendChild - measuring immediately would see

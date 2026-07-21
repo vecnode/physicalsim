@@ -140,17 +140,23 @@ export class CanvasController {
     });
   }
 
-  // Backspace/Delete removes whichever board/component is currently
-  // selected. Skipped while focus is inside a real form control (the
-  // adapter <select>, or any future text input) so deleting text in a
-  // field doesn't also delete a selected canvas item.
+  // Backspace/Delete removes whichever board/component or wire is
+  // currently selected - a board/component is tried first since deleting
+  // one already takes its wires with it (Scene.deleteSelected() ->
+  // WiringLayer.removeEntity()); the wire case only applies when a wire
+  // itself, not an endpoint's board, is what's selected. Skipped while
+  // focus is inside a real form control (the adapter <select>, or any
+  // future text input) so deleting text in a field doesn't also delete a
+  // selected canvas item.
   private bindDeleteKey(): void {
     window.addEventListener("keydown", (ev) => {
       if (ev.key !== "Backspace" && ev.key !== "Delete") return;
       const active = document.activeElement;
       const tag = active?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
-      if (this.scene.deleteSelected()) ev.preventDefault();
+      if (this.scene.deleteSelected() || this.scene.wiring.deleteSelectedWire()) {
+        ev.preventDefault();
+      }
     });
   }
 }

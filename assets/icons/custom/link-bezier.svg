@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Original glyph for this project (not from Phosphor) - one of three
+  link-style icons cycled by the canvas's link-style toggle button (see
+  web/shell/index.html, web/shell/src/main.ts). An S-curve, matching
+  canvas/wiring.ts's bezier style (a MaxMSP/Pd-style smooth patch cord).
+-->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none" stroke="currentColor" stroke-width="16" stroke-linecap="round"><path d="M48 208 C48 128 208 128 208 48"/></svg>

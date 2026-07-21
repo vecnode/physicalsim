@@ -435,14 +435,18 @@ button:disabled {
   background: transparent;
 }
 
-/* The pin-to-pin connection layer (canvas/wiring.ts) - an <svg> appended
-   as the first child of .tab1-content, so it inherits the exact same
-   pan/zoom CSS transform every board/component wrapper does and never
-   needs its own recompute for that. overflow: visible so a wire whose
-   endpoint sits outside the nominal content box (an item dragged to a
-   negative position, say) still draws instead of clipping.
-   pointer-events: none keeps it out of the way of drags/clicks on the
-   boards and pins underneath. */
+/* The pin-to-pin connection layer (canvas/wiring.ts) - an <svg> kept as
+   the *last* child of .tab1-content (WiringLayer.raiseToTop(), re-
+   asserted every time a new board/component is placed) so wires always
+   draw on top of everything they connect, never hidden underneath a
+   board. Still inherits the exact same pan/zoom CSS transform every
+   board/component wrapper does, since it's a child of the same
+   .tab1-content - no separate recompute needed for that. overflow:
+   visible so a wire whose endpoint sits outside the nominal content box
+   (an item dragged to a negative position, say) still draws instead of
+   clipping. pointer-events: none on the layer itself keeps empty space
+   between wires click-through to the boards/background underneath -
+   individual lines opt back in via their own pointer-events (below). */
 .wire-layer {
   position: absolute;
   inset: 0;
@@ -450,9 +454,77 @@ button:disabled {
   pointer-events: none;
 }
 
+/* Both .wire-hit and .wire-line are <path> elements now (straight/elbow/
+   bezier all draw as SVG path data - see wiring.ts's pathFor()), not
+   <line> - fill: none is required on both or the browser fills the area
+   the path encloses solid instead of just stroking its outline, which is
+   invisible on a straight line's zero-area path but renders as an ugly
+   filled wedge the moment the path bends (elbow/bezier). */
+.wire-hit,
+.wire-line {
+  fill: none;
+}
+
+/* A wide, invisible path laid exactly under .wire-line's visible one
+   (see render()) - pointer-events: stroke makes only this stroke's own
+   path hit-testable (not the layer's empty space), and 10px is wide
+   enough to click reliably without the 2px visible line itself needing
+   to be that thick. */
+.wire-hit {
+  stroke: transparent;
+  stroke-width: 10;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
 .wire-line {
   stroke: #ffd54a;
   stroke-width: 2;
+}
+
+/* A selected wire (canvas/wiring.ts's selectWire()) - brighter and
+   thicker, the same visual language .pin-marker.selected and
+   .board-item.selected already use for "this is the thing Backspace/
+   Delete will act on". */
+.wire-line.selected {
+  stroke: #ffffff;
+  stroke-width: 3;
+}
+
+/* The small terminal dot at each end of every wire, in every link style
+   (canvas/wiring.ts's render() - "circles in both ends" of the request
+   this exists for). Decorative only - pointer-events: none, since
+   .wire-hit already covers clicking the wire itself. */
+.wire-endpoint {
+  fill: #ffd54a;
+  pointer-events: none;
+}
+
+.wire-endpoint.selected {
+  fill: #ffffff;
+}
+
+/* The elbow style's three draggable segment handles (canvas/wiring.ts's
+   render()/addElbowHandle(), only present while the link style is
+   "elbow") - visibly grabbable, distinct from the plain endpoint dots
+   above so it's clear these move the wire's shape rather than just
+   marking a connection point. -h/-v pick the cursor matching which
+   direction dragging that particular handle actually moves the wire
+   (the vertical channel drags horizontally; the two horizontal legs
+   each drag vertically). */
+.wire-handle {
+  fill: var(--bg);
+  stroke: #ffd54a;
+  stroke-width: 2;
+  pointer-events: all;
+}
+
+.wire-handle-h {
+  cursor: ew-resize;
+}
+
+.wire-handle-v {
+  cursor: ns-resize;
 }
 
 /* Right-click "Boards/Sensors/Connections" menu (canvas/context-menu.ts)

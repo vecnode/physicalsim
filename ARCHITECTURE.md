@@ -354,18 +354,33 @@ it into its `SimulatorAdapter`; Start/Stop powers it on/off for real (CPU
 running + a visual power LED, not just one or the other).
 
 **Layout.** `.app` is a full-viewport column: a `.topbar` (title), then
-`.body` (a row: a fixed-width `.sidebar` holding the state/pins panels, and
-`.workspace` filling the rest). `.workspace` is itself a tab bar
+`.body` (a row: a fixed-width `.sidebar` holding only the log output now,
+and `.workspace` filling the rest). `.workspace` is itself a tab bar
 (`#board-tabs`) over one `.tab-pane` per tab — generic tabs (`tab1`/`tab2`/
 `tab3`), not tied to a specific board. Tab 1 additionally holds the
-"Simulator" panel (board picker + Start/Stop, now wired - see "Boards vs.
-adapters: plugging in, then powering on" below; Step/Reset stay disabled)
-pinned top-left via `align-self: flex-start` so it doesn't stretch to the
-pane's full height and never overlaps the canvas next to it. Start/Stop's
-icons (Phosphor Icons, MIT, `assets/icons/phosphor/{play,stop}.svg`) are
+"Simulator" panel (board picker, Start/Pause/Stop, and the status/cycles/
+PC readout - see "Boards vs. adapters: plugging in, then powering on"
+below) pinned top-left via `align-self: flex-start` so it doesn't stretch
+to the pane's full height and never overlaps the canvas next to it. The
+state readout (`#state-list`, a plain `<dl>`) sits directly under the
+controls, inside the same panel - not its own sidebar section anymore,
+so it reads together with whatever board/adapter it's reporting on rather
+than living in a separate part of the screen. Start/Pause/Stop's icons
+(Phosphor Icons, MIT, `assets/icons/phosphor/{play,pause,stop}.svg`) are
 inlined directly into their button markup, not fetched - `fill="currentColor"`
 on the SVG is what makes them follow `button:hover`'s color inversion, and
-two small static icons don't need a fetch or a templating layer.
+three small static icons don't need a fetch or a templating layer.
+
+**No pins panel in the sidebar anymore.** The per-pin attach/read/detach
+UI from the earlier "Pin I/O pipeline" work (`PinRow`, `refreshPinPanel()`,
+`addPinRow()`, etc. - previously in `main.ts`) has been removed entirely,
+DOM and JS both, not just hidden - it'll come back in a different form
+once pin interaction lives on the board itself (see "Not yet wired:
+per-pin LEDs" and the earlier per-pin-click discussion) rather than as a
+disconnected sidebar list. Nothing underneath it changed:
+`CircuitPin`/`Led`/`Button` (`web/common/src/circuit/`) and the board
+pin-name maps (`web/common/src/boards/`) are untouched and ready for
+whatever the next pin UI turns out to be.
 
 **Rendering: real DOM/SVG, not canvas.** Tabs 2/3 still use plain
 `<canvas>` placeholders (backing store sized 1:1 against
@@ -472,41 +487,114 @@ type.
 `cortex-m` are still parked out of the `#adapter-select` dropdown
 (`index.html`) — not removed from the codebase; `adapter-registry.ts`,
 `worker-rpc.ts`, and both adapter packages are untouched, just unreachable
-from the UI while board work is the focus. But `showBoard()` now calls
+from the UI while board work is the focus. But `showBoard()` calls
 `apply(board.adapterId)` right after placing a board — this *is* "plugging
 the board into the adapter": `apply()` already did everything that means
-(`main.ts`'s `activeAdapterId`/`getAdapterClient()`/state-subscription/
-`refreshPinPanel()`), it just never used to be reachable, since nothing
-tied a placed *board* to an *adapter id* before `boardAdapterId` existed.
-The sidebar's state readout and pins panel start working the moment a
-board is placed — no new UI, the existing machinery just gets a real
-adapter id to point at.
+(`main.ts`'s `activeAdapterId`/`getAdapterClient()`/state-subscription),
+it just never used to be reachable, since nothing tied a placed *board* to
+an *adapter id* before `boardAdapterId` existed. The state readout starts
+working the moment a board is placed — no new UI, the existing machinery
+just gets a real adapter id to point at.
 
-Start/Stop are no longer just adapter lifecycle controls — they're
-"power the circuit": `setPowered(on)` finds whichever placed board is
-backed by the active adapter (`circuit.boards.find(b => b.adapterId ===
-activeAdapterId)` — today, at most one board can ever match), sets its
-`.powered` flag, and calls `boardPowerSetter[board.type]` to reflect it on
-the real element — for Arduino Uno, `ArduinoUnoElement.ledPower` (the
-board's power-supply LED, labeled "ON" on the silkscreen; verified by
+**Start / Pause / Stop.** Three controls, not four - `step-btn`/`reset-btn`
+were removed entirely (DOM and JS) rather than left disabled, once Pause
+made Reset's old job part of what Stop already needed to do. All three
+call through `activeClient()?.call(...)`, so they safely no-op if nothing
+is plugged in yet:
+
+- **Start** — `call("start")`, then `setPowered(true)`.
+- **Pause** — `call("stop")` and nothing else. The adapter's own `"stop"`
+  RPC method (`Avr8Adapter.stop()`/`Rp2040Adapter.stop()`) only halts
+  ticking - it never resets CPU state, confirmed by watching `cycles`
+  freeze exactly in place across repeated polls, then continue climbing
+  (not restart from 0) after a later Start. This is deliberately *not*
+  the same as powering off: `ledPower` and `board.powered` are untouched,
+  matching a real board staying powered while halted mid-program (a
+  debugger breakpoint, not a power cut).
+- **Stop** — `call("reset")` (which itself calls `"stop"` first, then
+  recreates the CPU/MCU object - wiping registers and cycle count back to
+  power-on defaults) followed by `setPowered(false)`. Verified: `cycles`
+  reads back `0` and `ledPower` is `false` immediately after.
+
+`setPowered(on)` (shared by Start and Stop) finds whichever placed board
+is backed by the active adapter (`circuit.boards.find(b => b.adapterId
+=== activeAdapterId)` — today, at most one board can ever match), sets
+its `.powered` flag, and calls `boardPowerSetter[board.type]` to reflect
+it on the real element — for Arduino Uno, `ArduinoUnoElement.ledPower`
+(the power-supply LED, labeled "ON" on the silkscreen; verified by
 checking the rendered shadow DOM directly — a `<circle fill="#80ff80">`
 glow element appears/disappears exactly with `ledPower`). This is
 deliberately *not* the same as `led13`/`ledTX`/`ledRX` (those track real
 GPIO pin state, and aren't wired up yet — see "Not yet wired: per-pin
 LEDs" below): `ledPower` represents whether the board has power at all,
-independent of what any pin is doing. Both handlers still call
-`activeClient()?.call("start"|"stop")` first, so the real `avr8` CPU
-actually starts/stops too, not just the visual — verified together: state
-readout shows `running`, `ledPower` is `true`, and the glow circle exists
-in the shadow DOM, all three in lockstep. Step/Reset stay `disabled` in
-`index.html` - deliberately out of scope for "power the circuit", not a
-limitation of the model.
+independent of what any pin is doing, and independent of whether it's
+currently executing (Pause proves that: powered stays `true` throughout).
 
 **Not yet wired: per-pin LEDs.** `led13`/`ledTX`/`ledRX` on
 `ArduinoUnoElement` would make the board's own onboard LEDs reflect real
-GPIO activity (pin B5/TX/RX) the same way the sidebar pins panel's `Led`
-rows already do — a natural, cheap-looking follow-up once needed, not
-conflated with the power-on/off work above.
+GPIO activity (pin B5/TX/RX), the same way `web/common/src/circuit/`'s
+`Led` component already can for any `CircuitPin` — a natural, cheap-looking
+follow-up once there's a UI for it again (the sidebar pins panel that
+used to demonstrate this was removed - see "No pins panel in the sidebar
+anymore" above - not the underlying `CircuitPin`/`Led` machinery, which is
+untouched), not conflated with the power-on/off work above.
+
+**Energy model — `web/shell/src/energy.ts`, deliberately separate from
+the circuit model.** `CircuitBoard.powered` is binary; it says nothing
+about voltage, current, or power draw. Rather than add those as more
+fields on `CircuitBoard`, they live in their own file with their own
+`BoardEnergy` type (`{boardId, voltage, currentMa}`, linked to a
+`CircuitBoard` only by matching `id` — the two never share a struct).
+This mirrors a pattern confirmed directly in
+[velxio](https://github.com/davidmonterocrespo24/velxio)'s docs
+(`docs/wiki/circuit-emulation*.md` — consulted for architecture ideas
+only, see the licensing note above): their digital MCU harness
+(`AVRHarness`, wrapping `avr8js`) and their analog solver never share a
+data structure either — a dedicated `AVRSpiceBridge` is the *only*
+connection point, reading pin/PWM state out of the harness and writing
+solved node voltages back in. `computeEnergy(board, running)` in
+`energy.ts` is that same shape of bridge here: it reads a `CircuitBoard`,
+returns a `BoardEnergy`, and `circuit.ts` has no idea `energy.ts` exists
+(one-directional dependency, not two modules reaching into each other).
+
+velxio's own energy simulation is genuinely two-tier — confirmed, not
+inferred: **Pipeline A**, a hand-rolled ~500-line JS Modified Nodal
+Analysis (MNA) solver (node graph, component "stamps", Newton iteration,
+backward-Euler transient — zero dependencies, fast); **Pipeline B**, real
+`ngspice` compiled to WASM via `eecircuit-engine` (confirmed MIT
+licensed, a real standalone npm package, not velxio's own code) for full
+SPICE — AC/transient, diodes, BJTs, MOSFETs, op-amps, thermistors. Full
+SPICE came *after* the fast/simple solver, which came *after* the
+digital simulation was solid. (Wokwi's own approach is inferred, not
+confirmed, since its core engine isn't open source: fundamentally
+digital, with per-component behavioral analog approximations bolted on
+where a specific part needs one — not a general topology solver.)
+
+This project is at the "digital simulation solid, one board, no wiring
+between components yet" stage — matching where velxio was *before*
+Pipeline A existed. So `energy.ts` intentionally isn't a solver at all:
+`boardNominalVoltage`/`boardNominalCurrentMa` are fixed, known constants
+per board type (an Arduino Uno's logic level *is* 5V whenever powered,
+not something to compute), and `currentMa` picks between an idle/running
+nominal off the adapter's own `state.running` — approximate, explicitly
+labeled as nominal in code comments, not measured. `power` (mW) is
+derived (`voltage × currentMa`), not stored. Wired into `main.ts` at
+exactly two points: `setPowered()` (voltage/current snapshot the instant
+power state changes) and `renderState()` (already firing on every
+adapter `stateChange` — the natural place to correct current from idle
+to running once ticking is actually confirmed, no new adapter-side
+plumbing). The UI is a second `<dl>` (`#energy-list`, using the same
+`.readout` CSS class `#state-list` was generalized to) sitting next to
+the state readout in `.tab1-simulator-panel` — visually separate blocks,
+matching the code-level split, not merged rows in one table.
+
+**Explicitly out of scope, tracked here on purpose.** Per-pin voltage,
+real circuit-topology solving (Ohm's law across actual wires — there's
+nothing to apply it to without wiring between components), any SPICE/MNA
+solver (hand-rolled or `eecircuit-engine`/ngspice-WASM). All of that is
+the natural Pipeline-A-shaped next step, once there's more than one
+board and real connections between them for a solver to have an actual
+netlist to work with — not guessed at or half-built here.
 
 **Board elements: real size, not scaled to fit.** `showBoard(name)`
 creates the wrapper + custom element, then **awaits `updateComplete`**
@@ -521,7 +609,7 @@ clicks replace the scene rather than stacking duplicate boards.
 
 **Supported boards.** One today. Tracked here as more are added:
 
-| Board | Custom element | Adapter | Powered by Start/Stop? |
+| Board | Custom element | Adapter | Powered by Start/Pause/Stop? |
 |---|---|---|---|
 | Arduino Uno | `wokwi-arduino-uno` | `avr8` | Yes |
 

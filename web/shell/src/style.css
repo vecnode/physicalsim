@@ -3,6 +3,22 @@
   --fg: #000000;
   --border: #000000;
   --muted: #555555;
+  /* The canvas area (tabs 1-3) is always this dark grey with a grid,
+     independent of --bg/--fg above - a node-editor convention (Blender,
+     Unreal Blueprints, velxio), not something the light/dark toggle
+     below should touch. */
+  --canvas-bg: #2b2b2b;
+  --canvas-grid: #3a3a3a;
+}
+
+/* Toggled by main.ts's theme switch (persisted in localStorage) - only
+   the chrome (panels, text, buttons) changes; --canvas-bg/--canvas-grid
+   above are deliberately absent from this override. */
+:root[data-theme="dark"] {
+  --bg: #1a1a1a;
+  --fg: #e8e8e8;
+  --border: #e8e8e8;
+  --muted: #999999;
 }
 
 * {
@@ -40,6 +56,12 @@ body {
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: lowercase;
+}
+
+.topbar h1 .version {
+  font-weight: 400;
+  color: var(--muted);
+  font-size: 0.75rem;
 }
 
 .body {
@@ -131,20 +153,25 @@ button:disabled {
   cursor: not-allowed;
 }
 
-.state dl {
+/* Readouts (state, energy - see index.html): plain <dl>s inside
+   .tab1-simulator-panel, not their own .panel-wrapped sections. Shared
+   class rather than per-id rules since there are now two of these,
+   deliberately kept as visually separate blocks (matching the "two
+   models" split at the code level) rather than merged into one <dl>. */
+.readout {
   margin: 0;
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 2px 8px;
 }
 
-.state dt {
+.readout dt {
   color: var(--muted);
   text-transform: uppercase;
   font-size: 0.65rem;
 }
 
-.state dd {
+.readout dd {
   margin: 0;
   font-size: 0.75rem;
 }
@@ -156,63 +183,6 @@ button:disabled {
   color: var(--muted);
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.hint {
-  margin: 0;
-  font-size: 0.65rem;
-  color: var(--muted);
-}
-
-.pin-rows {
-  display: grid;
-  gap: 4px;
-}
-
-.pin-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border: 1px solid var(--border);
-  padding: 4px 6px;
-}
-
-.pin-row .pin-row-name {
-  flex: 1;
-  font-size: 0.7rem;
-}
-
-.pin-row .pin-row-name .pin-row-id {
-  color: var(--muted);
-  font-size: 0.6rem;
-}
-
-.led-dot {
-  width: 8px;
-  height: 8px;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg);
-  flex: none;
-}
-
-.led-dot.on {
-  background: var(--fg);
-}
-
-.pin-row-detach {
-  padding: 2px 6px;
-}
-
-.pin-log {
-  display: block;
-  height: 6em;
-  overflow-y: auto;
-  font-size: 0.65rem;
-  color: var(--muted);
-  white-space: pre-wrap;
-  border: 1px solid var(--border);
-  padding: 4px;
 }
 
 /* ---- Workspace: tabs + one canvas per tab, fills everything right of the sidebar ---- */
@@ -283,7 +253,7 @@ button:disabled {
 
 .board-canvas {
   display: block;
-  background: var(--bg);
+  background: var(--canvas-bg);
 }
 
 .board-canvas-full {
@@ -295,11 +265,20 @@ button:disabled {
    and drag/select behavior - tabs 2/3 stay plain placeholder <canvas>
    elements. Tab 1's is a real <div> (see index.html), not a <canvas> -
    positioned board items are real DOM/SVG (@wokwi/elements), not drawn
-   pixels. */
+   pixels. Grid is a CSS background here (cheap, just a <div>); tabs 2/3
+   draw the equivalent grid as canvas pixels in main.ts's
+   drawPlaceholder(), since an opaque-context <canvas> paints over any
+   CSS background applied to the element itself. Keep GRID_SIZE in sync
+   with main.ts if either changes. */
 .board-canvas-interactive {
   position: relative;
   overflow: hidden;
   border: 1px solid var(--border);
+  background-color: var(--canvas-bg);
+  background-image:
+    linear-gradient(to right, var(--canvas-grid) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--canvas-grid) 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 .board-item {
@@ -314,4 +293,31 @@ button:disabled {
 .board-item.selected {
   outline: 2px dashed var(--border);
   outline-offset: 1px;
+}
+
+/* Bottom bar: same height as .tabs (matching padding/border-width), a
+   home for canvas-wide controls that aren't per-tab - just the theme
+   toggle for now. */
+/* No padding on .bottombar itself, height instead comes purely from its
+   button's own box model - deliberately mirroring .tabs (also unpadded,
+   height set by .tab-btn's padding+border) rather than a hardcoded
+   height, so the two bars match by construction, not by coincidence. */
+.bottombar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+}
+
+.bottombar button {
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 5px 14px;
+}
+
+/* Icon-only buttons (no text after the icon) don't need the trailing
+   gap .icon normally reserves for the text that follows it. */
+.bottombar .icon {
+  margin-right: 0;
 }

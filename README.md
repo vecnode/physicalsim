@@ -6,17 +6,10 @@ CPU Emulators:
 
 - Arduino 8-bit AVR `avr8js`
 	- Arduino Uno
-	- Arduino Nano
-	- Arduino Pro Mini
 
+(idle) 
 - RP2040 `rp2040js`
-	- Raspberry Pi Pico
-	- Adafruit Feather RP2040
-	- SparkFun Pro Micro RP2040
-	- Pimoroni Tiny RP2040
-
 - ARM Cortex-M `qemu-system-arm` (QEMU, spawned as a native process)
-	- Netduino Plus 2 (`netduinoplus2` machine, STM32F405)
 
 
 ## Repository layout
@@ -35,18 +28,6 @@ simulators/
   avr8js/               git submodule -> https://github.com/vecnode/avr8js
 ```
 
-`avr8`/`rp2040` are JS/TS running in a Web Worker; `cortex-m` has no JS
-side at all — the C++ shell spawns `qemu-system-arm` directly (QMP for
-start/stop/reset, a minimal GDB Remote Serial Protocol client for
-step/PC readback) and it's reached only through the HTTP bridge below,
-never a Worker. In the shell UI, picking a different simulator in the
-dropdown doesn't switch anything by itself — click **Apply** to actually
-switch which adapter Start/Stop/Step/Reset act on. (`avr8`/`rp2040`/
-`cortex-m` are currently parked out of that dropdown — see
-ARCHITECTURE.md's "The board canvas" — while board-level work focuses on
-Arduino Uno; Start/Stop/Step/Reset are disabled in the UI until a board
-picks up a real adapter again. The bridge itself is unaffected — every
-`curl` example below still works exactly as shown.)
 
 ## Reproduce
 
@@ -150,7 +131,7 @@ Build/runtime prerequisites:
 - Linux runtime/build libs (webview GTK backend):
 	- GTK 3 development files
 	- WebKit2GTK development files
-- `qemu-system-arm` (for the `cortex-m` adapter) — not built by this
+- `qemu-system-arm` (for the `cortex-m` adapter) - not built by this
   project. For local dev builds, install it yourself (e.g. from
   [qemu.org](https://www.qemu.org/download/), or `scoop install qemu` /
   `winget install SoftwareFreedomConservancy.QEMU` on Windows, your
@@ -158,20 +139,6 @@ Build/runtime prerequisites:
   it, only `cortex-m` needs it. Not required to build physicalsim, only
   to run the `cortex-m` adapter.
 
-  **Packaged builds bundle their own copy** — `package_release.bat`
-  auto-detects a local QEMU install and copies `qemu-system-arm.exe` +
-  its DLLs into the output's `qemu/` folder (see `BUNDLE_QEMU_ARM` /
-  `QEMU_ARM_DIR` in `CMakeLists.txt`, same mechanism as the existing
-  `BUNDLE_WEBVIEW2_FIXED_RUNTIME` option — nothing is committed to git,
-  only copied at package time from wherever it's installed on the build
-  machine). At runtime, `find_qemu_system_arm()` (`src/qemu_adapter.cpp`)
-  checks a `qemu/` folder next to the executable *first*, before PATH or
-  any system install — so a packaged release runs standalone, with no
-  QEMU install required on the machine it's run on. Verified directly:
-  the spawned `qemu-system-arm.exe` process's path resolves to the
-  bundled copy, not the system one, even with both present. The bundled
-  copy is GPLv2 (its `COPYING` file travels with it in `qemu/`); it's
-  spawned as a separate process, never linked into physicalsim itself.
 
 Downloaded automatically at configure/build time (`FetchContent`):
 

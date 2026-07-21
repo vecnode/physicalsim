@@ -67,21 +67,23 @@
             <!--
               avr8/rp2040/cortex-m removed from the dropdown - not gone,
               just parked (see adapter-registry.ts, worker-rpc.ts, the
-              adapter packages: all untouched). These four act on a
-              running SimulatorAdapter, which Arduino Uno isn't wired to
-              yet (see ARCHITECTURE.md's "Boards" section), so they're
-              disabled rather than left silently doing nothing.
+              adapter packages: all untouched). Start/Stop now double as
+              "power the circuit" for whatever board is placed (see
+              main.ts's setPowered()); Step/Reset stay disabled - not
+              part of that, no adapter path re-enables them yet.
+              Icons: Phosphor Icons (MIT), vendored at
+              assets/icons/phosphor/{play,stop}.svg.
             -->
             <div class="controls">
-              <button id="start-btn" type="button" disabled title="No running CPU adapter selected">Start</button>
-              <button id="stop-btn" type="button" disabled title="No running CPU adapter selected">Stop</button>
+              <button id="start-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>Start</button>
+              <button id="stop-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></svg>Stop</button>
               <button id="step-btn" type="button" disabled title="No running CPU adapter selected">Step</button>
               <button id="reset-btn" type="button" disabled title="No running CPU adapter selected">Reset</button>
             </div>
           </section>
 
           <div class="tab1-canvas-area">
-            <canvas id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive"></canvas>
+            <div id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive"></div>
           </div>
         </div>
 

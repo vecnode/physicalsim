@@ -11,9 +11,11 @@
   "dependencies": {
     "@physicalsim/adapter-avr8": "*",
     "@physicalsim/adapter-rp2040": "*",
-    "@physicalsim/common": "*"
+    "@physicalsim/common": "*",
+    "lit": "^3.0.0"
   },
   "devDependencies": {
+    "@types/react": "^18.3.0",
     "typescript": "^5.7.3",
     "vite": "^6.0.0"
   }

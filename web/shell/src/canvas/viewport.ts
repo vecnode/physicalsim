@@ -62,13 +62,38 @@ export class Viewport {
     for (const cb of this.changeListeners) cb();
   }
 
-  setZoom(next: number): void {
+  // Changes zoom while keeping the world point currently under
+  // (clientX, clientY) at that same screen position - "zoom towards the
+  // cursor" rather than towards wherever the world origin happens to
+  // currently be on screen. Solves apply()'s screen = pan + world*zoom
+  // for the new pan, holding the world point (derived from the *old*
+  // pan/zoom) fixed at the same screen position under the new zoom.
+  setZoomAt(clientX: number, clientY: number, next: number): void {
+    const rect = this.container.getBoundingClientRect();
+    const screenX = clientX - rect.left;
+    const screenY = clientY - rect.top;
+    const worldX = (screenX - this.panX) / this.zoom;
+    const worldY = (screenY - this.panY) / this.zoom;
+
     this.zoom = Math.min(this.maxZoom, Math.max(this.minZoom, next));
+    this.panX = screenX - worldX * this.zoom;
+    this.panY = screenY - worldY * this.zoom;
     this.apply();
+  }
+
+  // Zooms centered on the viewport's own center - for callers with no
+  // particular cursor position to anchor on (the +/- buttons, reset).
+  setZoom(next: number): void {
+    const rect = this.container.getBoundingClientRect();
+    this.setZoomAt(rect.left + rect.width / 2, rect.top + rect.height / 2, next);
   }
 
   zoomBy(delta: number): void {
     this.setZoom(this.zoom + delta);
+  }
+
+  zoomAtBy(clientX: number, clientY: number, delta: number): void {
+    this.setZoomAt(clientX, clientY, this.zoom + delta);
   }
 
   panBy(dx: number, dy: number): void {
@@ -114,15 +139,18 @@ export class Viewport {
   }
 
   // Plain wheel (no Ctrl/Cmd needed) zooms, one step per notch - the same
-  // step +/- buttons use. Panning has its own dedicated gesture
-  // (background left-click-drag, wired by the caller), so wheel is free
-  // to mean "zoom" exclusively on the container.
+  // step +/- buttons use, centered on the cursor (zoomAtBy(), not
+  // zoomBy()) so scrolling in on some part of the scene keeps that part
+  // under the cursor instead of the zoom always anchoring on the same
+  // spot regardless of where the mouse is. Panning has its own dedicated
+  // gesture (background left-click-drag, wired by the caller), so wheel
+  // is free to mean "zoom" exclusively on the container.
   bindWheelZoom(): void {
     this.container.addEventListener(
       "wheel",
       (ev) => {
         ev.preventDefault();
-        this.zoomBy(ev.deltaY < 0 ? this.step : -this.step);
+        this.zoomAtBy(ev.clientX, ev.clientY, ev.deltaY < 0 ? this.step : -this.step);
       },
       { passive: false },
     );

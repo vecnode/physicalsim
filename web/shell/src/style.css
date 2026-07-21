@@ -15,35 +15,59 @@ body {
   height: 100%;
   margin: 0;
   font-family: "Courier New", ui-monospace, monospace;
+  font-size: 12px;
   background: var(--bg);
   color: var(--fg);
+  overflow: hidden;
 }
 
 .app {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: 32px 20px;
-  display: grid;
-  gap: 20px;
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
-header h1 {
+.topbar {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.topbar h1 {
   margin: 0;
-  font-size: 1.25rem;
+  font-size: 0.95rem;
   font-weight: 700;
   letter-spacing: 0.02em;
   text-transform: lowercase;
 }
 
+.body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.sidebar {
+  flex: none;
+  width: 276px;
+  overflow-y: auto;
+  border-right: 1px solid var(--border);
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .panel {
   border: 1px solid var(--border);
-  padding: 16px;
+  padding: 8px;
   display: grid;
-  gap: 10px;
+  gap: 6px;
 }
 
 label {
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--muted);
@@ -54,22 +78,25 @@ input[type="file"] {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
-  padding: 8px;
+  padding: 3px 5px;
   font: inherit;
+  font-size: 0.75rem;
 }
 
 .select-row {
   display: flex;
-  gap: 8px;
+  gap: 4px;
+  flex-wrap: wrap;
 }
 
 .select-row select {
   flex: 1;
+  min-width: 64px;
 }
 
 .controls {
   display: flex;
-  gap: 8px;
+  gap: 4px;
   flex-wrap: wrap;
 }
 
@@ -77,8 +104,9 @@ button {
   border: 1px solid var(--border);
   background: var(--bg);
   color: var(--fg);
-  padding: 8px 14px;
+  padding: 3px 8px;
   font: inherit;
+  font-size: 0.75rem;
   cursor: pointer;
 }
 
@@ -97,63 +125,61 @@ button:disabled {
   margin: 0;
   display: grid;
   grid-template-columns: auto 1fr;
-  gap: 4px 16px;
+  gap: 2px 8px;
 }
 
 .state dt {
   color: var(--muted);
   text-transform: uppercase;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
 }
 
 .state dd {
   margin: 0;
+  font-size: 0.75rem;
 }
 
 #log {
   display: block;
-  min-height: 1.2em;
-  font-size: 0.85rem;
+  min-height: 1.1em;
+  font-size: 0.7rem;
   color: var(--muted);
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .hint {
   margin: 0;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   color: var(--muted);
-}
-
-.pins .select-row select#pin-select {
-  flex: 2;
 }
 
 .pin-rows {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .pin-row {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 6px;
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 4px 6px;
 }
 
 .pin-row .pin-row-name {
   flex: 1;
-  font-size: 0.9rem;
+  font-size: 0.7rem;
 }
 
 .pin-row .pin-row-name .pin-row-id {
   color: var(--muted);
-  font-size: 0.75rem;
+  font-size: 0.6rem;
 }
 
 .led-dot {
-  width: 12px;
-  height: 12px;
+  width: 8px;
+  height: 8px;
   border: 1px solid var(--border);
   border-radius: 50%;
   background: var(--bg);
@@ -165,16 +191,98 @@ button:disabled {
 }
 
 .pin-row-detach {
-  padding: 4px 10px;
+  padding: 2px 6px;
 }
 
 .pin-log {
   display: block;
-  height: 8em;
+  height: 6em;
   overflow-y: auto;
-  font-size: 0.8rem;
+  font-size: 0.65rem;
   color: var(--muted);
   white-space: pre-wrap;
   border: 1px solid var(--border);
-  padding: 8px;
+  padding: 4px;
+}
+
+/* ---- Workspace: tabs + one canvas per tab, fills everything right of the sidebar ---- */
+
+.workspace {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.tabs {
+  flex: none;
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab-btn {
+  border: none;
+  border-right: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--muted);
+  padding: 6px 14px;
+  font: inherit;
+  font-size: 0.75rem;
+  text-transform: lowercase;
+  cursor: pointer;
+}
+
+.tab-btn:hover {
+  color: var(--fg);
+}
+
+.tab-btn.active {
+  color: var(--fg);
+  font-weight: 700;
+  border-bottom: 2px solid var(--fg);
+  margin-bottom: -1px;
+}
+
+.tab-pane {
+  display: none;
+  flex: 1;
+  min-height: 0;
+}
+
+.tab-pane.active {
+  display: flex;
+}
+
+/* Tab 1: a "Simulator" panel pinned top-left, sized to its content, next
+   to (never overlapping) the canvas area - the panel opts out of the
+   pane's default stretch so it doesn't grow to the pane's full height. */
+.tab1-simulator-panel {
+  flex: none;
+  align-self: flex-start;
+  width: 220px;
+  margin: 10px;
+}
+
+.tab1-canvas-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  justify-content: center;
+  overflow: hidden;
+}
+
+.board-canvas {
+  display: block;
+  background: var(--bg);
+}
+
+.board-canvas-full {
+  width: 100%;
+  height: 100%;
+}
+
+/* Only the canvas holding actual placed elements (tab 1) gets a border and
+   drag/select behavior - tabs 2/3 stay plain placeholder surfaces. */
+.board-canvas-interactive {
+  border: 1px solid var(--border);
 }

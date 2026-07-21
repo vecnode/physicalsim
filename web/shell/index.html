@@ -9,60 +9,92 @@
   <link rel="stylesheet" href="/src/style.css">
 </head>
 <body>
-  <main class="app">
-    <header>
+  <div class="app">
+    <header class="topbar">
       <h1>physicalsim</h1>
     </header>
 
-    <section class="panel">
-      <label for="adapter-select">Simulator</label>
-      <div class="select-row">
-        <select id="adapter-select">
-          <option value="avr8">avr8</option>
-          <option value="rp2040">rp2040</option>
-          <option value="cortex-m">cortex-m</option>
-        </select>
-        <button id="apply-btn" type="button">Apply</button>
-      </div>
+    <div class="body">
+      <aside class="sidebar">
+        <section class="panel state">
+          <dl id="state-list">
+            <dt>status</dt><dd id="state-running">idle</dd>
+            <dt>cycles</dt><dd id="state-cycles">0</dd>
+            <dt>pc</dt><dd id="state-pc">0x0</dd>
+          </dl>
+        </section>
 
-      <div class="controls">
-        <button id="start-btn" type="button">Start</button>
-        <button id="stop-btn" type="button">Stop</button>
-        <button id="step-btn" type="button">Step</button>
-        <button id="reset-btn" type="button">Reset</button>
-      </div>
-    </section>
+        <output id="log" aria-live="polite"></output>
 
-    <section class="panel state">
-      <dl id="state-list">
-        <dt>status</dt><dd id="state-running">idle</dd>
-        <dt>cycles</dt><dd id="state-cycles">0</dd>
-        <dt>pc</dt><dd id="state-pc">0x0</dd>
-      </dl>
-    </section>
+        <section class="panel pins">
+          <label for="pin-select">Pins (active simulator)</label>
+          <div class="select-row">
+            <select id="pin-select"></select>
+            <select id="pin-kind-select">
+              <option value="led">LED (display)</option>
+              <option value="button">Button (control)</option>
+            </select>
+            <button id="pin-read-btn" type="button">Read</button>
+            <button id="pin-attach-btn" type="button">Attach</button>
+          </div>
+          <p id="pin-unsupported" class="hint" hidden>
+            This simulator has no pin I/O yet.
+          </p>
 
-    <output id="log" aria-live="polite"></output>
+          <div id="pin-rows" class="pin-rows"></div>
 
-    <section class="panel pins">
-      <label for="pin-select">Pins (active simulator)</label>
-      <div class="select-row">
-        <select id="pin-select"></select>
-        <select id="pin-kind-select">
-          <option value="led">LED (display)</option>
-          <option value="button">Button (control)</option>
-        </select>
-        <button id="pin-read-btn" type="button">Read</button>
-        <button id="pin-attach-btn" type="button">Attach</button>
-      </div>
-      <p id="pin-unsupported" class="hint" hidden>
-        This simulator has no pin I/O yet.
-      </p>
+          <output id="pin-log" class="pin-log" aria-live="polite"></output>
+        </section>
+      </aside>
 
-      <div id="pin-rows" class="pin-rows"></div>
+      <main class="workspace">
+        <nav class="tabs" id="board-tabs">
+          <button class="tab-btn active" type="button" data-tab="tab1">tab 1</button>
+          <button class="tab-btn" type="button" data-tab="tab2">tab 2</button>
+          <button class="tab-btn" type="button" data-tab="tab3">tab 3</button>
+        </nav>
 
-      <output id="pin-log" class="pin-log" aria-live="polite"></output>
-    </section>
-  </main>
+        <div class="tab-pane active" data-tab="tab1">
+          <section class="panel tab1-simulator-panel">
+            <label for="adapter-select">Simulator</label>
+            <div class="select-row">
+              <select id="adapter-select">
+                <option value="arduino-uno" selected>Arduino Uno</option>
+              </select>
+              <button id="apply-btn" type="button">Apply</button>
+            </div>
+
+            <!--
+              avr8/rp2040/cortex-m removed from the dropdown - not gone,
+              just parked (see adapter-registry.ts, worker-rpc.ts, the
+              adapter packages: all untouched). These four act on a
+              running SimulatorAdapter, which Arduino Uno isn't wired to
+              yet (see ARCHITECTURE.md's "Boards" section), so they're
+              disabled rather than left silently doing nothing.
+            -->
+            <div class="controls">
+              <button id="start-btn" type="button" disabled title="No running CPU adapter selected">Start</button>
+              <button id="stop-btn" type="button" disabled title="No running CPU adapter selected">Stop</button>
+              <button id="step-btn" type="button" disabled title="No running CPU adapter selected">Step</button>
+              <button id="reset-btn" type="button" disabled title="No running CPU adapter selected">Reset</button>
+            </div>
+          </section>
+
+          <div class="tab1-canvas-area">
+            <canvas id="canvas-tab1" class="board-canvas board-canvas-full board-canvas-interactive"></canvas>
+          </div>
+        </div>
+
+        <div class="tab-pane" data-tab="tab2">
+          <canvas id="canvas-tab2" class="board-canvas board-canvas-full"></canvas>
+        </div>
+
+        <div class="tab-pane" data-tab="tab3">
+          <canvas id="canvas-tab3" class="board-canvas board-canvas-full"></canvas>
+        </div>
+      </main>
+    </div>
+  </div>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

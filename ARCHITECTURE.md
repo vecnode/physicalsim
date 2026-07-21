@@ -344,6 +344,121 @@ any adapter internals directly:
   `CircuitPin.forBoardPin(client, board, name)` is the convenience
   entry point that resolves through one of these before constructing.
 
+## The board canvas
+
+A real-time workspace for placing and wiring board illustrations, separate
+from (and currently unconnected to) the adapter/pin machinery above —
+`web/shell/index.html` + `web/shell/src/main.ts`'s board-workspace section.
+This is the backend the UI needs as boards go from "a picture" to "a picture
+you can actually wire up to a running adapter," so it's worth understanding
+even though today it only draws and moves a static image.
+
+**Layout.** `.app` is a full-viewport column: a `.topbar` (title), then
+`.body` (a row: a fixed-width `.sidebar` holding the state/pins panels, and
+`.workspace` filling the rest). `.workspace` is itself a tab bar
+(`#board-tabs`) over one `.tab-pane` per tab — generic tabs (`tab1`/`tab2`/
+`tab3`), not tied to a specific board. Tab 1 additionally holds the
+"Simulator" panel (board picker + the now-disabled Start/Stop/Step/Reset —
+see "Boards vs. adapters" below) pinned top-left via `align-self: flex-start`
+so it doesn't stretch to the pane's full height and never overlaps the
+canvas next to it.
+
+**Rendering: plain 2D canvas, not DOM/SVG.** Each tab owns one `<canvas>`,
+backing store sized 1:1 against `devicePixelRatio` and redrawn only on
+resize/tab-switch/scene-change — no per-frame render loop, since nothing
+animates on its own yet. Tab 1's canvas (`.board-canvas-interactive`) is the
+only one with a scene: a plain array of placed items
+(`SceneItem { name, x, y, width, height }`, all in canvas backing-store
+pixel space) redrawn by `redrawTab1()`. Tabs 2/3 stay blank, unbordered
+placeholders. This is a deliberate choice, not a placeholder-for-later: see
+"Why canvas, not the real wokwi-elements components" below for the tradeoff
+it's making.
+
+**Selection and drag.** Hit-testing is a plain top-to-bottom rect scan over
+`tab1Scene` (fine at this scale — one board today) converting pointer
+`clientX/Y` into the same canvas-pixel space via `getBoundingClientRect()` +
+`devicePixelRatio`. `mousedown` selects (and starts a drag, recording the
+pointer's offset from the item's origin) or deselects (click on empty
+canvas); `mousemove` updates the selected item's `x`/`y` and redraws;
+`mouseup` is listened for on `window`, not the canvas, so a fast drag that
+briefly leaves canvas bounds doesn't get stuck. Selected items get a dashed
+black stroke around their bounding box — the "border when selected" is
+drawn fresh every redraw, not a persistent DOM overlay.
+
+**Board images: real size, not scaled to fit.** `showBoard(name)` loads the
+image once (cached in `loadedBoardImages`), then places it at
+`img.naturalWidth * devicePixelRatio` × `img.naturalHeight * devicePixelRatio`
+— true size, never shrunk or stretched to fit the canvas. Repeated `Apply`
+clicks replace the scene rather than stacking duplicate boards.
+
+**Boards vs. adapters.** `avr8`/`rp2040`/`cortex-m` are parked out of the
+`#adapter-select` dropdown (`index.html`) — not removed from the codebase;
+`adapter-registry.ts`, `worker-rpc.ts`, and both adapter packages are
+untouched, just unreachable from the UI for now while board work is the
+focus. Start/Stop/Step/Reset are `disabled` in the HTML rather than quietly
+doing nothing, since `activeAdapterId` starts (and, until a board picks up
+an adapter, stays) `null` — see the comments in `main.ts` around
+`activeClient()`. Selecting "Arduino Uno" and clicking Apply calls
+`showBoard()` directly; it never reaches `apply()`/`getAdapterClient()` at
+all, because there's no adapter to reach yet. Reconnecting a board to its
+real MCU (Arduino Uno's is literally the same ATmega328p `avr8` already
+emulates) is the next real step, not a rewrite — `CircuitPin`/`Led`/`Button`
+and the board pin-name maps (`web/common/src/boards/arduino-uno.ts`) already
+exist for exactly this from the "Pin I/O pipeline" work above.
+
+**Supported boards.** One today. Tracked here as more are added — an entry
+means a board image exists in `assets/boards/`, not that it's wired to a
+running adapter yet:
+
+| Board | Image asset | Wired to an adapter? |
+|---|---|---|
+| Arduino Uno | `arduino-uno.svg` | No — visual only (see above) |
+
+**Board image assets.** `assets/boards/<name>.svg` is the canonical,
+version-controlled copy; `web/shell/public/boards/<name>.svg` is a byte-identical
+copy in Vite's static-asset source directory (`publicDir`, defaulting to
+`<project>/public` — *not* the same `public/` as the repo-root build output;
+see the `.gitignore` comment next to `/public/` for why that distinction is
+now anchored explicitly). Vite copies it verbatim into the build output at
+`npm run build` time, and `cpp-embedlib` embeds it into the binary the same
+way it embeds `index.html`/the JS bundles — confirmed by a real headless run
+serving `GET /boards/arduino-uno.svg` back correctly. Nothing is fetched
+from wokwi.com or any CDN at runtime; distribution has to work offline, same
+as the WebView2 runtime and bundled QEMU.
+
+**Where `arduino-uno.svg` came from, and the license constraint that
+matters for the next board.** Extracted from
+[wokwi-elements](https://github.com/wokwi/wokwi-elements)'s
+`arduino-uno-element.ts` (MIT licensed) — that project renders boards as
+Lit web components with real SVG DOM per pin/LED/button, which is *why*
+Wokwi's own boards are natively clickable per-element and this one currently
+isn't (see below). The extraction kept only the static SVG markup (default
+state: every LED off) and dropped the Lit-specific bindings (event
+handlers, `tabindex`, conditional glow states) and computed template
+expressions (inlined to literal numbers) — it's a plain static asset now,
+not a component. [velxio](https://github.com/davidmonterocrespo24/velxio)
+(a similar from-scratch Wokwi-style simulator, referenced during this work
+for how a full project structures itself around `@wokwi/elements`) is
+**AGPLv3 + a separate commercial license** — nothing from that repo should
+be copied into physicalsim; it was consulted for architecture ideas only,
+not code.
+
+**Why canvas, not the real wokwi-elements components.** Two real options
+for board rendering exist: (a) use `@wokwi/elements` directly as DOM/SVG —
+every pin, LED, and button is already a real interactive element with its
+own event handlers, which is how Wokwi gets per-pin clicks "for free" — or
+(b) stay on plain `<canvas>`, as today, and hand-roll hit-testing. (a) means
+taking on a real runtime dependency (Lit) and moving board rendering out of
+the performance-first, dependency-free canvas model the rest of this
+workspace is built on; (b) means porting *data* (not code — plain pin-name
+→ x/y coordinates, e.g. `arduino-uno-element.ts`'s `pinInfo` array) into
+this project's own board asset format, and extending the same hit-test
+pattern `tab1Scene` already uses for whole-board selection down to
+per-pin circles. (b) is the direction this project is headed in, to keep
+the "no framework, fast canvas" property intact as more boards and
+interactions (per-pin click, wiring between pins) get added — not yet
+implemented, tracked as the natural next step once a board needs it.
+
 ## Build pipeline
 
 `public/` is never authored by hand — it's Vite's build output

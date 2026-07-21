@@ -39,6 +39,23 @@
             </div>
 
             <!--
+              Stage 2 of the terminal feature (see ARCHITECTURE.md's
+              "Firmware loading" section) - loads a compiled Intel HEX
+              file into the placed board's flash and reboots into it.
+              Requires a board already placed via Apply above (there's
+              nothing to load firmware into otherwise). The file input is
+              hidden and triggered by the button so it can be styled like
+              every other control here, rather than showing the browser's
+              own default file-picker chrome.
+            -->
+            <div class="select-row">
+              <button id="load-firmware-btn" type="button" title="Load a compiled .hex file">
+                <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>Load .hex…
+              </button>
+              <input id="firmware-file-input" type="file" accept=".hex" hidden>
+            </div>
+
+            <!--
               avr8/rp2040/cortex-m removed from the dropdown - not gone,
               just parked (see adapter-registry.ts, worker-rpc.ts, the
               adapter packages: all untouched). Start/Pause/Stop are

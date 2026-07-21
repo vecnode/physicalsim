@@ -67,8 +67,9 @@ export class Avr8Adapter implements SimulatorAdapter {
   private serialListeners = new Set<(byte: number) => void>();
 
   async init(_config: unknown): Promise<void> {
-    // No firmware loading yet — this just runs the CPU against an empty
-    // program, to exercise start/stop/step/reset.
+    // Firmware is loaded later, via loadFirmware() - init() just gets the
+    // CPU/peripherals into a bootable (if empty-flash) state, the same one
+    // reset() returns to.
     this.attachPeripherals();
   }
 
@@ -148,6 +149,37 @@ export class Avr8Adapter implements SimulatorAdapter {
   onSerialData(cb: (byte: number) => void): () => void {
     this.serialListeners.add(cb);
     return () => this.serialListeners.delete(cb);
+  }
+
+  // Writes a parsed flash image (see @physicalsim/common's
+  // parseIntelHex()) into program memory and reboots into it. `bytes` is
+  // a plain byte stream in address order; AVR flash is word-addressed
+  // and little-endian, so each pair of bytes packs into one
+  // this.program entry the same way avr-gcc's own .hex output already
+  // assumes a real programmer would unpack it.
+  //
+  // this.program is filled with 0xffff (all-ones, matching an erased
+  // chip's real reset state) before writing bytes over it, rather than
+  // only overwriting exactly `bytes.length` worth - otherwise a shorter
+  // second firmware load would leave the *previous* load's now-stale
+  // instructions sitting past the new program's end, silently reachable
+  // if execution ever ran off the end of the intended code.
+  loadFirmware(bytes: Uint8Array): void {
+    const maxBytes = this.program.length * 2;
+    if (bytes.length > maxBytes) {
+      throw new Error(`Firmware is ${bytes.length} bytes, too large for the ${maxBytes}-byte flash`);
+    }
+    this.program.fill(0xffff);
+    const wordCount = Math.ceil(bytes.length / 2);
+    for (let i = 0; i < wordCount; i++) {
+      const lo = bytes[i * 2];
+      const hi = i * 2 + 1 < bytes.length ? bytes[i * 2 + 1] : 0xff;
+      this.program[i] = lo | (hi << 8);
+    }
+    // Booting new firmware is exactly what reset() already does (recreate
+    // the CPU/peripherals from this.program, wipe registers and cycle
+    // count) - reusing it here rather than duplicating that logic.
+    this.reset();
   }
 
   private resolvePin(pin: string): { port: AVRIOPort; bit: number } {

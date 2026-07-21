@@ -120,3 +120,53 @@ describe("Avr8Adapter serial output", () => {
     expect(cb).toHaveBeenCalledWith(42);
   });
 });
+
+describe("Avr8Adapter firmware loading", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  // LDI r16, 0x42 - opcode "1110 KKKK dddd KKKK" (confirmed directly
+  // against avr8js's own instruction.ts): K=0x42 splits into KKKK=0100 and
+  // KKKK=0010, d=0 (register 16 + 0), giving 0xE402 - stored little-endian
+  // (low byte first) since AVR flash words are little-endian.
+  const LDI_R16_0x42 = new Uint8Array([0x02, 0xe4]);
+
+  it("writes bytes into flash such that the CPU actually executes them", () => {
+    adapter.loadFirmware(LDI_R16_0x42);
+    adapter.step(1);
+    expect(cpuOf(adapter).data[16]).toBe(0x42);
+  });
+
+  it("resets cycles/pc back to power-on defaults when loading", () => {
+    adapter.loadFirmware(LDI_R16_0x42);
+    adapter.step(1);
+    expect(cpuOf(adapter).data[16]).toBe(0x42); // confirms the first load actually ran
+
+    adapter.loadFirmware(LDI_R16_0x42);
+    const cpu = cpuOf(adapter) as unknown as { pc: number; cycles: number };
+    expect(cpu.pc).toBe(0);
+    expect(cpu.cycles).toBe(0);
+  });
+
+  it("clears any previous firmware's leftover instructions past the new program's end", () => {
+    // First load: two instructions worth of flash - the second one
+    // matters only in that it must NOT still be there after the load
+    // below overwrites it with something shorter.
+    adapter.loadFirmware(new Uint8Array([0x02, 0xe4, 0x02, 0xe4]));
+    // Second load: just one instruction, one word shorter than the first.
+    adapter.loadFirmware(LDI_R16_0x42);
+
+    const program = (adapter as unknown as { program: Uint16Array }).program;
+    expect(program[0]).toBe(0xe402);
+    expect(program[1]).toBe(0xffff); // erased, not the first load's stale second instruction
+  });
+
+  it("rejects firmware larger than the flash", () => {
+    const tooBig = new Uint8Array((adapter as unknown as { program: Uint16Array }).program.length * 2 + 2);
+    expect(() => adapter.loadFirmware(tooBig)).toThrow(/too large/);
+  });
+});

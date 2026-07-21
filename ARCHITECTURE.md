@@ -847,27 +847,23 @@ as the theme/chrome-hidden toggles; the panel's own header has a second,
 lighter-weight collapse button that just shrinks it to that header
 without hiding it.
 
-**Stage 1 of three, deliberately.** The natural next step after a
-Serial Monitor exists is "let me write and run an Arduino sketch here,"
-and the honest constraint is that nothing about the editor widget is the
-hard part — there is no compiler anywhere in this codebase. `avr8js`
-only emulates a CPU executing whatever's already sitting in its flash;
-turning an Arduino sketch into AVR machine code is a separate, much
-larger undertaking (a WASM-ported `avr-gcc`, or a server-side compile
-step) that a text editor doesn't get you any closer to. So the planned
-progression is:
+**Three stages, deliberately — two built.** The natural next step after
+a Serial Monitor exists is "let me write and run an Arduino sketch
+here," and the honest constraint is that nothing about an editor widget
+is the hard part — there is no compiler anywhere in this codebase.
+`avr8js` only emulates a CPU executing whatever's already sitting in its
+flash; turning an Arduino sketch into AVR machine code is a separate,
+much larger undertaking (a WASM-ported `avr-gcc`, or a server-side
+compile step) that a text editor doesn't get you any closer to.
 
-1. **This** — surface whatever the firmware transmits over UART.
-   Genuinely useful on its own and buildable today, independent of
-   everything below it.
-2. **Firmware loading** — accept a compiled `.hex` (Intel HEX) file,
-   parse it, write it into the emulated flash before Start. No editor
-   needed: compile with the real Arduino CLI/IDE elsewhere and load the
-   result here. This is the step that actually makes the terminal show
-   something, since right now nothing ever writes to `UDR`.
-3. **In-browser editing and compiling** — needs a real AVR toolchain
-   running somewhere. A large, separate project, not a natural extension
-   of adding an editor widget.
+1. **Surface whatever the firmware transmits over UART** — this
+   section, above.
+2. **Firmware loading** — done; see below. Accepts a compiled `.hex`
+   file, so no in-browser editor or compiler was needed to make the
+   terminal actually show something.
+3. **In-browser editing and compiling** — still needs a real AVR
+   toolchain running somewhere. A large, separate project, not a
+   natural extension of adding an editor widget.
 
 **The RPC surface** — three additions, mirroring the pin I/O pipeline
 above almost exactly (`web/common/src/adapter-types.ts`,
@@ -928,6 +924,27 @@ completed lines (`MAX_LINES`), trimmed from the oldest end, so a
 long-running sketch printing continuously doesn't grow the DOM (and the
 page's memory) without bound — a rolling window, matching the sidebar
 log's own spirit rather than a full transcript.
+
+**Firmware loading (Stage 2).** The "Load .hex…" button (next to Apply)
+reads a file, parses it with `parseIntelHex()` (`web/common/src/
+intel-hex.ts` — adapter-agnostic on purpose, since the format itself has
+nothing to do with AVR specifically; records `02`/`04`/`03`/`05`
+handled, not just the `00`/`01` a 32KB image actually needs, and
+checksums verified line by line), and calls a new `loadFirmware`
+RPC method with the resulting bytes. `Avr8Adapter.loadFirmware()` is the
+sole authority on the real flash size (the parser itself is only
+handed a generous sanity ceiling, not a hardware limit, so one magic
+number doesn't have to stay in sync across the process boundary): it
+fills `program` with `0xffff` (erased-flash state, so a shorter second
+load can't leave a previous load's stale instructions reachable past
+the new one's end), packs the bytes into little-endian words, and calls
+`this.reset()` — reusing the exact CPU-recreation path Stop already
+uses, rather than duplicating it, so loading firmware reboots into it
+the same way power-cycling a real board would. Verified end-to-end, not
+just unit-by-unit: a hand-assembled 3-word program (`LDI r16, 'H'` /
+`STS 0xc6, r16`, the encoding confirmed directly against `avr8js`'s own
+instruction decoder) loaded through the real UI and produced a live
+stream of `H` characters in the terminal once Started.
 
 ## Build pipeline
 

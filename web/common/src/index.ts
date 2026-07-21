@@ -1,5 +1,6 @@
 export * from "./adapter-types.js";
 export * from "./worker-host.js";
+export * from "./intel-hex.js";
 export * from "./circuit/circuit-pin.js";
 export * from "./circuit/circuit.js";
 export * from "./circuit/components/led.js";

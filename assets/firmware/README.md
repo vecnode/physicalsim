@@ -22,3 +22,18 @@ three-level `DEC`/`BRNE` countdown loop and an `RJMP` back to the start.
 **To test it:** place an Arduino Uno (Apply), click "Load .hex…" and
 pick this file, then Start - the Serial Monitor should immediately begin
 filling with `PhysicalSim ready` lines.
+
+## `button-mirror.hex`
+
+A hand-assembled ATmega328p program exercising the signal chain
+(`web/shell/src/signal-chain.ts`): sets D13 as an output, then loops
+forever copying D2's current level onto D13 (`SBIC`/`SBI`/`CBI` against
+the real PIND/PORTB registers - no delay loop, since it needs to react
+immediately to D2 changing, not print on a timer). 14 bytes: one `SBI`
+(enable D13 as an output), then a three-instruction read-test-write loop.
+
+**To test it:** place an Arduino Uno (Apply), add a Pushbutton and an LED
+from the right-click menu, wire the pushbutton to D2 and the LED to D13,
+load this file, then Start - clicking the pushbutton on canvas should
+light the LED immediately, with no firmware changes needed to test a
+different sensor/pin pair going forward.

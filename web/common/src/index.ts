@@ -5,6 +5,8 @@ export * from "./circuit/circuit-pin.js";
 export * from "./circuit/circuit.js";
 export * from "./circuit/components/led.js";
 export * from "./circuit/components/button.js";
+export * from "./circuit/component-signal-pin.js";
 export * from "./boards/board.js";
 export * from "./boards/arduino-uno.js";
 export * from "./boards/rp2040-board.js";
+export * from "./boards/board-registry.js";

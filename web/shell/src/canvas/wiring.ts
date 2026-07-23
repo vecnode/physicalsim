@@ -99,6 +99,13 @@ export class WiringLayer {
   // when no connection is in progress.
   private pending: { entityId: string; pin: string; marker: HTMLElement } | null = null;
 
+  // Fired whenever the wire *set* changes (added/removed/reset) - not on
+  // every render() (dragging fires that constantly). This is the hook a
+  // signal-chain layer (canvas/signal-net.ts) uses to know when to
+  // re-resolve which pins are electrically linked, without needing to
+  // poll getWires() itself.
+  private wireChangeListeners: Array<() => void> = [];
+
   constructor(
     private readonly content: HTMLElement,
     private readonly getEntityFrame: (entityId: string) => EntityFrame | undefined,
@@ -159,6 +166,21 @@ export class WiringLayer {
     this.pinOffsets.set(pinKey(entityId, pin), { x, y });
   }
 
+  // Read-only snapshot of every wire currently drawn - what a signal-chain
+  // layer resolves into electrical links. Returns the live array (not a
+  // copy): callers must not mutate it.
+  getWires(): readonly Wire[] {
+    return this.wires;
+  }
+
+  onWiresChanged(cb: () => void): void {
+    this.wireChangeListeners.push(cb);
+  }
+
+  private notifyWiresChanged(): void {
+    for (const cb of this.wireChangeListeners) cb();
+  }
+
   // Called when an entity is deleted - drops both its pin offsets and any
   // wire touching it, so a dangling wire never renders pointing at
   // nothing.
@@ -174,6 +196,7 @@ export class WiringLayer {
         this.selectedWireId = null;
       }
       this.render();
+      this.notifyWiresChanged();
     }
   }
 
@@ -206,6 +229,7 @@ export class WiringLayer {
     this.cancelPending();
     this.wires.push(wire);
     this.render();
+    this.notifyWiresChanged();
   }
 
   // Selects a wire (clicked - see render()'s hit-path handler), clearing
@@ -236,18 +260,21 @@ export class WiringLayer {
     this.wires = this.wires.filter((w) => w.id !== this.selectedWireId);
     this.selectedWireId = null;
     this.render();
+    this.notifyWiresChanged();
     return true;
   }
 
   // Clears every wire and pending state - called when the scene is reset
   // (Apply replacing everything).
   reset(): void {
+    const hadWires = this.wires.length > 0;
     this.wires = [];
     this.pinOffsets.clear();
     this.selectedWireId = null;
     this.dragging = null;
     this.cancelPending();
     this.render();
+    if (hadWires) this.notifyWiresChanged();
   }
 
   // Resolves an elbow wire's three free values against their defaults -

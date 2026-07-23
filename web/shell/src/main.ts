@@ -2,6 +2,7 @@ import { IntelHexParseError, parseIntelHex, type SimState } from "@physicalsim/c
 import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
+import { SignalChain } from "./signal-chain.js";
 import { CanvasController } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import "./native-bridge.js";
@@ -130,6 +131,12 @@ function apply(id: AdapterId): void {
 // canvas's own right-click "Boards" menu - Scene fires this without
 // knowing anything about SimulatorAdapter/apply() itself.
 canvas.scene.onBoardPlaced((board) => apply(board.adapterId));
+
+// Bridges canvas wiring to real pin I/O - a pushbutton wired to a board
+// pin can now drive it, and an LED wired to one reflects it. Constructed
+// once; it subscribes to the scene's own wiring changes and needs no
+// further wiring from this file (see signal-chain.ts).
+new SignalChain(canvas.scene, getAdapterClient);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop

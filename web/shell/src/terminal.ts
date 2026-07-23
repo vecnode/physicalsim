@@ -50,6 +50,21 @@ export class Terminal {
     this.currentLineEl = null;
   }
 
+  // Appends one complete, non-UART line (e.g. "firmware loaded") - styled
+  // distinctly (.terminal-system-line) so it doesn't read as something
+  // the board itself printed via Serial. Always starts its own line and
+  // ends the current one, so any UART byte arriving right after doesn't
+  // get appended onto it.
+  writeLine(text: string): void {
+    const line = document.createElement("div");
+    line.className = "terminal-system-line";
+    line.textContent = text;
+    this.el.output.appendChild(line);
+    this.trimToMaxLines();
+    this.currentLineEl = null;
+    this.scrollToBottom();
+  }
+
   // Feeds one byte of UART TX data. CR is dropped (Arduino's Serial
   // library, like most serial links, sends CRLF line endings - keeping
   // only LF as the line break avoids a stray blank-looking line for

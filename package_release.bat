@@ -88,11 +88,19 @@ if defined QEMU_ARM_DIR (
   echo               https://www.qemu.org/download/ and rerun to bundle it.
 )
 
+REM avr-gcc (the in-app sketch compiler's backend, src/avr_toolchain.cpp)
+REM is fetched by CMake itself (BUNDLE_AVR_TOOLCHAIN, see CMakeLists.txt) -
+REM unlike QEMU/WebView2 above, there's nothing to locate on this machine
+REM first, just a flag to turn on. Still optional (the app runs fine
+REM without it, just without the sketch compiler), same posture as QEMU.
+echo     Bundling avr-gcc toolchain (fetched by CMake)
+
 "%CMAKE_EXE%" -B build ^
   -DINCLUDE_TERMINAL_ON_RELEASE=OFF ^
   -DSTATIC_MSVC_RUNTIME_RELEASE=ON ^
   -DBUNDLE_WEBVIEW2_FIXED_RUNTIME=ON ^
   "-DWEBVIEW2_FIXED_RUNTIME_DIR=!FIXED_RUNTIME_DIR_FOR_CMAKE!" ^
+  -DBUNDLE_AVR_TOOLCHAIN=ON ^
   !QEMU_ARM_ARGS!
 if errorlevel 1 goto :error
 
@@ -123,6 +131,14 @@ if exist "build\Release\WebView2Runtime" (
 
 if exist "build\Release\qemu" (
   xcopy "build\Release\qemu" "%OUT_DIR%\qemu" /E /I /Y >nul
+)
+
+if exist "build\Release\avr-core" (
+  xcopy "build\Release\avr-core" "%OUT_DIR%\avr-core" /E /I /Y >nul
+)
+
+if exist "build\Release\avr-toolchain" (
+  xcopy "build\Release\avr-toolchain" "%OUT_DIR%\avr-toolchain" /E /I /Y >nul
 )
 
 echo.

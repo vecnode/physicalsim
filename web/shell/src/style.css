@@ -70,9 +70,17 @@ body {
   display: flex;
 }
 
+/* Empty scaffold, no icons yet - see index.html's own comment. Sits left
+   of .sidebar, the same "activity bar" position VS Code/most IDEs use. */
+.icon-rail {
+  flex: none;
+  width: 28px;
+  border-right: 1px solid var(--border);
+}
+
 .sidebar {
   flex: none;
-  width: 276px;
+  width: 320px;
   overflow-y: auto;
   border-right: 1px solid var(--border);
   padding: 10px;
@@ -109,6 +117,20 @@ input[type="file"] {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+/* The minimal sketch textarea (index.html's .sketch-panel) - deliberately
+   plain, no syntax highlighting, matching the same border/bg/font as
+   every other input here rather than looking like a separate widget. */
+.sketch-panel textarea {
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--fg);
+  padding: 5px 6px;
+  font: inherit;
+  font-size: 0.75rem;
+  resize: vertical;
+  width: 100%;
 }
 
 .select-row select {
@@ -499,6 +521,15 @@ button:disabled {
 
 .terminal-output div {
   line-height: 1.4;
+}
+
+/* Written by Terminal.writeLine() - a system message (e.g. "firmware
+   loaded"), not something the board itself sent over Serial - styled
+   distinctly from plain .terminal-output div text so the two don't read
+   as the same kind of line. */
+.terminal-system-line {
+  color: #9a9a9a;
+  font-style: italic;
 }
 
 /* Shown only via :empty, so it disappears the instant real output

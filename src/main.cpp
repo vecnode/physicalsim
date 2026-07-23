@@ -38,6 +38,7 @@
 #include "WebAssets.h"
 #include "webview/webview.h"
 #include "qemu_adapter.hpp"
+#include "avr_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
 #include <boost/asio.hpp>
@@ -512,6 +513,42 @@ int main(int argc, char **argv) {
       });
 
 
+  // Compiles a real Arduino sketch (setup()/loop(), digitalRead/Write,
+  // Serial, etc.) into an Intel HEX image using a bundled/system avr-gcc -
+  // see avr_toolchain.hpp. Deliberately outside the /bridge/:adapter/...
+  // abstraction above: compiling isn't scoped to a running adapter
+  // instance the way pin I/O is, it's a standalone build step whose
+  // output (hex text) the browser then feeds through the exact same
+  // parseIntelHex() -> loadFirmware() path "Load .hex..." already uses.
+  // POST /compile  body: {"source": "<sketch text>"}
+  server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
+    json body;
+    try {
+      body = json::parse(req.body);
+    } catch (const std::exception &) {
+      res.status = 400;
+      res.set_header("Cache-Control", "no-store");
+      res.set_content(R"({"ok":false,"log":"invalid JSON body"})", "application/json");
+      return;
+    }
+    const std::string source = body.value("source", std::string{});
+    if (source.empty()) {
+      res.status = 400;
+      res.set_header("Cache-Control", "no-store");
+      res.set_content(R"({"ok":false,"log":"empty sketch source"})", "application/json");
+      return;
+    }
+
+    const auto result = avrtoolchain::compile_sketch(source);
+    json out = {{"ok", result.ok}, {"log", result.log}};
+    if (result.ok) {
+      out["hexText"] = result.hex_text;
+    }
+    res.set_header("Cache-Control", "no-store");
+    res.status = result.ok ? 200 : 422;
+    res.set_content(out.dump(), "application/json");
+  });
+
   // Serve embedded static assets from public/.
   httplib::mount(server, Web::FS);
 
@@ -543,7 +580,7 @@ int main(int argc, char **argv) {
       w.dispatch([&w]() { w.terminate(); });
     });
   } else {
-    w.set_size(1280, 720, WEBVIEW_HINT_NONE);
+    w.set_size(1440, 800, WEBVIEW_HINT_NONE);
 #ifdef _WIN32
     apply_windows_icons(w);
 #endif

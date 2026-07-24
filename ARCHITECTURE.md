@@ -1133,10 +1133,15 @@ LED/pushbutton path along the way), this is a parallel system, the same
   **the exact same three pieces `SignalChain` already uses** -
   `boardPinMaps`, `resolveBoardPinName()`, `CircuitPin.forBoardPin()` -
   then hands them to a small `PROTOCOL_ATTACHERS` registry keyed by
-  component type (today: `lcd1602` → constructs an `Hd44780Decoder` and
-  assigns its output to the placed `wokwi-lcd1602` element's own
-  `characters` property). Disposal is per-component, not per-wire: the
-  moment any one of the six wires disappears, the whole decoder detaches.
+  component type (`lcd1602`/`lcd2004` → both construct an
+  `Hd44780Decoder` and assign its output to the placed element's own
+  `characters` property, differing only in the `cols`/`rows` passed in -
+  `wokwi-lcd2004` is a plain subclass of `wokwi-lcd1602` in
+  `simulators/wokwi-elements`, same pinInfo, same API, just a 20x4 size
+  override, so it needed no protocol work of its own once
+  `Hd44780Decoder`'s row addressing was generalized - see below).
+  Disposal is per-component, not per-wire: the moment any one of the six
+  wires disappears, the whole decoder detaches.
 
 **Why this is already board-agnostic, not just component-agnostic.**
 Nothing above - `componentProtocols`, `resolveProtocolLinks()`,
@@ -1218,6 +1223,28 @@ compiled, loaded, and run through the full pipeline - `lcd.print("hello,
 world!")` and a live `millis()/1000` counter on row 2 both appeared on
 the placed `wokwi-lcd1602` element and kept advancing in real time, with
 no static/preset text involved anywhere in the path.
+
+**Generalizing to `lcd2004`.** DDRAM row addressing wasn't a 2-row
+hardcode to begin with: `rowOffsets` is computed as
+`[0x00, 0x40, cols, 0x40 + cols]` - exactly `LiquidCrystal::begin()`'s
+own `setRowOffsets(0x00, 0x40, 0x00 + cols, 0x40 + cols)` call, made
+unconditionally regardless of line count - and `addressToRowCol()`
+resolves an address against however many of those four offsets the
+display actually has rows for (the highest offset not exceeding the
+address wins, the same way a real chip's row boundaries work). So a
+20x4 `wokwi-lcd2004` (a plain `wokwi-lcd1602` subclass in
+`simulators/wokwi-elements` - same `pinInfo`, same `characters`/`text`
+API, only `numCols`/`numRows` overridden) needed no protocol work of its
+own: one more `componentProtocols`/`PROTOCOL_ATTACHERS` entry passing
+`cols=20, rows=4` into the same `Hd44780Decoder`. Rows 2/3 starting at
+`cols` and `0x40 + cols` (not a straightforward continuation of rows
+0/1) is a real, slightly odd quirk of 4-line HD44780 displays, not a
+physicalsim simplification of one - covered by its own
+`hd44780-decoder.test.ts` case. Verified in the running app that a
+placed `wokwi-lcd2004` exposes the same `RS`/`E`/`D4`-`D7` pin names and
+wires successfully through the exact same `ProtocolChain` path
+`lcd1602` already runs through end-to-end above; the row-addressing math
+itself is what the new unit test covers.
 
 **The RPC surface** — three additions, mirroring the pin I/O pipeline
 above almost exactly (`web/common/src/adapter-types.ts`,

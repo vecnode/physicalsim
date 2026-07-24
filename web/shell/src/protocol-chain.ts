@@ -17,19 +17,36 @@ interface ProtocolAttachment {
 // adding a second protocol component later (a relay needing its own
 // multi-pin driver, say) is one more entry here plus one more
 // componentProtocols entry, nothing else in this file changes.
+// Shared by both LCD entries below - Hd44780Decoder itself doesn't know
+// or care which @wokwi/elements tag it's driving, only its cols/rows.
+function attachHd44780(
+  pins: Record<string, CircuitPin>,
+  el: HTMLElement,
+  cols: number,
+  rows: number,
+): ProtocolAttachment {
+  const decoder = new Hd44780Decoder(
+    { rs: pins.rs, e: pins.e, d4: pins.d4, d5: pins.d5, d6: pins.d6, d7: pins.d7 },
+    (characters) => {
+      (el as unknown as { characters: Uint8Array }).characters = characters;
+    },
+    cols,
+    rows,
+  );
+  return { dispose: () => decoder.dispose() };
+}
+
 const PROTOCOL_ATTACHERS: Record<
   string,
   (pins: Record<string, CircuitPin>, el: HTMLElement) => ProtocolAttachment
 > = {
-  lcd1602: (pins, el) => {
-    const decoder = new Hd44780Decoder(
-      { rs: pins.rs, e: pins.e, d4: pins.d4, d5: pins.d5, d6: pins.d6, d7: pins.d7 },
-      (characters) => {
-        (el as unknown as { characters: Uint8Array }).characters = characters;
-      },
-    );
-    return { dispose: () => decoder.dispose() };
-  },
+  // wokwi-lcd1602's own fixed size (16 cols x 2 rows).
+  lcd1602: (pins, el) => attachHd44780(pins, el, 16, 2),
+  // wokwi-lcd2004 - a plain subclass of wokwi-lcd1602 (same pinInfo,
+  // same "characters" API) overriding only its size to 20x4, so it needs
+  // no protocol work of its own beyond this entry - see hd44780-decoder.
+  // ts's own generalized row-offset math for why 4 rows "just works".
+  lcd2004: (pins, el) => attachHd44780(pins, el, 20, 4),
 };
 
 // The multi-pin counterpart to signal-chain.ts's SignalChain - glues

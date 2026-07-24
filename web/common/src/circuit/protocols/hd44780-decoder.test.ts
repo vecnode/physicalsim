@@ -147,4 +147,53 @@ describe("Hd44780Decoder", () => {
 
     decoder.dispose();
   });
+
+  it("addresses a 20x4 display's rows 2/3 correctly (LiquidCrystal's own row_offsets quirk)", async () => {
+    const client = new FakePinClient();
+    const rs = new CircuitPin(client, "RS");
+    const e = new CircuitPin(client, "E");
+    const d4 = new CircuitPin(client, "D4");
+    const d5 = new CircuitPin(client, "D5");
+    const d6 = new CircuitPin(client, "D6");
+    const d7 = new CircuitPin(client, "D7");
+
+    let latest: Uint8Array | null = null;
+    const decoder = new Hd44780Decoder(
+      { rs, e, d4, d5, d6, d7 },
+      (chars) => {
+        latest = chars;
+      },
+      20,
+      4,
+    );
+    await flush();
+
+    async function pulseNibble(nibble: number): Promise<void> {
+      await d4.write(nibble & 0x1 ? 1 : 0);
+      await d5.write(nibble & 0x2 ? 1 : 0);
+      await d6.write(nibble & 0x4 ? 1 : 0);
+      await d7.write(nibble & 0x8 ? 1 : 0);
+      await e.write(0);
+      await e.write(1);
+      await e.write(0);
+    }
+    async function sendByte(byte: number, rsValue: number): Promise<void> {
+      await rs.write(rsValue);
+      await pulseNibble(byte >> 4);
+      await pulseNibble(byte & 0x0f);
+    }
+
+    // setRowOffsets(0x00, 0x40, 0x00 + 20, 0x40 + 20) - rows 2/3 start at
+    // 20 (0x14) and 84 (0x54), not a straightforward continuation of
+    // rows 0/1.
+    await sendByte(0x80 | 0x14, 0); // SETDDRAMADDR, row 2 start
+    await sendByte("2".charCodeAt(0), 1);
+    expect(latest![2 * 20]).toBe("2".charCodeAt(0));
+
+    await sendByte(0x80 | 0x54, 0); // SETDDRAMADDR, row 3 start
+    await sendByte("3".charCodeAt(0), 1);
+    expect(latest![3 * 20]).toBe("3".charCodeAt(0));
+
+    decoder.dispose();
+  });
 });

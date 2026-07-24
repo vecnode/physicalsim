@@ -23,13 +23,6 @@ export interface Hd44780Pins {
   d7: CircuitPin;
 }
 
-// Matches wokwi-lcd1602's own hardcoded size (LCD1602Element.numCols/
-// numRows in simulators/wokwi-elements - not configurable per instance),
-// not a general HD44780 parameter - a 4-row display would need a
-// different wokwi element entirely, out of scope here.
-const COLS = 16;
-const ROWS = 2;
-
 type PinKey = keyof Hd44780Pins;
 
 // One instance per wired LCD - constructed by protocol-chain.ts once all
@@ -58,10 +51,16 @@ export class Hd44780Decoder {
   private pendingHighNibble: number | null = null;
   private pendingRs = 0;
 
-  // HD44780 DDRAM address (0x00-0x27 = row 0, 0x40-0x67 = row 1 - see
-  // LiquidCrystal::setRowOffsets(0, 0x40, cols, 0x40+cols) for a 2-line
-  // display) - only the first COLS bytes of each 40-byte row are ever
-  // visible, matching a real un-scrolled 16-column display.
+  // HD44780 DDRAM address. Real row start addresses, computed exactly the
+  // way LiquidCrystal::begin() computes them for *any* row count
+  // (setRowOffsets(0x00, 0x40, 0x00 + cols, 0x40 + cols), called
+  // unconditionally regardless of how many lines the display actually
+  // has) - not a 2-row-specific hardcode, so this same formula is already
+  // correct for wokwi-lcd2004's 20x4 layout too (rows 2/3 continuing from
+  // rows 0/1's DDRAM at a `cols`-sized offset, the real, slightly odd
+  // quirk of 4-line HD44780 displays, not a physicalsim simplification of
+  // it).
+  private readonly rowOffsets: number[];
   private ddramAddr = 0;
   // I/D bit (entry mode) - LCD_ENTRYLEFT (increment) is begin()'s own
   // default (_displaymode = LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT).
@@ -72,16 +71,26 @@ export class Hd44780Decoder {
   // rather than discarding what was written.
   private displayOn = true;
 
-  private readonly buffer = new Uint8Array(COLS * ROWS);
+  private readonly buffer: Uint8Array;
 
   constructor(
     pins: Hd44780Pins,
     // Called after every command/character byte is applied - always the
     // full buffer (cloned, not the live one), so the caller (protocol-
-    // chain.ts) can assign it wholesale to wokwi-lcd1602's own
+    // chain.ts) can assign it wholesale to the placed element's own
     // `characters` property without the two ever aliasing the same array.
     private readonly onUpdate: (characters: Uint8Array) => void,
+    // Matches whichever wokwi element this decoder is driving
+    // (LCD1602Element.numCols/numRows or LCD2004Element's own override,
+    // in simulators/wokwi-elements) - not a general HD44780 parameter on
+    // its own, since the real chip's usable DDRAM/row layout depends on
+    // which physical display is wired, and the caller (protocol-chain.ts)
+    // already knows which one that is.
+    private readonly cols = 16,
+    private readonly rows = 2,
   ) {
+    this.rowOffsets = [0x00, 0x40, cols, 0x40 + cols];
+    this.buffer = new Uint8Array(cols * rows);
     (Object.entries(pins) as Array<[PinKey, CircuitPin]>).forEach(([key, pin]) => {
       // Seeds the shadow with whatever the pin already reads as, the same
       // "reflect reality immediately, not just after the next toggle"
@@ -139,18 +148,38 @@ export class Hd44780Decoder {
     } else {
       this.runCommand(byte);
     }
-    this.onUpdate(this.displayOn ? this.buffer.slice() : new Uint8Array(COLS * ROWS));
+    this.onUpdate(this.displayOn ? this.buffer.slice() : new Uint8Array(this.cols * this.rows));
+  }
+
+  // Resolves a raw DDRAM address to (row, col) against this.rowOffsets -
+  // the highest offset not exceeding addr wins (matching how the real
+  // chip's row boundaries work: row 1 "starts" at 0x40 but everything
+  // from 0x00 up to 0x3F belongs to row 0 first). Returns null for an
+  // address off this display's visible columns/rows entirely.
+  private addressToRowCol(addr: number): { row: number; col: number } | null {
+    let bestRow = -1;
+    let bestOffset = -1;
+    for (let row = 0; row < this.rows; row++) {
+      const offset = this.rowOffsets[row];
+      if (addr >= offset && offset > bestOffset) {
+        bestRow = row;
+        bestOffset = offset;
+      }
+    }
+    if (bestRow === -1) return null;
+    const col = addr - bestOffset;
+    if (col < 0 || col >= this.cols) return null;
+    return { row: bestRow, col };
   }
 
   private writeChar(charCode: number): void {
-    const row = this.ddramAddr >= 0x40 ? 1 : 0;
-    const col = this.ddramAddr - (row ? 0x40 : 0);
-    // Off the visible 16 columns of its row (or past row 1 entirely) -
-    // silently dropped, matching what a real un-scrolled 16x2 display
-    // shows for text that overruns a line: it's still "written" to
-    // DDRAM, just never visible.
-    if (row < ROWS && col >= 0 && col < COLS) {
-      this.buffer[row * COLS + col] = charCode;
+    // Off the visible columns of its row (or past the last row entirely)
+    // - silently dropped, matching what a real un-scrolled display shows
+    // for text that overruns a line: it's still "written" to DDRAM, just
+    // never visible.
+    const resolved = this.addressToRowCol(this.ddramAddr);
+    if (resolved) {
+      this.buffer[resolved.row * this.cols + resolved.col] = charCode;
     }
     this.ddramAddr += this.entryIncrement ? 1 : -1;
   }
@@ -174,10 +203,11 @@ export class Hd44780Decoder {
       // glyph on this canvas.
     } else if (byte & 0x20) {
       // FUNCTION SET (interface width/line count/font). A deliberate
-      // no-op: the wokwi-lcd1602 element this drives is a fixed-size
-      // 16x2, 5x8-font display regardless of what a sketch requests, so
-      // there's no display-side state for this to change. Also what
-      // begin()'s 4-bit-mode reset dance harmlessly resolves to twice
+      // no-op: whichever fixed-size element this decoder drives
+      // (wokwi-lcd1602's 16x2, wokwi-lcd2004's 20x4 - see this.cols/rows)
+      // has a size fixed by its own class, not by what a sketch requests
+      // here, so there's no display-side state for this to change. Also
+      // what begin()'s 4-bit-mode reset dance harmlessly resolves to twice
       // (see onNibbleLatched()'s own comment).
     } else if (byte & 0x10) {
       // CURSOR OR DISPLAY SHIFT. Only the cursor-move case (bit 0x08

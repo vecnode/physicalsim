@@ -580,6 +580,44 @@ void loop(void) {
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
+  "rp2040-button-control": {
+    label: "Button Control (RP2040)",
+    description: "Control an LED with a pushbutton - on the Arduino Nano RP2040 Connect.",
+    level: "beginner",
+    board: "Arduino Nano RP2040 Connect",
+    glyph: "🔘",
+    // Second RP2040 example, same shape as "Button Control" (Uno) - a
+    // pushbutton write-role pin driving an LED read-role pin - but
+    // through pico-sdk's own C API (gpio_get()/gpio_put()), not
+    // Arduino's (digitalRead()/digitalWrite()), same reasoning as
+    // "rp2040-blink" above. Not sleep_ms()-affected (no delay at all
+    // here), so no busy-wait workaround needed - this one's a
+    // straightforward pico-sdk sketch.
+    sketch: `void setup(void) {
+  gpio_init(15);
+  gpio_set_dir(15, GPIO_IN);
+  gpio_init(6);
+  gpio_set_dir(6, GPIO_OUT);
+}
+
+void loop(void) {
+  gpio_put(6, gpio_get(15));
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("nano-rp2040-connect");
+      if (!board) return;
+      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
+      if (!button) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 160);
+      if (!led) return;
+      // "D3"/"D13" resolve through boards/nano-rp2040-connect.ts to
+      // "GP15"/"GP6" - matching gpio_init(15)/gpio_init(6) above.
+      // Different pins from "rp2040-blink"'s GP25 on purpose, so the two
+      // RP2040 examples don't collide if ever placed side by side.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: button.id, pin: "1.l" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D13" }, { entityId: led.id, pin: "A" });
+    },
+  },
   "lcd-display": {
     label: "LCD Display",
     description: "16x2 LCD driven by real LiquidCrystal firmware over its RS/E/D4-D7 bus.",

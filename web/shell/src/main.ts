@@ -385,28 +385,6 @@ const EXAMPLES: Record<string, Example> = {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
     },
   },
-  "mega-blink": {
-    label: "Blink LED (Mega)",
-    description: "Classic blink example on an Arduino Mega - same sketch, a genuinely different chip underneath.",
-    level: "beginner",
-    board: "Arduino Mega",
-    glyph: "💡",
-    sketch: LED_BLINK_SKETCH,
-    build: async () => {
-      const board = await canvas.scene.showBoard("arduino-mega");
-      if (!board) return;
-      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
-      if (!led) return;
-      // "13" resolves through boards/arduino-mega.ts to "B7" - the real
-      // ATmega2560 datasheet pinout, NOT the same physical port/bit as
-      // the Uno's own D13 (B5). This only lights up correctly because
-      // /compile is now board-aware (avr_toolchain.cpp's
-      // resolve_board_target(), threaded from main.ts's compileAndRun()
-      // through to the HTTP endpoint) - a sketch compiled with the
-      // wrong variant would toggle a different, unwired pin instead.
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
-    },
-  },
   "button-led": {
     label: "Button Control",
     description: "Control an LED with a pushbutton.",
@@ -491,10 +469,10 @@ void loop() {
     },
   },
   "toggle-switch": {
-    label: "Toggle Switch",
-    description: "Press the button once to turn the LED on, press again to turn it off.",
+    label: "Toggle Switch (Mega)",
+    description: "Press the button once to turn the LED on, press again to turn it off - on an Arduino Mega.",
     level: "beginner",
-    board: "Arduino Uno",
+    board: "Arduino Mega",
     glyph: "🔁",
     // Same two component types as "Button Control" (pushbutton write,
     // LED read - the only two component-signal-pin.ts actually has an
@@ -502,6 +480,11 @@ void loop() {
     // (LOW -> HIGH) and flips a stored ledState each press, instead of
     // just mirroring whatever the button currently reads. A real,
     // distinct beginner example, not a second copy of Button Control.
+    // Runs on an Arduino Mega rather than an Uno specifically so there's
+    // at least one example proving the board-aware compiler (see
+    // avr_toolchain.cpp's resolve_board_target()) end to end - pins "2"
+    // and "13" resolve through boards/arduino-mega.ts to E4/B7, the real
+    // ATmega2560 pinout, not the Uno's own D2/D13 (D4/B5).
     sketch: `const int buttonPin = 2;
 const int ledPin = 13;
 
@@ -523,7 +506,7 @@ void loop() {
   lastButtonState = buttonState;
 }`,
     build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
+      const board = await canvas.scene.showBoard("arduino-mega");
       if (!board) return;
       const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
       if (!button) return;

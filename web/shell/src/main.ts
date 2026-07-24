@@ -5,6 +5,7 @@ import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { SignalChain } from "./signal-chain.js";
 import { CanvasController } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
+import { SketchEditor } from "./sketch-editor.js";
 import "./native-bridge.js";
 // Side-effect only: registers every <wokwi-*> custom element (Lit's
 // @customElement decorator calls customElements.define() when each
@@ -288,18 +289,33 @@ async function loadFirmwareFile(file: File): Promise<void> {
 }
 
 // -----------------------------------------------------------------------
-// Sketch compiling: a plain textarea + "Compile & Run" (index.html's
-// .sketch-panel) - deliberately the smallest possible thing, not the
-// polished code-editor experience discussed as future work. Posts to the
-// native shell's own POST /compile (src/avr_toolchain.cpp, which shells
-// out to a bundled/system avr-gcc + the vendored ArduinoCore-avr), then
-// feeds the resulting hex text through the exact same
+// Sketch compiling: a real code editor (Monaco - src/sketch-editor.ts) +
+// "Compile & Run" (index.html's .sketch-panel). Posts to the native
+// shell's own POST /compile (src/avr_toolchain.cpp, which shells out to a
+// bundled/system avr-gcc + the vendored ArduinoCore-avr), then feeds the
+// resulting hex text through the exact same
 // parseIntelHex() -> loadFirmware() path loadFirmwareFile() above uses -
 // compiling only ever produces the same kind of bytes "Load .hex…"
 // already consumes.
 // -----------------------------------------------------------------------
 
-const sketchSource = document.getElementById("sketch-source") as HTMLTextAreaElement;
+// Pre-filled, not an empty editor - Compile & Run should do something
+// meaningful the first time it's clicked, not fail on an empty sketch.
+const DEFAULT_SKETCH = `void setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+}`;
+
+const sketchEditor = new SketchEditor(
+  document.getElementById("sketch-editor") as HTMLElement,
+  DEFAULT_SKETCH,
+);
 const compileRunBtn = document.getElementById("compile-run-btn") as HTMLButtonElement;
 
 interface CompileResponse {
@@ -316,7 +332,7 @@ async function compileAndRun(): Promise<void> {
     logLine("place a board (Apply) before compiling");
     return;
   }
-  const source = sketchSource.value;
+  const source = sketchEditor.getValue();
   if (!source.trim()) {
     logLine("sketch is empty");
     return;
@@ -482,6 +498,10 @@ function applyTheme(theme: "light" | "dark"): void {
   // state - a moon while light (click to go dark), a sun while dark.
   themeIconLight.hidden = theme === "dark";
   themeIconDark.hidden = theme !== "dark";
+  // Monaco has its own theme concept, independent of the CSS variables
+  // the rest of the chrome uses - kept in sync here so the editor doesn't
+  // look inconsistent with everything around it.
+  sketchEditor.setTheme(theme);
 }
 
 const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
@@ -491,4 +511,49 @@ themeToggleBtn.addEventListener("click", () => {
   const next = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
   localStorage.setItem(THEME_STORAGE_KEY, next);
   applyTheme(next);
+});
+
+// -----------------------------------------------------------------------
+// Sidebar resize: drag #sidebar-resize-handle to change .sidebar's width -
+// persisted like the theme/chrome-hidden toggles above, since this is
+// meant to stay set while working, not reset on every reload.
+// -----------------------------------------------------------------------
+
+const SIDEBAR_WIDTH_STORAGE_KEY = "physicalsim-sidebar-width";
+const SIDEBAR_MIN_WIDTH = 260;
+const SIDEBAR_MAX_WIDTH = 720;
+
+const sidebarEl = document.querySelector(".sidebar") as HTMLElement;
+const sidebarResizeHandle = document.getElementById("sidebar-resize-handle") as HTMLElement;
+
+function applySidebarWidth(width: number): void {
+  const clamped = Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+  sidebarEl.style.width = `${clamped}px`;
+  // Monaco's automaticLayout (a ResizeObserver internally) isn't a
+  // reliable signal in every host/embedding - see sketch-editor.ts's own
+  // layout() doc comment - so this is told explicitly rather than trusted
+  // to notice the width change on its own.
+  sketchEditor.layout();
+}
+
+const storedSidebarWidth = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+if (storedSidebarWidth > 0) applySidebarWidth(storedSidebarWidth);
+
+sidebarResizeHandle.addEventListener("mousedown", (ev) => {
+  ev.preventDefault();
+  sidebarResizeHandle.classList.add("dragging");
+  const startX = ev.clientX;
+  const startWidth = sidebarEl.getBoundingClientRect().width;
+
+  const onMouseMove = (moveEv: MouseEvent): void => {
+    applySidebarWidth(startWidth + (moveEv.clientX - startX));
+  };
+  const onMouseUp = (): void => {
+    sidebarResizeHandle.classList.remove("dragging");
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarEl.getBoundingClientRect().width));
+    window.removeEventListener("mousemove", onMouseMove);
+    window.removeEventListener("mouseup", onMouseUp);
+  };
+  window.addEventListener("mousemove", onMouseMove);
+  window.addEventListener("mouseup", onMouseUp);
 });

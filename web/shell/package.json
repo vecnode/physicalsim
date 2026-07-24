@@ -12,7 +12,8 @@
     "@physicalsim/adapter-avr8": "*",
     "@physicalsim/adapter-rp2040": "*",
     "@physicalsim/common": "*",
-    "lit": "^3.0.0"
+    "lit": "^3.0.0",
+    "monaco-editor": "^0.52.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.0",

@@ -80,13 +80,57 @@ body {
 
 .sidebar {
   flex: none;
-  width: 320px;
+  width: 384px;
   overflow-y: auto;
-  border-right: 1px solid var(--border);
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Drags .sidebar's width (main.ts's bindSidebarResize()) - a thin
+   invisible hit-target (not the visible border itself, which is easy to
+   miss with a mouse) with the border drawn as its own middle line so it
+   still reads as the same border .sidebar used to draw on itself. */
+.sidebar-resize-handle {
+  flex: none;
+  width: 5px;
+  margin: 0 -2px;
+  cursor: col-resize;
+  position: relative;
+  z-index: 1;
+}
+
+.sidebar-resize-handle::after {
+  content: "";
+  position: absolute;
+  left: 2px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle.dragging::after {
+  background: var(--fg);
+  width: 2px;
+  left: 1.5px;
+}
+
+/* The code editor is the sidebar's whole purpose now - grows to fill
+   essentially all of the column's height (previously a fixed 10-row box
+   squeezed alongside two unrelated panels), #log above it staying its own
+   natural size. ".sidebar .sketch-panel" (not just ".sketch-panel") is
+   deliberate - .panel's own "display: grid" has equal specificity and
+   comes later in this file, so a same-specificity ".sketch-panel" rule
+   would lose to it regardless of where it's placed; the extra selector
+   segment wins on specificity instead of depending on source order. */
+.sidebar .sketch-panel {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel {
@@ -119,17 +163,15 @@ input[type="file"] {
   flex-wrap: wrap;
 }
 
-/* The minimal sketch textarea (index.html's .sketch-panel) - deliberately
-   plain, no syntax highlighting, matching the same border/bg/font as
-   every other input here rather than looking like a separate widget. */
-.sketch-panel textarea {
+/* Monaco's mount point (index.html's .sketch-panel, src/sketch-editor.ts) -
+   sized here, not by Monaco itself; automaticLayout (set on the editor
+   instance) reacts to this element's size changing, including the sidebar
+   resize handle being dragged. Monaco needs an explicit height (unlike the
+   textarea it replaced, it won't size itself from content/flex alone). */
+#sketch-editor {
+  flex: 1;
+  min-height: 120px;
   border: 1px solid var(--border);
-  background: var(--bg);
-  color: var(--fg);
-  padding: 5px 6px;
-  font: inherit;
-  font-size: 0.75rem;
-  resize: vertical;
   width: 100%;
 }
 
@@ -176,7 +218,7 @@ button:disabled {
 }
 
 /* Readouts (state, energy - see index.html): plain <dl>s inside
-   .tab1-simulator-panel, not their own .panel-wrapped sections. Shared
+   .simulator-overlay, not their own .panel-wrapped sections. Shared
    class rather than per-id rules since there are now two of these,
    deliberately kept as visually separate blocks (matching the "two
    models" split at the code level) rather than merged into one <dl>. */
@@ -255,14 +297,19 @@ button:disabled {
   display: flex;
 }
 
-/* Tab 1: a "Simulator" panel pinned top-left, sized to its content, next
-   to (never overlapping) the canvas area - the panel opts out of the
-   pane's default stretch so it doesn't grow to the pane's full height. */
-.tab1-simulator-panel {
-  flex: none;
-  align-self: flex-start;
+/* The Simulator panel (Apply/Load .hex/Start-Pause-Stop/status) - floats
+   on top of the canvas itself (the "simulator rectangle"), top-left, the
+   same overlay convention .canvas-overlay already uses bottom-right for
+   the minimap/zoom controls. A solid background is required (unlike
+   .canvas-overlay's individual children, which each supply their own) -
+   this is one panel, not a stack of separately-backed widgets. */
+.simulator-overlay {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 10;
   width: 220px;
-  margin: 10px;
+  background: var(--bg);
 }
 
 /* A column: the canvas (+ its own overlay) on top, the terminal panel
@@ -780,7 +827,7 @@ button:disabled {
    the bare canvas. On <html>, not .app, so it can hide elements
    regardless of which tab-pane they live in without a second selector
    per pane. */
-.chrome-hidden .tab1-simulator-panel,
+.chrome-hidden .simulator-overlay,
 .chrome-hidden .canvas-overlay {
   display: none;
 }

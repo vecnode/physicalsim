@@ -520,7 +520,10 @@ int main(int argc, char **argv) {
   // instance the way pin I/O is, it's a standalone build step whose
   // output (hex text) the browser then feeds through the exact same
   // parseIntelHex() -> loadFirmware() path "Load .hex..." already uses.
-  // POST /compile  body: {"source": "<sketch text>"}
+  // POST /compile  body: {"source": "<sketch text>", "board": "<CircuitBoard.type, optional>"}
+  // "board" selects the -mmcu=/variant target (see avr_toolchain.hpp's
+  // resolve_board_target()) - omitted or unrecognized falls back to
+  // Arduino Uno, matching this endpoint's original single-board behavior.
   server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
     json body;
     try {
@@ -538,8 +541,9 @@ int main(int argc, char **argv) {
       res.set_content(R"({"ok":false,"log":"empty sketch source"})", "application/json");
       return;
     }
+    const std::string board = body.value("board", std::string{"arduino-uno"});
 
-    const auto result = avrtoolchain::compile_sketch(source);
+    const auto result = avrtoolchain::compile_sketch(source, board);
     json out = {{"ok", result.ok}, {"log", result.log}};
     if (result.ok) {
       out["hexText"] = result.hex_text;

@@ -1,21 +1,27 @@
 import {
+  adcConfig,
   avrInstruction,
+  AVRADC,
+  AVREEPROM,
   AVRIOPort,
+  AVRSPI,
   AVRTimer,
+  AVRTWI,
   AVRUSART,
   CPU,
-  portBConfig,
-  portCConfig,
-  portDConfig,
+  EEPROMMemoryBackend,
+  eepromConfig,
+  spiConfig,
   timer0Config,
   timer1Config,
   timer2Config,
+  twiConfig,
   usart0Config,
 } from "avr8js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
+import { DS1307Device } from "./ds1307.js";
+import { ATMEGA328P, type AvrChipConfig } from "./chip.js";
 
-// ATmega328p (Arduino Uno) parameters.
-const FLASH_WORDS = 0x8000;
 const CLOCK_HZ = 16e6;
 
 // Caps how often a *running* simulation posts a state update. The tick loop
@@ -41,15 +47,31 @@ const INITIAL_BATCH_CYCLES = 20_000;
 export class Avr8Adapter implements SimulatorAdapter {
   readonly id = "avr8";
 
-  private program = new Uint16Array(FLASH_WORDS);
-  private cpu = new CPU(this.program);
+  private program: Uint16Array;
+  private cpu: CPU;
   private timer0!: AVRTimer;
   private timer1!: AVRTimer;
   private timer2!: AVRTimer;
-  private portB!: AVRIOPort;
-  private portC!: AVRIOPort;
-  private portD!: AVRIOPort;
+  // Port letter -> constructed AVRIOPort, built from chip.ports in
+  // attachPeripherals() - not fixed B/C/D fields, since a second chip
+  // variant (ATMEGA2560, see chip.ts) has 11 of these, not 3.
+  private ports = new Map<string, AVRIOPort>();
+  private adcPort!: AVRIOPort;
   private usart!: AVRUSART;
+  private adc!: AVRADC;
+  private spi!: AVRSPI;
+  private twi!: AVRTWI;
+  private eeprom!: AVREEPROM;
+  // Constructed once, not in attachPeripherals() - EEPROM is battery-
+  // backed on real hardware, meaning its contents survive a power cycle
+  // (Stop/Start, Reset, even loadFirmware()'s reboot into new firmware,
+  // matching how the same physical chip's EEPROM would still hold
+  // whatever the previous sketch wrote). It does NOT survive this Worker
+  // being torn down and recreated (a full page reload) - a documented,
+  // not silent, difference from real hardware's non-volatility, matching
+  // this project's existing "in-memory, not persisted to disk" posture
+  // (see ARCHITECTURE.md's "Feature parity vs. velxio" section).
+  private readonly eepromBackend: EEPROMMemoryBackend;
 
   private running = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -57,7 +79,6 @@ export class Avr8Adapter implements SimulatorAdapter {
   private batchCycles = INITIAL_BATCH_CYCLES;
   private listeners = new Set<(state: SimState) => void>();
 
-  private portLetters = new Map<AVRIOPort, string>();
   private pinListeners = new Map<string, Set<(value: number) => void>>();
   private lastPinValues = new Map<string, number>();
   // Subscriptions here are the outside world's, not per-run state - unlike
@@ -65,6 +86,18 @@ export class Avr8Adapter implements SimulatorAdapter {
   // must survive a reset() the same way pinListeners does, since resetting
   // the CPU shouldn't silently drop whoever's listening to Serial output.
   private serialListeners = new Set<(byte: number) => void>();
+
+  // Defaults to the atmega328p (Arduino Uno/Nano - both the exact same
+  // MCU, see boards/arduino-nano.ts) - pass ATMEGA2560 (chip.ts) for a
+  // Mega-shaped worker entry point (worker-mega.ts). Kept as a
+  // constructor parameter, not a second class, since every method below
+  // (start/stop/step/pin I/O/ADC/loadFirmware/reset) is chip-agnostic
+  // once ports/flash size come from `chip` instead of being hardcoded.
+  constructor(private readonly chip: AvrChipConfig = ATMEGA328P) {
+    this.program = new Uint16Array(chip.flashWords);
+    this.cpu = new CPU(this.program);
+    this.eepromBackend = new EEPROMMemoryBackend(chip.eepromBytes);
+  }
 
   async init(_config: unknown): Promise<void> {
     // Firmware is loaded later, via loadFirmware() - init() just gets the
@@ -139,6 +172,23 @@ export class Avr8Adapter implements SimulatorAdapter {
     return () => listeners.delete(cb);
   }
 
+  // Drives an ADC channel with a real voltage (0..5, clamped) rather than
+  // a GPIO bit - a placed potentiometer/photoresistor/joystick's "read"
+  // side (see analog-chain.ts, web/shell). Reuses resolvePin() for the
+  // port/bit lookup since A0-A5 already resolve to "C0".."C5" via
+  // boardPinMaps (see boards/arduino-uno.ts) - the ADC channel number
+  // happens to equal PORTC's bit number on the atmega328p (both are 0-5
+  // for A0-A5), which is why no separate "analog pin id" concept exists
+  // here; this only accepts port C, since that's the only port any board
+  // map ever resolves an analog pin name to.
+  writeAnalogPin(pin: string, voltage: number): void {
+    const { port, bit } = this.resolvePin(pin);
+    if (port !== this.adcPort || bit >= this.chip.adcChannels) {
+      throw new Error(`Pin "${pin}" is not an ADC-capable pin`);
+    }
+    this.adc.channelValues[bit] = Math.min(5, Math.max(0, voltage));
+  }
+
   // Fires once per byte the firmware writes to UDR (the USART transmit
   // register) - real Arduino sketches reach this through Serial.write()/
   // Serial.print(). Read-only: this is Stage 1 of the terminal ("show
@@ -188,8 +238,7 @@ export class Avr8Adapter implements SimulatorAdapter {
     if (!Number.isInteger(bit) || bit < 0 || bit > 7) {
       throw new Error(`Invalid pin id "${pin}"`);
     }
-    const port =
-      portLetter === "B" ? this.portB : portLetter === "C" ? this.portC : portLetter === "D" ? this.portD : undefined;
+    const port = this.ports.get(portLetter);
     if (!port) {
       throw new Error(`Unknown port for pin id "${pin}"`);
     }
@@ -206,10 +255,41 @@ export class Avr8Adapter implements SimulatorAdapter {
     this.timer0 = new AVRTimer(this.cpu, timer0Config);
     this.timer1 = new AVRTimer(this.cpu, timer1Config);
     this.timer2 = new AVRTimer(this.cpu, timer2Config);
-    this.portB = new AVRIOPort(this.cpu, portBConfig);
-    this.portC = new AVRIOPort(this.cpu, portCConfig);
-    this.portD = new AVRIOPort(this.cpu, portDConfig);
+    this.ports = new Map(
+      Object.entries(this.chip.ports).map(([letter, config]) => [letter, new AVRIOPort(this.cpu, config)]),
+    );
+    const adcPort = this.ports.get(this.chip.adcPortLetter);
+    if (!adcPort) {
+      throw new Error(`Chip config's adcPortLetter "${this.chip.adcPortLetter}" isn't one of its own ports`);
+    }
+    this.adcPort = adcPort;
     this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
+    // adcConfig already ships atmega328Channels as its muxChannels - ADC
+    // channels 0-7 map straight onto ADMUX's mux-select bits, exactly how
+    // real hardware ties A0-A7 to PORTC's ADC-capable pins, so no per-
+    // board remapping is needed here.
+    this.adc = new AVRADC(this.cpu, adcConfig);
+    // Constructing these (even with no device-specific eventHandler/
+    // onByte set beyond DS1307Device below) is what stops any sketch
+    // that touches SPI.transfer()/Wire.endTransmission() from hanging
+    // forever - before this, writes to SPDR/TWCR had no writeHooks at
+    // all, so SPSR's SPIF flag (or TWCR's TWINT flag) never set and a
+    // sketch's own `while (!(SPSR & SPIF));`-style wait spun forever.
+    // AVRSPI's default onByte (returns 0 on every byte, "nothing's
+    // there") and AVRTWI's default NoopTWIEventHandler (NACKs every
+    // address, "nothing's listening") now make that correct, even for
+    // devices with no decoder of their own yet (ILI9341, SD, SSD1306,
+    // MPU6050, I2C-mode LCD) - a real improvement independent of DS1307Device
+    // below, which is the one device with actual protocol-level behavior
+    // so far.
+    this.spi = new AVRSPI(this.cpu, spiConfig, CLOCK_HZ);
+    this.twi = new AVRTWI(this.cpu, twiConfig, CLOCK_HZ);
+    this.twi.eventHandler = new DS1307Device(this.twi);
+    // this.eepromBackend itself is constructed once (see the constructor)
+    // and reused here on every reset - only the AVREEPROM peripheral
+    // object (which just wraps cpu+backend to service EECR/EEDR register
+    // writes) needs recreating alongside the fresh CPU.
+    this.eeprom = new AVREEPROM(this.cpu, this.eepromBackend, eepromConfig);
     // reset() replaces this.cpu and re-runs attachPeripherals(), which
     // constructs a brand-new AVRUSART with its own (null) onByteTransmit -
     // re-wiring it here, not just once at construction, is what keeps
@@ -219,13 +299,8 @@ export class Avr8Adapter implements SimulatorAdapter {
       for (const cb of this.serialListeners) cb(value);
     };
 
-    this.portLetters = new Map([
-      [this.portB, "B"],
-      [this.portC, "C"],
-      [this.portD, "D"],
-    ]);
     this.lastPinValues.clear();
-    for (const [port, letter] of this.portLetters) {
+    for (const [letter, port] of this.ports) {
       port.addListener((newValue, oldValue) => {
         if (newValue === oldValue) return;
         for (let bit = 0; bit < 8; bit++) {

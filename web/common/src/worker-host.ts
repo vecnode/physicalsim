@@ -8,6 +8,7 @@ import type {
   RpcResponse,
   SimulatorAdapter,
   SubscribePinParams,
+  WriteAnalogPinParams,
   WritePinParams,
 } from "./adapter-types.js";
 
@@ -60,6 +61,15 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
           {
             const { pin, value } = params as WritePinParams;
             result = adapter.writePin(pin, value);
+          }
+          break;
+        case "writeAnalogPin":
+          if (!adapter.writeAnalogPin) {
+            throw new Error(`Adapter "${adapter.id}" does not support writeAnalogPin`);
+          }
+          {
+            const { pin, voltage } = params as WriteAnalogPinParams;
+            result = adapter.writeAnalogPin(pin, voltage);
           }
           break;
         case "subscribePin":

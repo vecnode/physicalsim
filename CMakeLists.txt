@@ -359,10 +359,17 @@ endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
 # The vendored core (simulators/ArduinoCore-avr's trimmed cores/arduino +
-# variants/standard, LGPL 2.1) is small enough to always copy next to the
-# executable, dev or packaged build alike - src/avr_toolchain.cpp looks for
-# it there first, falling back to the source tree (PHYSICALSIM_SOURCE_DIR
-# above) only if this hasn't run yet.
+# variants/standard + variants/mega, LGPL 2.1) is small enough to always
+# copy next to the executable, dev or packaged build alike -
+# src/avr_toolchain.cpp looks for it there first, falling back to the
+# source tree (PHYSICALSIM_SOURCE_DIR above) only if this hasn't run yet.
+# Both variants are copied unconditionally (not just "standard") because
+# avr_toolchain.cpp's resolve_board_target() picks between them per board
+# at compile time, not at CMake configure time - Arduino Mega needs
+# variants/mega's own pins_arduino.h (different port/pin mapping than the
+# atmega328p boards' "standard" variant - see arduino-mega.ts on the JS
+# side for the same D0-D53/A0-A15 mapping this variant's own tables
+# encode).
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
@@ -374,7 +381,10 @@ add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
         $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
-    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard)"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
+    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega)"
 )
 
 # Vendored Arduino libraries a sketch can #include - same "small enough to

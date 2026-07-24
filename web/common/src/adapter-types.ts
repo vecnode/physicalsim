@@ -20,6 +20,14 @@ export interface SimulatorAdapter {
   readPin?(pin: string): number | undefined;
   writePin?(pin: string, value: number): void;
   onPinChange?(pin: string, cb: (value: number) => void): () => void;
+  // Analog input - separate from readPin?/writePin? (which are always
+  // digital 0/1) because an ADC channel is fed a continuous voltage, not
+  // a bit. "pin" is the same adapter-level pin id writePin? uses (e.g.
+  // "C0" for avr8's A0) - the ADC channel it maps to is an adapter-
+  // internal detail, not something callers need to know. Optional: only
+  // a board whose adapter actually has an ADC peripheral wired up
+  // supports this (avr8 as of this addition; rp2040/cortex-m don't yet).
+  writeAnalogPin?(pin: string, voltage: number): void;
   // Serial (UART TX) output - also optional, and read-only for now: this
   // is Stage 1 of the terminal feature ("show whatever the firmware
   // transmits"), not Serial.read() support. Only avr8 implements it today
@@ -48,6 +56,7 @@ export type AdapterMethod =
   | "reset"
   | "readPin"
   | "writePin"
+  | "writeAnalogPin"
   | "subscribePin"
   | "subscribeSerial"
   | "loadFirmware";
@@ -59,6 +68,11 @@ export interface ReadPinParams {
 export interface WritePinParams {
   pin: string;
   value: number;
+}
+
+export interface WriteAnalogPinParams {
+  pin: string;
+  voltage: number;
 }
 
 export interface SubscribePinParams {

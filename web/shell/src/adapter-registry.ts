@@ -7,7 +7,17 @@ import { AdapterClient } from "./worker-rpc.js";
 import { NativeAdapterClient } from "./native-adapter-client.js";
 import { notifyNative } from "./native-notify.js";
 
-export type AdapterId = "rp2040" | "avr8" | "cortex-m";
+// "avr8-mega" is a second worker entry point for the exact same
+// Avr8Adapter class (adapters/avr8/src/adapter.ts), constructed with the
+// ATMEGA2560 chip config instead of the default atmega328p one - a
+// distinct AdapterId, not a parameter on "avr8", because every client
+// here is cached one-per-id (see getAdapterClient() below): two boards
+// sharing an id already share one running CPU (arduino-uno and
+// arduino-nano do this today, deliberately - see boardAdapterId in
+// circuit.ts), which is correct for two boards that are the *same* chip
+// but would silently corrupt a Mega's much larger port/flash state if an
+// Uno shared it too.
+export type AdapterId = "rp2040" | "avr8" | "avr8-mega" | "cortex-m";
 
 // Structural interface both AdapterClient (Worker-backed) and
 // NativeAdapterClient (native-process-backed, see that file) satisfy.
@@ -34,6 +44,12 @@ function createWorker(id: AdapterId): Worker {
   if (id === "rp2040") {
     return new Worker(
       new URL("../../adapters/rp2040/src/worker.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-mega") {
+    return new Worker(
+      new URL("../../adapters/avr8/src/worker-mega.ts", import.meta.url),
       { type: "module" },
     );
   }

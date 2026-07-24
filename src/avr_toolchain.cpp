@@ -175,15 +175,39 @@ std::optional<std::filesystem::path> find_core_dir() {
   return std::nullopt;
 }
 
-std::optional<std::filesystem::path> find_variant_dir() {
-  const auto bundled = executable_dir() / "avr-core" / "variants" / "standard";
+// Board -> {-mmcu= value, ArduinoCore-avr variants/ subdirectory, the
+// ARDUINO_AVR_* define real Arduino board.txt files set for it}. Every
+// entry here is atmega328p + "standard" except Mega, which is a genuinely
+// different chip (see chip.ts's own AvrChipConfig on the JS/TS side for
+// the CPU-emulation half of this same board/chip split) - not just a
+// different define. Keyed by circuit.ts's CircuitBoard.type string, so
+// it stays in lockstep with boardAdapterId there without either file
+// importing the other (this is native C++, that's TS - there's no shared
+// module to put one canonical table in).
+struct BoardTarget {
+  std::string mcu;      // avr-gcc -mmcu=
+  std::string variant;  // ArduinoCore-avr/variants/<variant>
+  std::string define;   // -D<define>
+};
+
+BoardTarget resolve_board_target(const std::string &board) {
+  if (board == "arduino-nano") return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_NANO"};
+  if (board == "arduino-mega") return BoardTarget{"atmega2560", "mega", "ARDUINO_AVR_MEGA2560"};
+  // "arduino-uno", empty, or anything unrecognized - the original
+  // single-board behavior this function generalizes, preserved as the
+  // fallback rather than failing outright.
+  return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_UNO"};
+}
+
+std::optional<std::filesystem::path> find_variant_dir(const std::string &variant) {
+  const auto bundled = executable_dir() / "avr-core" / "variants" / variant;
   std::error_code ec;
   if (std::filesystem::exists(bundled / "pins_arduino.h", ec)) {
     return bundled;
   }
   if (std::string(PHYSICALSIM_SOURCE_DIR).size() > 0) {
     const auto from_source = std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" /
-                              "ArduinoCore-avr" / "variants" / "standard";
+                              "ArduinoCore-avr" / "variants" / variant;
     if (std::filesystem::exists(from_source / "pins_arduino.h", ec)) {
       return from_source;
     }
@@ -369,16 +393,18 @@ RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::
   return result;
 }
 
-// Common flags shared by every compile step, matching what a real Arduino
-// Uno build uses (arduino-cli's own defaults for this board): -Os for
-// flash-size-conscious code, LTO + --gc-sections to drop unused core
-// functions, ARDUINO_AVR_UNO/ARDUINO_ARCH_AVR since some core code
-// branches on them.
-std::vector<std::string> common_flags(const ToolchainPaths &tc) {
+// Common flags shared by every compile step, matching what a real
+// arduino-cli build uses for the target board: -Os for flash-size-
+// conscious code, LTO + --gc-sections to drop unused core functions, and
+// the board's own ARDUINO_AVR_*/ARDUINO_ARCH_AVR defines since some core
+// code branches on them. F_CPU is 16MHz for every AVR board physicalsim
+// supports today (Uno/Nano/Mega all run their crystal at 16MHz) - not
+// yet parameterized per board because nothing here needs it to be.
+std::vector<std::string> common_flags(const ToolchainPaths &tc, const BoardTarget &target) {
   std::vector<std::string> flags = {
       "-w", "-Os", "-g", "-ffunction-sections", "-fdata-sections", "-flto",
-      "-mmcu=atmega328p", "-DF_CPU=16000000L", "-DARDUINO=10819",
-      "-DARDUINO_AVR_UNO", "-DARDUINO_ARCH_AVR",
+      "-mmcu=" + target.mcu, "-DF_CPU=16000000L", "-DARDUINO=10819",
+      "-D" + target.define, "-DARDUINO_ARCH_AVR",
       "-I" + tc.core_dir.string(), "-I" + tc.variant_dir.string(),
   };
   // Each vendored library's own src/ dir, so "#include <LiquidCrystal.h>"
@@ -392,26 +418,28 @@ std::vector<std::string> common_flags(const ToolchainPaths &tc) {
 
 }  // namespace
 
-std::optional<ToolchainPaths> find_toolchain() {
+std::optional<ToolchainPaths> find_toolchain(const std::string &board) {
   auto bin_dir = find_toolchain_bin_dir();
   auto core_dir = find_core_dir();
-  auto variant_dir = find_variant_dir();
+  auto variant_dir = find_variant_dir(resolve_board_target(board).variant);
   if (!bin_dir || !core_dir || !variant_dir) {
     return std::nullopt;
   }
   return ToolchainPaths{*bin_dir, *core_dir, *variant_dir, find_library_dirs()};
 }
 
-CompileResult compile_sketch(const std::string &source) {
+CompileResult compile_sketch(const std::string &source, const std::string &board) {
   CompileResult result;
 
-  const auto toolchain = find_toolchain();
+  const auto target = resolve_board_target(board);
+  const auto toolchain = find_toolchain(board);
   if (!toolchain) {
     result.log =
-        "AVR toolchain not found. Expected either a bundled copy next to "
-        "physicalsim's executable (avr-toolchain/bin/), avr-g++ on PATH, or "
-        "an Arduino IDE install; and the vendored core (avr-core/ next to "
-        "the executable, or simulators/ArduinoCore-avr in a dev build).";
+        "AVR toolchain not found for board \"" + board + "\" (resolved variant \"" + target.variant +
+        "\"). Expected either a bundled copy next to physicalsim's executable "
+        "(avr-toolchain/bin/), avr-g++ on PATH, or an Arduino IDE install; and "
+        "the vendored core + variant (avr-core/ next to the executable, or "
+        "simulators/ArduinoCore-avr in a dev build).";
     return result;
   }
 
@@ -440,7 +468,7 @@ CompileResult compile_sketch(const std::string &source) {
   const auto gxx = toolchain->bin_dir / kGxxName;
   const auto gcc = toolchain->bin_dir / kGccName;
   const auto objcopy = toolchain->bin_dir / kObjcopyName;
-  const auto flags = common_flags(*toolchain);
+  const auto flags = common_flags(*toolchain, target);
 
   std::vector<std::filesystem::path> object_files;
   std::ostringstream full_log;
@@ -522,7 +550,7 @@ CompileResult compile_sketch(const std::string &source) {
   {
     std::vector<std::string> link_args = {
         "-w", "-Os", "-g", "-flto", "-fuse-linker-plugin", "-Wl,--gc-sections",
-        "-mmcu=atmega328p", "-o", elf_path.string(),
+        "-mmcu=" + target.mcu, "-o", elf_path.string(),
     };
     for (const auto &obj : object_files) link_args.push_back(obj.string());
     link_args.push_back("-lm");

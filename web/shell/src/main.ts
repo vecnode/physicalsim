@@ -4,6 +4,7 @@ import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { SignalChain } from "./signal-chain.js";
 import { ProtocolChain } from "./protocol-chain.js";
+import { AnalogChain } from "./analog-chain.js";
 import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
@@ -144,6 +145,14 @@ new SignalChain(canvas.scene, getAdapterClient);
 // behavior needs several correlated pins (an LCD's RS/E/D4-D7 bus) -
 // see protocol-chain.ts. Constructed the same way, for the same reason.
 new ProtocolChain(canvas.scene, getAdapterClient);
+
+// Analog counterpart to SignalChain, for components that drive a
+// continuous ADC voltage rather than a digital bit (potentiometer,
+// slide-potentiometer, analog-joystick's VERT/HORZ) - see analog-
+// chain.ts. Only avr8 boards have an ADC wired up as of this addition;
+// wiring one of these to an rp2040/cortex-m board is inert (caught
+// inside AnalogChain.attach()), not an error.
+new AnalogChain(canvas.scene, getAdapterClient);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop
@@ -373,6 +382,28 @@ const EXAMPLES: Record<string, Example> = {
       // board-registry.ts - markers are bare numbers, mapped to "D13"
       // internally); "A" is wokwi-led's anode, the one pin
       // component-signal-pin.ts's role: "read" entry actually checks.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "mega-blink": {
+    label: "Blink LED (Mega)",
+    description: "Classic blink example on an Arduino Mega - same sketch, a genuinely different chip underneath.",
+    level: "beginner",
+    board: "Arduino Mega",
+    glyph: "💡",
+    sketch: LED_BLINK_SKETCH,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-mega");
+      if (!board) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
+      if (!led) return;
+      // "13" resolves through boards/arduino-mega.ts to "B7" - the real
+      // ATmega2560 datasheet pinout, NOT the same physical port/bit as
+      // the Uno's own D13 (B5). This only lights up correctly because
+      // /compile is now board-aware (avr_toolchain.cpp's
+      // resolve_board_target(), threaded from main.ts's compileAndRun()
+      // through to the HTTP endpoint) - a sketch compiled with the
+      // wrong variant would toggle a different, unwired pin instead.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
     },
   },
@@ -848,10 +879,19 @@ async function compileAndRun(): Promise<void> {
   }, 250);
 
   try {
+    // Which board is actually placed, not just which adapter is active -
+    // "avr8" backs both arduino-uno and arduino-nano (same chip, same
+    // compile target), but the C++ side's resolve_board_target()
+    // (avr_toolchain.cpp) needs the specific board string to know which
+    // ARDUINO_AVR_* define/variant to use, and "avr8-mega" needs it to
+    // pick -mmcu=atmega2560 + variants/mega over the default Uno target.
+    // Falls back to undefined (server-side default: Arduino Uno) if no
+    // board is placed yet - matches this endpoint's original behavior.
+    const board = canvas.scene.findBoardByAdapter(activeAdapterId ?? "")?.type;
     const res = await fetch("/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, board }),
     });
     const body = (await res.json()) as CompileResponse;
     // Done ticking before the final message is written below - the ticks

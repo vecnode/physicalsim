@@ -21,10 +21,12 @@ export interface ComponentSignalPin {
   role: SignalRole;
 }
 
-// Potentiometer/slide-potentiometer intentionally have no entry yet -
-// analogRead() isn't modeled by any adapter today (no AVRADC wired up in
-// web/adapters/avr8/src/adapter.ts), so there's nothing correct to attach
-// them to. Adding them here once that lands is the only change needed.
+// Potentiometer/slide-potentiometer/analog-joystick's VERT/HORZ have no
+// entry here - they're analog, not digital, and are wired through the
+// separate componentAnalogPins/AnalogChain path instead (see component-
+// analog-pin.ts) now that AVRADC is wired up in web/adapters/avr8/src/
+// adapter.ts. This table stays digital-only on purpose, the same "one
+// pin, one 0/1 value" contract SignalRole documents above.
 export const componentSignalPins: Record<string, ComponentSignalPin> = {
   pushbutton: { pinNames: ["1.l", "2.l", "1.r", "2.r"], role: "write" },
   "pushbutton-6mm": { pinNames: ["1.l", "2.l", "1.r", "2.r"], role: "write" },
@@ -33,8 +35,9 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   // "button-press"/"button-release" DOM events wokwi-pushbutton does
   // (simulators/wokwi-elements' own analog-joystick-element.ts) - no new
   // signal-chain code needed, same as pushbutton above. VERT/HORZ
-  // (analog X/Y) intentionally have no entry - blocked by the same
-  // missing-ADC reason potentiometer is, below.
+  // (analog X/Y) are wired separately, through componentAnalogPins (see
+  // component-analog-pin.ts) - digital and analog pins on the same
+  // component each go through their own table/chain.
   "analog-joystick": { pinNames: ["SEL"], role: "write" },
   // "read" role here is the generic "reflect whatever the board pin is"
   // code every read-role component already shares (see SignalChain) - the
@@ -60,11 +63,12 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   "ir-receiver": { pinNames: ["DAT"], role: "read" },
   "ntc-temperature-sensor": { pinNames: ["OUT"], role: "read" },
   // Same demo-only "read" caveat, doubly so here: MPU6050's real job
-  // (accelerometer/gyro data) is entirely over I2C (SDA/SCL), which no
-  // adapter emulates - not "not wired up yet" like the sensors above, but
-  // architecturally out of reach until a TWI peripheral exists. INT is
-  // wired here (an interrupt pin, at least plausibly an output on real
-  // hardware) purely so the indicator LED can demo the same read-role
-  // pattern; it carries no real motion data.
+  // (accelerometer/gyro data) is entirely over I2C (SDA/SCL). avr8's
+  // AVRTWI peripheral is wired up now (see adapter.ts, ds1307.ts) - so
+  // the *bus* exists - but no MPU6050-shaped TWIEventHandler has been
+  // written yet (DS1307Device is the one I2C device decoder that exists
+  // so far). INT is wired here (an interrupt pin, at least plausibly an
+  // output on real hardware) purely so the indicator LED can demo the
+  // same read-role pattern; it carries no real motion data.
   mpu6050: { pinNames: ["INT"], role: "read" },
 };

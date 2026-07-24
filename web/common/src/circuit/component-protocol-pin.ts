@@ -32,15 +32,20 @@ export interface ComponentProtocol {
   roles: Record<string, ProtocolPinRole>;
 }
 
+// wokwi-lcd2004 (simulators/wokwi-elements) is a plain subclass of
+// wokwi-lcd1602 overriding only numCols/numRows - its pinInfo (and so its
+// RS/E/D4-D7 pin names) is exactly the same, unchanged. Shared here for
+// the same reason: both entries name the identical set of roles.
+const HD44780_PARALLEL_ROLES: Record<string, ProtocolPinRole> = {
+  rs: { pinNames: ["RS"] },
+  e: { pinNames: ["E"] },
+  d4: { pinNames: ["D4"] },
+  d5: { pinNames: ["D5"] },
+  d6: { pinNames: ["D6"] },
+  d7: { pinNames: ["D7"] },
+};
+
 export const componentProtocols: Record<string, ComponentProtocol> = {
-  lcd1602: {
-    roles: {
-      rs: { pinNames: ["RS"] },
-      e: { pinNames: ["E"] },
-      d4: { pinNames: ["D4"] },
-      d5: { pinNames: ["D5"] },
-      d6: { pinNames: ["D6"] },
-      d7: { pinNames: ["D7"] },
-    },
-  },
+  lcd1602: { roles: HD44780_PARALLEL_ROLES },
+  lcd2004: { roles: HD44780_PARALLEL_ROLES },
 };

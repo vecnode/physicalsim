@@ -463,6 +463,44 @@ button:disabled {
   font-size: 0.7rem;
 }
 
+/* Bottom-left mirror of .canvas-overlay/.minimap's own size - a fixed
+   size (unlike the minimap, which tracks .zoom-controls's own rendered
+   width) since a 3x3 swatch grid has no natural "match this row" sizing
+   source of its own. Toggled by the bottombar's #wire-color-toggle-btn
+   (main.ts); hidden by default. */
+.wire-color-panel {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  z-index: 10;
+  width: 96px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.wire-color-panel.hidden {
+  display: none;
+}
+
+.wire-color-swatches {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 4px;
+}
+
+/* One per WIRE_COLORS entry (main.ts) - the swatch's own background
+   *is* the color it sets (WiringLayer.setColor()), not a labeled button;
+   a small border keeps light swatches (e.g. white) visible against
+   --canvas-bg's dark background regardless of the swatch's own color. */
+.wire-color-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  padding: 0;
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
 /* Serial Monitor (web/shell/src/terminal.ts) - docked below the canvas
    as a flex sibling (see .tab1-canvas-area above), not overlaid on top
    of it. Dark, theme-independent chrome matching --canvas-bg/
@@ -587,14 +625,18 @@ button:disabled {
   cursor: grabbing;
 }
 
-/* Solid, not dashed, and the same accent color (#ffd54a) .pin-marker.
-   selected/.wire-line/.wire-endpoint already use for "this is a selected
-   thing" - previously var(--border) (plain black in light mode, since
-   --border is also the chrome's ordinary 1px divider color), which read
-   as a stray segmented line rather than a deliberate selection highlight. */
+/* Solid, not dashed, and a neutral light grey rather than #ffd54a (the
+   accent .pin-marker.selected/.wire-line/.wire-endpoint use) - a selected
+   board/component is a much bigger shape than a pin or wire, and the
+   bright accent read as too loud at that size. outline-offset gives it
+   room to breathe instead of hugging the SVG's own edge; border-radius
+   rounds the outline's corners to match (Chromium - which WebView2 and
+   this dev preview both are - follows the element's own border-radius
+   when rounding an outline). */
 .board-item.selected {
-  outline: 2px solid #ffd54a;
-  outline-offset: 1px;
+  outline: 2px solid #cccccc;
+  outline-offset: 4px;
+  border-radius: 4px;
 }
 
 /* One per pin (see canvas/scene.ts's overlayPinMarkers()), positioned in
@@ -677,31 +719,30 @@ button:disabled {
   cursor: pointer;
 }
 
+/* Color (stroke/fill) is set inline by wiring.ts's render() now, not
+   here - the palette panel (#wire-color-panel, main.ts) needs to win over
+   whatever's in this stylesheet, and an inline style always beats an
+   external rule. This rule now only owns the width. */
 .wire-line {
-  stroke: #ffd54a;
   stroke-width: 2;
 }
 
-/* A selected wire (canvas/wiring.ts's selectWire()) - brighter and
-   thicker, the same visual language .pin-marker.selected and
-   .board-item.selected already use for "this is the thing Backspace/
-   Delete will act on". */
+/* A selected wire (canvas/wiring.ts's selectWire()) - thicker, the same
+   visual language .pin-marker.selected and .board-item.selected already
+   use for "this is the thing Backspace/Delete will act on" (color itself
+   - always white when selected - is set inline alongside .wire-line's
+   own, for the same reason). */
 .wire-line.selected {
-  stroke: #ffffff;
   stroke-width: 3;
 }
 
 /* The small terminal dot at each end of every wire, in every link style
    (canvas/wiring.ts's render() - "circles in both ends" of the request
    this exists for). Decorative only - pointer-events: none, since
-   .wire-hit already covers clicking the wire itself. */
+   .wire-hit already covers clicking the wire itself. Fill color is set
+   inline by render(), same reasoning as .wire-line above. */
 .wire-endpoint {
-  fill: #ffd54a;
   pointer-events: none;
-}
-
-.wire-endpoint.selected {
-  fill: #ffffff;
 }
 
 /* The elbow style's three draggable segment handles (canvas/wiring.ts's
@@ -824,7 +865,8 @@ button:disabled {
    regardless of which tab-pane they live in without a second selector
    per pane. */
 .chrome-hidden .simulator-overlay,
-.chrome-hidden .canvas-overlay {
+.chrome-hidden .canvas-overlay,
+.chrome-hidden .wire-color-panel {
   display: none;
 }
 

@@ -215,3 +215,4 @@ export class CanvasController {
 export { Viewport } from "./viewport.js";
 export { Scene } from "./scene.js";
 export type { Wire } from "./wiring.js";
+export { DEFAULT_WIRE_COLOR } from "./wiring.js";

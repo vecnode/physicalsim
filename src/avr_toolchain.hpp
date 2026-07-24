@@ -3,12 +3,14 @@
 //
 // Compiles a real Arduino sketch (setup()/loop(), digitalRead/Write,
 // Serial, etc.) into an Intel HEX image for Arduino Uno (ATmega328p),
-// using a bundled/system avr-gcc and the vendored ArduinoCore-avr subset
-// (simulators/ArduinoCore-avr - cores/arduino + variants/standard only).
-// No compiler ships inside physicalsim's own binary; this shells out to
-// avr-gcc/avr-g++/avr-objcopy the same way qemu_adapter.cpp shells out to
-// qemu-system-arm - see that file for the process-spawn pattern this
-// mirrors.
+// using a bundled/system avr-gcc, the vendored ArduinoCore-avr subset
+// (simulators/ArduinoCore-avr - cores/arduino + variants/standard only),
+// and whatever vendored Arduino libraries a sketch #includes (e.g.
+// LiquidCrystal - simulators/LiquidCrystal, CMakeLists.txt's
+// AVR_LIBRARIES list). No compiler ships inside physicalsim's own binary;
+// this shells out to avr-gcc/avr-g++/avr-objcopy the same way
+// qemu_adapter.cpp shells out to qemu-system-arm - see that file for the
+// process-spawn pattern this mirrors.
 //
 // The resulting hex text is meant to be fed through the exact same path
 // "Load .hex..." already uses (web/common/src/intel-hex.ts's
@@ -20,6 +22,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <vector>
 
 namespace avrtoolchain {
 
@@ -27,6 +30,15 @@ struct ToolchainPaths {
   std::filesystem::path bin_dir;      // avr-gcc/avr-g++/avr-objcopy live here
   std::filesystem::path core_dir;     // ArduinoCore-avr's cores/arduino
   std::filesystem::path variant_dir;  // ArduinoCore-avr's variants/standard
+  // One entry per vendored Arduino library (CMakeLists.txt's
+  // AVR_LIBRARIES list, e.g. LiquidCrystal) that a sketch can #include -
+  // each is that library's own src/ directory, added to both the
+  // compiler's include path and the set of files compiled alongside the
+  // sketch/core (see compile_sketch()). Not required to be non-empty:
+  // a missing library is dropped with a warning in the log rather than
+  // failing the whole compile, since most sketches don't need any of
+  // them.
+  std::vector<std::filesystem::path> library_dirs;
 };
 
 // Locates a usable avr-gcc toolchain and the vendored ArduinoCore-avr

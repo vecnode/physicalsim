@@ -377,6 +377,24 @@ add_custom_command(TARGET physicalsim POST_BUILD
     COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard)"
 )
 
+# Vendored Arduino libraries a sketch can #include - same "small enough to
+# always copy, dev or packaged build alike" posture as the core above, and
+# src/avr_toolchain.cpp falls back to the source tree the same way too.
+# Each entry is one git submodule under simulators/ (LiquidCrystal is
+# LGPL 2.1, same license as the core), following the modern Arduino 1.5+
+# library layout (a src/ subfolder holding the real headers/sources) -
+# adding a second library later is one more line here, not a new copying
+# mechanism.
+set(AVR_LIBRARIES LiquidCrystal)
+foreach(_avr_lib ${AVR_LIBRARIES})
+    add_custom_command(TARGET physicalsim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_CURRENT_SOURCE_DIR}/simulators/${_avr_lib}/src
+            $<TARGET_FILE_DIR:physicalsim>/avr-libraries/${_avr_lib}/src
+        COMMENT "Copying vendored Arduino library: ${_avr_lib}"
+    )
+endforeach()
+
 # The toolchain itself, only when BUNDLE_AVR_TOOLCHAIN actually fetched one
 # (see the FetchContent block above) - large (~150MB), opt-in, same
 # "off unless packaging a release" posture as BUNDLE_QEMU_ARM.

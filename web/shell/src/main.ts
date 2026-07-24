@@ -15,22 +15,21 @@ import "./native-bridge.js";
 // once more boards are wired up.
 import "@wokwi/elements";
 
-const adapterSelect = document.getElementById("adapter-select") as HTMLSelectElement;
-const applyBtn = document.getElementById("apply-btn") as HTMLButtonElement;
-const startBtn = document.getElementById("start-btn") as HTMLButtonElement;
-const pauseBtn = document.getElementById("pause-btn") as HTMLButtonElement;
-const stopBtn = document.getElementById("stop-btn") as HTMLButtonElement;
+// Start/Pause/Stop/Load .hex… all live on the icon-rail now - see
+// index.html's own comment. No adapter-select/apply-btn anymore either:
+// a board is always placed by picking an Example (EXAMPLES table below),
+// never a dropdown+Apply. (The rail's own Compile & Run button -
+// railCompileBtn - is declared further down, next to compileRunBtn, the
+// sketch panel's matching button; the two share one handler.)
+const startBtn = document.getElementById("rail-run-btn") as HTMLButtonElement;
+const pauseBtn = document.getElementById("rail-pause-btn") as HTMLButtonElement;
+const stopBtn = document.getElementById("rail-stop-btn") as HTMLButtonElement;
 const stateRunning = document.getElementById("state-running") as HTMLElement;
 const stateCycles = document.getElementById("state-cycles") as HTMLElement;
 const statePc = document.getElementById("state-pc") as HTMLElement;
 const energyVoltage = document.getElementById("energy-voltage") as HTMLElement;
 const energyCurrent = document.getElementById("energy-current") as HTMLElement;
 const energyPower = document.getElementById("energy-power") as HTMLElement;
-const log = document.getElementById("log") as HTMLElement;
-
-function logLine(text: string): void {
-  log.textContent = text;
-}
 
 // -----------------------------------------------------------------------
 // Canvas (tab 1): everything about placing/dragging/wiring boards and
@@ -125,12 +124,13 @@ function apply(id: AdapterId): void {
   } else {
     unsubscribeSerial = null;
   }
-  logLine(`watching ${id} (native bridge can drive it too)`);
+  terminal.writeLine(`watching ${id} (native bridge can drive it too)`);
 }
 
-// Plugs a newly-placed board into its adapter, from either Apply or the
-// canvas's own right-click "Boards" menu - Scene fires this without
-// knowing anything about SimulatorAdapter/apply() itself.
+// Plugs a newly-placed board into its adapter, from either an Example's
+// build() (EXAMPLES table below - the normal way a board gets placed
+// now) or the canvas's own right-click "Boards" menu - Scene fires this
+// without knowing anything about SimulatorAdapter/apply() itself.
 canvas.scene.onBoardPlaced((board) => apply(board.adapterId));
 
 // Bridges canvas wiring to real pin I/O - a pushbutton wired to a board
@@ -154,22 +154,8 @@ canvas.scene.onEntityDeleted((entity) => {
     statePc.textContent = "0x0";
     renderEnergy({ boardId: entity.id, voltage: 0, currentMa: 0 });
     terminal.clear();
-    logLine("board removed");
+    terminal.writeLine("board removed");
   }
-});
-
-applyBtn.addEventListener("click", () => {
-  const value = adapterSelect.value;
-  // "Arduino Uno" is a board illustration, not a running SimulatorAdapter -
-  // it isn't in the AdapterId union and never reaches getAdapterClient().
-  // Selecting it just places the board on tab 1; it doesn't touch
-  // start/pause/stop or any of the avr8/rp2040/cortex-m machinery.
-  if (value === "arduino-uno") {
-    showTab("tab1");
-    void canvas.scene.showBoard("arduino-uno");
-    return;
-  }
-  apply(value as AdapterId);
 });
 
 function activeClient() {
@@ -196,8 +182,12 @@ function activeClient() {
 startBtn.addEventListener("click", () => {
   void activeClient()?.call("start");
   setPowered(true);
+  terminal.writeLine("started");
 });
-pauseBtn.addEventListener("click", () => void activeClient()?.call("stop"));
+pauseBtn.addEventListener("click", () => {
+  void activeClient()?.call("stop");
+  terminal.writeLine("paused");
+});
 stopBtn.addEventListener("click", () => {
   void activeClient()?.call("reset");
   setPowered(false);
@@ -205,7 +195,18 @@ stopBtn.addEventListener("click", () => {
   // output from before the reset shouldn't linger as if it were still
   // relevant.
   terminal.clear();
+  terminal.writeLine("stopped");
 });
+
+// The rail's own Compile & Run shortcut - startBtn/pauseBtn/stopBtn
+// above are already the rail's Start/Pause/Stop buttons themselves (see
+// the const declarations at the top of this file), so no proxying is
+// needed for those three; only Compile & Run has two separate buttons
+// (the rail's and the sketch panel's own compileRunBtn) sharing one
+// handler. compileAndRun() is a plain function declaration, hoisted, so
+// this can call it despite being declared before it in this file.
+const railCompileBtn = document.getElementById("rail-compile-btn") as HTMLButtonElement;
+railCompileBtn.addEventListener("click", () => void compileAndRun());
 
 // Powers (or unpowers) whichever placed board is backed by the active
 // adapter. Reflects onto the element via boardPowerSetter (board-type-
@@ -241,7 +242,7 @@ const FIRMWARE_PARSE_SANITY_LIMIT_BYTES = 1024 * 1024;
 
 loadFirmwareBtn.addEventListener("click", () => {
   if (!activeClient()) {
-    logLine("place a board (Apply) before loading firmware");
+    terminal.writeLine("place a board (Apply) before loading firmware");
     return;
   }
   firmwareFileInput.click();
@@ -256,7 +257,7 @@ firmwareFileInput.addEventListener("change", () => {
 async function loadFirmwareFile(file: File): Promise<void> {
   const client = activeClient();
   if (!client) {
-    logLine("place a board (Apply) before loading firmware");
+    terminal.writeLine("place a board (Apply) before loading firmware");
     return;
   }
 
@@ -271,20 +272,16 @@ async function loadFirmwareFile(file: File): Promise<void> {
     // because of that padding).
     bytes = parsed.bytes.slice(0, parsed.usedBytes);
   } catch (err) {
-    logLine(err instanceof IntelHexParseError ? err.message : `couldn't read "${file.name}"`);
+    terminal.writeLine(err instanceof IntelHexParseError ? err.message : `couldn't read "${file.name}"`);
     return;
   }
 
   try {
     await client.call("loadFirmware", bytes);
     terminal.clear();
-    // The Serial Monitor, not the sidebar log - firmware loading is
-    // about what's about to run on the board, the same place its output
-    // shows up, not a one-line status that gets overwritten by the next
-    // unrelated update.
     terminal.writeLine(`${file.name} loaded (${bytes.length} bytes)`);
   } catch (err) {
-    logLine(err instanceof Error ? err.message : "firmware load failed");
+    terminal.writeLine(err instanceof Error ? err.message : "firmware load failed");
   }
 }
 
@@ -301,7 +298,10 @@ async function loadFirmwareFile(file: File): Promise<void> {
 
 // Pre-filled, not an empty editor - Compile & Run should do something
 // meaningful the first time it's clicked, not fail on an empty sketch.
-const DEFAULT_SKETCH = `void setup() {
+// LED_BUILTIN is pin 13 on an Uno - the same pin the canvas LED below
+// gets wired to, so it blinks in lockstep with the board's own onboard
+// LED rather than needing a separate pin number kept in sync by hand.
+const LED_BLINK_SKETCH = `void setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
@@ -314,9 +314,171 @@ void loop() {
 
 const sketchEditor = new SketchEditor(
   document.getElementById("sketch-editor") as HTMLElement,
-  DEFAULT_SKETCH,
+  LED_BLINK_SKETCH,
 );
 const compileRunBtn = document.getElementById("compile-run-btn") as HTMLButtonElement;
+
+// -----------------------------------------------------------------------
+// Examples: a canvas layout (board + wired components) and a matching
+// sketch, loaded together - picking one (or launching the app fresh)
+// should leave a circuit already built and code that already matches it,
+// not an empty canvas the user has to wire up before Compile & Run does
+// anything visible. Each build() places whatever it needs via the same
+// Scene API the canvas's own right-click menu uses (showBoard/
+// addComponentAt), then wires pins with wiring.connect() - the
+// programmatic equivalent of two pin clicks, added to wiring.ts
+// specifically for this (see its own doc comment).
+// -----------------------------------------------------------------------
+
+interface Example {
+  label: string;
+  description: string;
+  level: "beginner" | "intermediate" | "advanced";
+  board: string;
+  // A single character/emoji stood in for a real circuit thumbnail
+  // (index.html's .example-card-thumb) - no rendering pipeline exists yet
+  // to produce a live preview image per example, and a plain glyph still
+  // tells two cards apart at a glance.
+  glyph: string;
+  sketch: string;
+  build: () => Promise<void>;
+}
+
+const DEFAULT_EXAMPLE_ID = "led-blink";
+
+const EXAMPLES: Record<string, Example> = {
+  "led-blink": {
+    label: "Blink LED",
+    description: "Classic Arduino blink example - toggle an LED on and off.",
+    level: "beginner",
+    board: "Arduino Uno",
+    glyph: "💡",
+    sketch: LED_BLINK_SKETCH,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      // Placed to the board's right, roughly level with its digital pin
+      // header - not measured against the board's actual rendered size
+      // (addComponentAt's own placeElement() centers it, so an exact
+      // offset isn't load-bearing), just far enough clear of it to land
+      // outside the board's own footprint.
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
+      if (!led) return;
+      // "13" is the wokwi-arduino-uno pin marker name for digital pin 13
+      // (see circuit.ts's boardTagName/resolveBoardPinName in
+      // board-registry.ts - markers are bare numbers, mapped to "D13"
+      // internally); "A" is wokwi-led's anode, the one pin
+      // component-signal-pin.ts's role: "read" entry actually checks.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "button-led": {
+    label: "Button Control",
+    description: "Control an LED with a pushbutton.",
+    level: "beginner",
+    board: "Arduino Uno",
+    glyph: "🔘",
+    sketch: `const int buttonPin = 2;
+const int ledPin = 13;
+
+void setup() {
+  pinMode(buttonPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(ledPin, digitalRead(buttonPin));
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
+      if (!button) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 160);
+      if (!led) return;
+      // "1.l" is one of pushbutton's four (mechanically-shorted-in-pairs)
+      // legs - component-signal-pin.ts's own comment: wiring to any one of
+      // them is equivalent. Pin "2" matches buttonPin in the sketch above.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+};
+
+const openExampleGalleryBtn = document.getElementById("open-example-gallery-btn") as HTMLButtonElement;
+const exampleGalleryOverlay = document.getElementById("example-gallery-overlay") as HTMLElement;
+const exampleGalleryGrid = document.getElementById("example-gallery-grid") as HTMLElement;
+const exampleGalleryCloseBtn = document.getElementById("example-gallery-close-btn") as HTMLButtonElement;
+
+async function loadExample(id: string): Promise<void> {
+  const example = EXAMPLES[id];
+  if (!example) return;
+  await example.build();
+  // Zooms out (never in - see zoomToFit()'s own doc comment) to fit
+  // whatever the example just placed - a fresh circuit should be fully
+  // visible immediately, not require a manual zoom-out because the LED
+  // example's own board+component pair spans wider than the default 100%
+  // view.
+  canvas.zoomToFit();
+  sketchEditor.setValue(example.sketch);
+  terminal.writeLine(`loaded example: ${example.label}`);
+}
+
+function showExampleGallery(): void {
+  exampleGalleryOverlay.classList.remove("hidden");
+}
+
+function hideExampleGallery(): void {
+  exampleGalleryOverlay.classList.add("hidden");
+}
+
+// Built once from EXAMPLES, not hand-written in index.html - a new entry
+// in the table above is enough to add a new card, no HTML edit needed.
+function renderExampleGallery(): void {
+  exampleGalleryGrid.replaceChildren();
+  for (const [id, example] of Object.entries(EXAMPLES)) {
+    const card = document.createElement("button");
+    card.type = "button";
+    card.className = "example-card";
+    card.innerHTML = `
+      <div class="example-card-thumb">${example.glyph}</div>
+      <div class="example-card-title">${example.label}</div>
+      <div class="example-card-desc">${example.description}</div>
+      <div class="example-card-meta">
+        <span class="example-card-level">${example.level}</span>
+        <span>${example.board}</span>
+      </div>
+    `;
+    card.addEventListener("click", () => {
+      void loadExample(id);
+      hideExampleGallery();
+    });
+    exampleGalleryGrid.appendChild(card);
+  }
+}
+
+renderExampleGallery();
+openExampleGalleryBtn.addEventListener("click", showExampleGallery);
+exampleGalleryCloseBtn.addEventListener("click", hideExampleGallery);
+// Clicking the dimmed backdrop closes it too - only when the click lands
+// on the overlay itself, not something inside the panel bubbling up.
+exampleGalleryOverlay.addEventListener("click", (ev) => {
+  if (ev.target === exampleGalleryOverlay) hideExampleGallery();
+});
+window.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !exampleGalleryOverlay.classList.contains("hidden")) hideExampleGallery();
+});
+
+// Loads on startup - a fresh launch should already have a default example
+// built (board placed, LED wired, sketch matching), not an empty canvas
+// the user has to Apply/wire themselves before Compile & Run does
+// anything. showBoard()'s own onBoardPlaced hook (registered above) still
+// fires from this and plugs the board into its adapter exactly like a
+// manual Apply click would - Compile & Run works immediately after this
+// resolves. The gallery opens right after, on top of it - closing without
+// picking a different one just leaves this default in place rather than
+// an empty canvas.
+void loadExample(DEFAULT_EXAMPLE_ID).then(showExampleGallery);
 
 interface CompileResponse {
   ok: boolean;
@@ -329,16 +491,34 @@ compileRunBtn.addEventListener("click", () => void compileAndRun());
 async function compileAndRun(): Promise<void> {
   const client = activeClient();
   if (!client) {
-    logLine("place a board (Apply) before compiling");
+    terminal.writeLine("place a board (Apply) before compiling");
     return;
   }
   const source = sketchEditor.getValue();
   if (!source.trim()) {
-    logLine("sketch is empty");
+    terminal.writeLine("sketch is empty");
     return;
   }
 
   compileRunBtn.disabled = true;
+  railCompileBtn.disabled = true;
+
+  // Compiling the sketch + the whole Arduino core (avr_toolchain.cpp
+  // shells out to a real avr-gcc, one process per source file - see
+  // ARCHITECTURE.md's "The compiler" section) can take a few seconds,
+  // with nothing to show for it until the single POST /compile resolves.
+  // A live "compiling… (Ns)" line (Terminal.writeUpdatingLine(), updated
+  // in place rather than spamming one line per tick) means Compile & Run
+  // reads as "working", not "hung", the whole time it's blocked on that
+  // fetch.
+  const COMPILE_PROGRESS_KEY = "compile-progress";
+  const startedAt = performance.now();
+  const elapsedSeconds = () => ((performance.now() - startedAt) / 1000).toFixed(1);
+  terminal.writeUpdatingLine(COMPILE_PROGRESS_KEY, `compiling… (${elapsedSeconds()}s)`);
+  const progressTimer = window.setInterval(() => {
+    terminal.writeUpdatingLine(COMPILE_PROGRESS_KEY, `compiling… (${elapsedSeconds()}s)`);
+  }, 250);
+
   try {
     const res = await fetch("/compile", {
       method: "POST",
@@ -346,10 +526,16 @@ async function compileAndRun(): Promise<void> {
       body: JSON.stringify({ source }),
     });
     const body = (await res.json()) as CompileResponse;
+    // Done ticking before the final message is written below - the ticks
+    // above and the final line share the same key, so leaving the timer
+    // running even one tick longer would immediately overwrite whatever
+    // gets written next.
+    window.clearInterval(progressTimer);
+    terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
 
     if (!body.ok) {
       terminal.clear();
-      terminal.writeLine(`compile failed:\n${body.log || "(no compiler output)"}`);
+      terminal.writeLine(`compile failed after ${elapsedSeconds()}s:\n${body.log || "(no compiler output)"}`);
       return;
     }
 
@@ -357,12 +543,19 @@ async function compileAndRun(): Promise<void> {
     const bytes = parsed.bytes.slice(0, parsed.usedBytes);
     await client.call("loadFirmware", bytes);
     terminal.clear();
-    terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes)`);
+    terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);
   } catch (err) {
+    window.clearInterval(progressTimer);
+    terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
     terminal.clear();
-    terminal.writeLine(err instanceof Error ? `compile error: ${err.message}` : "compile failed");
+    terminal.writeLine(
+      err instanceof Error
+        ? `compile error after ${elapsedSeconds()}s: ${err.message}`
+        : "compile failed",
+    );
   } finally {
     compileRunBtn.disabled = false;
+    railCompileBtn.disabled = false;
   }
 }
 

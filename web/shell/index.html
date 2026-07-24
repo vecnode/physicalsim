@@ -29,11 +29,42 @@
     </header>
 
     <div class="body">
-      <!-- Layout scaffold only - no icons/functionality yet. Reserved for
-           navigating between workspaces (circuit canvas, and eventually a
-           code editor pane) the way an IDE's activity bar does; nothing
-           reads or writes this element today. -->
-      <nav class="icon-rail" aria-hidden="true"></nav>
+      <!-- The "activity bar" (VS Code convention) - every quick-access
+           control for running a sketch, in one place, top-down: Compile &
+           Run, Start/Pause/Stop, then Load .hex… (a separator apart from
+           the other four - it loads *pre-compiled* firmware, not the
+           editor's own sketch). This is now the *only* place Start/Pause/
+           Stop and Load .hex… live - the simulator overlay on the canvas
+           (below) used to duplicate them, back when it also held the
+           board picker/Apply; now that boards are always placed by
+           picking an Example (main.ts's EXAMPLES table), that picker is
+           gone too, and the overlay is purely a state/energy readout. -->
+      <nav class="icon-rail">
+        <button id="rail-compile-btn" type="button" title="Compile & Run sketch">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor"><path d="M19.14,12.94c0.04,-0.3,0.06,-0.61,0.06,-0.94c0,-0.32,-0.02,-0.64,-0.07,-0.94l2.03,-1.58c0.18,-0.14,0.23,-0.41,0.12,-0.61l-1.92,-3.32c-0.12,-0.22,-0.37,-0.29,-0.59,-0.22l-2.39,0.96c-0.5,-0.38,-1.03,-0.7,-1.62,-0.94L14.4,2.81c-0.04,-0.24,-0.24,-0.41,-0.48,-0.41h-3.84c-0.24,0,-0.43,0.17,-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22,-0.08,-0.47,0,-0.59,0.22L2.74,8.87C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58c-0.18,0.14,-0.23,0.41,-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39,-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44,-0.17,0.47,-0.41l0.36,-2.54c0.59,-0.24,1.13,-0.56,1.62,-0.94l2.39,0.96c0.22,0.08,0.47,0,0.59,-0.22l1.92,-3.32c0.12,-0.22,0.07,-0.47,-0.12,-0.61L19.14,12.94z M12,15.6c-1.98,0,-3.6,-1.62,-3.6,-3.6s1.62,-3.6,3.6,-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/></svg>
+        </button>
+        <button id="rail-run-btn" type="button" title="Start">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>
+        </button>
+        <button id="rail-pause-btn" type="button" title="Pause">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z"/></svg>
+        </button>
+        <button id="rail-stop-btn" type="button" title="Stop">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></svg>
+        </button>
+        <!--
+          Stage 2 of the terminal feature (see ARCHITECTURE.md's "Firmware
+          loading" section) - loads a compiled Intel HEX file into the
+          placed board's flash and reboots into it, independent of the
+          sketch editor/compiler above. The file input is hidden and
+          triggered by the button so no browser-default file-picker chrome
+          shows up on the rail.
+        -->
+        <button id="load-firmware-btn" type="button" title="Load a compiled .hex file">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>
+        </button>
+        <input id="firmware-file-input" type="file" accept=".hex" hidden>
+      </nav>
 
       <!--
         The whole left bar (next to the icon-rail): a code editor, nothing
@@ -43,9 +74,24 @@
         three narrow columns crammed against the canvas). Those moved to
         .simulator-overlay, floating on the canvas itself (the "simulator
         rectangle") below - this column is purely "write code, test it".
+        Status text (board-placed, firmware-load, compile results, …) all
+        goes to the Serial Monitor now (main.ts's logLine() writes there,
+        not to any element here) - nothing prints on top of the editor.
       -->
       <aside class="sidebar">
-        <output id="log" aria-live="polite"></output>
+        <!--
+          Examples (main.ts's EXAMPLES table): a canvas layout (board +
+          wired components) and a matching sketch, loaded together so
+          picking one leaves the circuit already built and the code
+          already correct - just Compile & Run, then Start. The default
+          ("led-blink") also loads automatically on startup (see main.ts's
+          bottom), so a fresh launch already has something wired rather
+          than an empty canvas; this button just reopens the same gallery
+          (#example-gallery-overlay below) to pick a different one. Sits
+          above the editor, not in the simulator overlay, since picking an
+          example is about the sketch below it as much as the canvas.
+        -->
+        <button id="open-example-gallery-btn" type="button">Choose Example…</button>
 
         <!--
           A real code editor (Monaco - src/sketch-editor.ts), not the
@@ -99,57 +145,16 @@
               </div>
 
               <!--
-                Pinned top-left of the canvas - the board itself, and
-                everything about running it, live in the same "simulator
-                rectangle" rather than a separate column squeezed to the
-                side. avr8/rp2040/cortex-m removed from the dropdown - not
-                gone, just parked (see adapter-registry.ts, worker-rpc.ts,
-                the adapter packages: all untouched). Start/Pause/Stop are
-                "power the circuit" for whatever board is placed (see
-                main.ts's setPowered()): Start powers on and runs, Pause
-                halts execution without losing power (CPU state preserved -
-                the adapter's own stop() RPC method never wipes state, only
-                halts ticking), Stop powers off for real (adapter reset() -
-                which itself calls stop() first - wipes CPU state back to
-                power-on defaults, matching what a real board losing power
-                would do). Step/Reset buttons removed - Stop now covers
-                Reset's job as part of powering off; Step never fit the
-                power model.
-                Icons: Phosphor Icons (MIT), vendored at
-                assets/icons/phosphor/{play,pause,stop}.svg.
+                Pinned top-left of the canvas - a pure state/energy
+                readout now, nothing else: no board picker (a board is
+                always placed by picking an Example - main.ts's EXAMPLES
+                table - not a dropdown+Apply here anymore), no Start/
+                Pause/Stop (moved to the icon-rail activity bar, next to
+                the sidebar, so they're not tucked into a floating panel
+                on the canvas), no Load .hex… (moved there too). Just
+                text and numbers reflecting whatever's currently running.
               -->
               <section class="panel simulator-overlay">
-                <label for="adapter-select">Simulator</label>
-                <div class="select-row">
-                  <select id="adapter-select">
-                    <option value="arduino-uno" selected>Arduino Uno</option>
-                  </select>
-                  <button id="apply-btn" type="button">Apply</button>
-                </div>
-
-                <!--
-                  Stage 2 of the terminal feature (see ARCHITECTURE.md's
-                  "Firmware loading" section) - loads a compiled Intel HEX
-                  file into the placed board's flash and reboots into it.
-                  Requires a board already placed via Apply above (there's
-                  nothing to load firmware into otherwise). The file input
-                  is hidden and triggered by the button so it can be
-                  styled like every other control here, rather than
-                  showing the browser's own default file-picker chrome.
-                -->
-                <div class="select-row">
-                  <button id="load-firmware-btn" type="button" title="Load a compiled .hex file">
-                    <svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>Load .hex…
-                  </button>
-                  <input id="firmware-file-input" type="file" accept=".hex" hidden>
-                </div>
-
-                <div class="controls">
-                  <button id="start-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M232.4,114.49,88.32,26.35a16,16,0,0,0-16.2-.3A15.86,15.86,0,0,0,64,39.87V216.13A15.94,15.94,0,0,0,80,232a16.07,16.07,0,0,0,8.36-2.35L232.4,141.51a15.81,15.81,0,0,0,0-27ZM80,215.94V40l143.83,88Z"/></svg>Start</button>
-                  <button id="pause-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,32H160a16,16,0,0,0-16,16V208a16,16,0,0,0,16,16h40a16,16,0,0,0,16-16V48A16,16,0,0,0,200,32Zm0,176H160V48h40ZM96,32H56A16,16,0,0,0,40,48V208a16,16,0,0,0,16,16H96a16,16,0,0,0,16-16V48A16,16,0,0,0,96,32Zm0,176H56V48H96Z"/></svg>Pause</button>
-                  <button id="stop-btn" type="button"><svg class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M200,40H56A16,16,0,0,0,40,56V200a16,16,0,0,0,16,16H200a16,16,0,0,0,16-16V56A16,16,0,0,0,200,40Zm0,160H56V56H200V200Z"/></svg>Stop</button>
-                </div>
-
                 <dl id="state-list" class="readout">
                   <dt>status</dt><dd id="state-running">idle</dd>
                   <dt>cycles</dt><dd id="state-cycles">0</dd>
@@ -256,6 +261,28 @@
         <svg id="theme-icon-light" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M120,40V16a8,8,0,0,1,16,0V40a8,8,0,0,1-16,0Zm72,88a64,64,0,1,1-64-64A64.07,64.07,0,0,1,192,128Zm-16,0a48,48,0,1,0-48,48A48.05,48.05,0,0,0,176,128ZM58.34,69.66A8,8,0,0,0,69.66,58.34l-16-16A8,8,0,0,0,42.34,53.66Zm0,116.68-16,16a8,8,0,0,0,11.32,11.32l16-16a8,8,0,0,0-11.32-11.32ZM192,72a8,8,0,0,0,5.66-2.34l16-16a8,8,0,0,0-11.32-11.32l-16,16A8,8,0,0,0,192,72Zm5.66,114.34a8,8,0,0,0-11.32,11.32l16,16a8,8,0,0,0,11.32-11.32ZM48,128a8,8,0,0,0-8-8H16a8,8,0,0,0,0,16H40A8,8,0,0,0,48,128Zm80,80a8,8,0,0,0-8,8v24a8,8,0,0,0,16,0V216A8,8,0,0,0,128,208Zm112-88H216a8,8,0,0,0,0,16h24a8,8,0,0,0,0-16Z"/></svg>
         <svg id="theme-icon-dark" class="icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor" hidden><path d="M233.54,142.23a8,8,0,0,0-8-2,88.08,88.08,0,0,1-109.8-109.8,8,8,0,0,0-10-10,104.84,104.84,0,0,0-52.91,37A104,104,0,0,0,136,224a103.09,103.09,0,0,0,62.52-20.88,104.84,104.84,0,0,0,37-52.91A8,8,0,0,0,233.54,142.23ZM188.9,190.34A88,88,0,0,1,65.66,67.11a89,89,0,0,1,31.4-26A106,106,0,0,0,96,56,104.11,104.11,0,0,0,200,160a106,106,0,0,0,14.92-1.06A89,89,0,0,1,188.9,190.34Z"/></svg>
       </button>
+    </div>
+  </div>
+
+  <!--
+    Example gallery (main.ts's renderExampleGallery()/EXAMPLES table) - a
+    full-viewport picker shown on startup (after the default example has
+    already been built underneath it, so closing without picking still
+    leaves a working circuit) and reopenable any time via the sidebar's
+    "Choose Example…" button. Sits outside .app (not another
+    .simulator-overlay-style absolutely-positioned child of the canvas) so
+    it can cover the whole window, tabs and sidebar included, regardless
+    of which tab or panel is showing underneath.
+  -->
+  <div id="example-gallery-overlay" class="example-gallery-overlay hidden">
+    <div class="example-gallery" role="dialog" aria-modal="true" aria-labelledby="example-gallery-title">
+      <header class="example-gallery-header">
+        <h2 id="example-gallery-title">Choose an example</h2>
+        <button id="example-gallery-close-btn" type="button" title="Close">✕</button>
+      </header>
+      <!-- Populated from main.ts's EXAMPLES table, not hardcoded here - one
+           .example-card button per entry. -->
+      <div id="example-gallery-grid" class="example-gallery-grid"></div>
     </div>
   </div>
 

@@ -29,6 +29,10 @@ export class Terminal {
   // at startup/clear()), created lazily on the next non-newline byte so
   // an empty terminal doesn't start with one blank line already in it.
   private currentLineEl: HTMLElement | null = null;
+  // Named lines that get overwritten in place rather than appended fresh
+  // each time (writeUpdatingLine() below) - e.g. main.ts's compile
+  // progress ticker, which would otherwise spam one new line per tick.
+  private readonly updatingLines = new Map<string, HTMLElement>();
 
   constructor(private readonly el: TerminalElements) {
     el.collapseBtn.addEventListener("click", () => this.setCollapsed(!this.collapsed));
@@ -48,6 +52,7 @@ export class Terminal {
   clear(): void {
     this.el.output.replaceChildren();
     this.currentLineEl = null;
+    this.updatingLines.clear();
   }
 
   // Appends one complete, non-UART line (e.g. "firmware loaded") - styled
@@ -63,6 +68,43 @@ export class Terminal {
     this.trimToMaxLines();
     this.currentLineEl = null;
     this.scrollToBottom();
+  }
+
+  // Writes `text` to a single named line, overwriting it in place on
+  // every call with the same `key` instead of appending a fresh line each
+  // time - main.ts's compile progress ticker uses this so "compiling…
+  // (Ns)" updates one line rather than scrolling the terminal with one
+  // new line per tick. The line is created (and tracked) on first call;
+  // subsequent calls just update its text. `key` is caller-chosen and
+  // arbitrary - it never appears in the output, just identifies which
+  // line to update.
+  writeUpdatingLine(key: string, text: string): void {
+    let line = this.updatingLines.get(key);
+    // isConnected guards against a line that's since been trimmed off the
+    // front by trimToMaxLines() or wiped by clear() (which also empties
+    // this map, but a stale reference surviving *between* those two
+    // isn't otherwise impossible) - in either case, start a fresh line
+    // rather than silently updating a detached element nobody sees.
+    if (!line || !line.isConnected) {
+      line = document.createElement("div");
+      line.className = "terminal-system-line";
+      this.el.output.appendChild(line);
+      this.updatingLines.set(key, line);
+      this.trimToMaxLines();
+      this.currentLineEl = null;
+    }
+    line.textContent = text;
+    this.scrollToBottom();
+  }
+
+  // Stops treating `key` as updatable - the next writeUpdatingLine() with
+  // the same key starts a new line instead of resuming the old one.
+  // Doesn't touch the line's own text/position; call this once a ticker
+  // is done (e.g. compile finished) so a later, unrelated call with the
+  // same key can't accidentally resume overwriting an old, unrelated
+  // line.
+  finishUpdatingLine(key: string): void {
+    this.updatingLines.delete(key);
   }
 
   // Feeds one byte of UART TX data. CR is dropped (Arduino's Serial

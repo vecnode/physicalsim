@@ -85,6 +85,47 @@ export class CanvasController {
     this.minimap.render();
   }
 
+  // Pans/zooms so every currently-placed board/component fits inside the
+  // container, with some breathing room around the edges - called once
+  // after an Example finishes building (main.ts's loadExample()) so a
+  // freshly-loaded circuit is immediately fully visible instead of
+  // needing a manual zoom-out to see, say, a board placed off to one side
+  // of a component wired to it. Reuses Scene.minimapItems() (already a
+  // world-space {x, y, w, h} per placed entity, built for the minimap) as
+  // the bounding-box source rather than a second measurement pass. A
+  // no-op on an empty scene - there's no meaningful box to fit nothing
+  // into, and the viewport should just stay wherever it already was.
+  zoomToFit(padding = 60): void {
+    const items = this.scene.minimapItems();
+    if (items.length === 0) return;
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const item of items) {
+      minX = Math.min(minX, item.x);
+      minY = Math.min(minY, item.y);
+      maxX = Math.max(maxX, item.x + item.w);
+      maxY = Math.max(maxY, item.y + item.h);
+    }
+
+    const boxW = maxX - minX + padding * 2;
+    const boxH = maxY - minY + padding * 2;
+    const rect = this.container.getBoundingClientRect();
+    // Never zooms *in* past 100% for a single small board - min(..., 1) -
+    // "fit everything" shouldn't also mean "blow up one lone LED to fill
+    // the whole canvas"; it only ever zooms out to make room, same as a
+    // real "zoom to fit" control in an image viewer or IDE minimap.
+    const zoom = Math.min(
+      this.viewport.maxZoom,
+      Math.max(this.viewport.minZoom, Math.min(rect.width / boxW, rect.height / boxH, 1)),
+    );
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    this.viewport.setPanZoom(rect.width / 2 - centerX * zoom, rect.height / 2 - centerY * zoom, zoom);
+  }
+
   private bindZoomControls(el: CanvasElements): void {
     el.zoomOutBtn.addEventListener("click", () => this.viewport.zoomBy(-ZOOM_STEP));
     el.zoomInBtn.addEventListener("click", () => this.viewport.zoomBy(ZOOM_STEP));
@@ -93,6 +134,16 @@ export class CanvasController {
       const zoom = this.viewport.zoom;
       el.zoomLevelEl.textContent = `${Math.round(zoom * 100)}%`;
       el.container.style.backgroundSize = `${GRID_SIZE_CSS_PX * zoom}px ${GRID_SIZE_CSS_PX * zoom}px`;
+      // The grid's own background-position, in lockstep with panX/panY -
+      // without this, the grid only ever rescaled with zoom and stayed
+      // visually fixed while dragging, since the container itself (which
+      // owns the CSS background) is deliberately never transformed (see
+      // viewport.ts's own doc comment - only #tab1-content pans/scales).
+      // World (0, 0) maps to screen (panX, panY) the same way it does for
+      // every placed item, so anchoring the pattern's origin there keeps
+      // grid lines aligned with a dragged board's position, not just
+      // moving at the same visual rate as it.
+      el.container.style.backgroundPosition = `${this.viewport.panX}px ${this.viewport.panY}px`;
     });
     this.viewport.bindWheelZoom();
   }

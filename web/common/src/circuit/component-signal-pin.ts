@@ -29,4 +29,24 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   pushbutton: { pinNames: ["1.l", "2.l", "1.r", "2.r"], role: "write" },
   "pushbutton-6mm": { pinNames: ["1.l", "2.l", "1.r", "2.r"], role: "write" },
   led: { pinNames: ["A"], role: "read" },
+  // The joystick's SEL (button) pin dispatches the exact same
+  // "button-press"/"button-release" DOM events wokwi-pushbutton does
+  // (simulators/wokwi-elements' own analog-joystick-element.ts) - no new
+  // signal-chain code needed, same as pushbutton above. VERT/HORZ
+  // (analog X/Y) intentionally have no entry - blocked by the same
+  // missing-ADC reason potentiometer is, below.
+  "analog-joystick": { pinNames: ["SEL"], role: "write" },
+  // "read" role here is the generic "reflect whatever the board pin is"
+  // code every read-role component already shares (see SignalChain) - the
+  // exact right direction for the relay (firmware genuinely drives its
+  // coil pin), but a real pir-motion-sensor/tilt-switch is actually an
+  // *input* to firmware, not something firmware drives. Neither
+  // wokwi-elements component has any click/interaction hook to be a real
+  // write-role input yet (see their own element source), so "read" is
+  // the only wiring physicalsim can offer today - a deliberate demo-only
+  // capability (wire it to an output pin and it flashes), not a claim
+  // that this is how the real sensor's data direction works.
+  "ks2e-m-dc5": { pinNames: ["COIL1"], role: "read" },
+  "pir-motion-sensor": { pinNames: ["OUT"], role: "read" },
+  "tilt-switch": { pinNames: ["OUT"], role: "read" },
 };

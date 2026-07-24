@@ -1763,6 +1763,35 @@ documented workaround for a real, narrower peripheral-emulation gap
 (distinct from the boot2/bootrom gap above, discovered while chasing it)
 worth fixing in `rp2040js` directly at some point.
 
+**Known limitation: GPIO *input* reads from compiled firmware don't see
+externally-injected values.** `writePin()` (an external component like a
+placed pushbutton driving a pin, via `SignalChain` - see "Pin-to-pin
+wiring" above) correctly updates the pin's state as read back through
+`Rp2040Adapter.readPin()` itself, confirmed directly over the native
+bridge. It does **not**, however, show up when the *compiled sketch's own*
+`gpio_get()` call reads the same pin - the `"rp2040-button-control"`
+example places and wires correctly, compiles and loads correctly (a
+distinct, plausible byte count from `"rp2040-blink"`'s, confirming the
+right source actually compiled), but pressing the button doesn't move the
+LED. Traced partway, not root-caused: `rp2040js`'s `GPIO_IN` register
+(what `gpio_get()` compiles down to reading, confirmed against
+`pico-sdk`'s own `hardware/gpio.h`) is a live getter with no caching
+(`RP2040.gpioValues`, computed fresh from every `GPIOPin.inputValue` on
+each read), and every intermediate step `writePin()` touches
+(`rawInputValue`, `inputEnable` via `padValue`, the `inputOverride`
+register defaulting to pass-through) reads correctly in isolation via
+`readPin()`. The actual disconnect between "the JS-side state is
+correct" and "compiled firmware reading the same register sees something
+else" wasn't found by reading source - it would need runtime
+instrumentation inside `rp2040js` (logging actual register reads during
+execution), not more static tracing. A real, distinct gap from the
+`sleep_ms()` one above: GPIO **output** from compiled firmware (driving
+an LED) is proven solid; GPIO **input** *into* compiled firmware (reading
+a button/sensor) isn't proven working yet. Shipped anyway (per user
+direction, 2026-07-24) since the example is still a correct
+demonstration of the second board's placement/wiring/compile path, with
+this gap documented rather than silently broken.
+
 Verified end-to-end through every layer, not just unit-by-unit: a real
 `arm-none-eabi-gcc` (xPack prebuilt) compiling real `pico-sdk` source
 through real `cmake`+`ninja`; the resulting binary run directly against

@@ -132,8 +132,14 @@ if errorlevel 1 (popd & goto :error)
 popd
 
 	REM --- Configure / Build / Run -----------------------------------------------
+REM BUNDLE_AVR_TOOLCHAIN mirrors package_release.bat's Release config - the
+REM in-app sketch compiler (src/avr_toolchain.cpp) needs a real avr-g++ next
+REM to the exe, and without this flag a Debug build has none (no bundled
+REM copy, and avr-g++ isn't normally on PATH), so "Compile & Run" always
+REM fails with "AVR toolchain not found" even though avr-core/ is already
+REM covered by the PHYSICALSIM_SOURCE_DIR dev-build fallback below.
 echo [2/4] Configuring CMake
-"%CMAKE_EXE%" -B build
+"%CMAKE_EXE%" -B build -DBUNDLE_AVR_TOOLCHAIN=ON
 if errorlevel 1 goto :error
 
 echo [3/4] Building physicalsim (Debug)

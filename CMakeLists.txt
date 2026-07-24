@@ -137,10 +137,30 @@ if(BUNDLE_AVR_TOOLCHAIN)
     if(_avr_toolchain_url)
         FetchContent_Declare(avr_gcc_toolchain URL ${_avr_toolchain_url})
         FetchContent_MakeAvailable(avr_gcc_toolchain)
-        # The archive's own layout is a single "avr/" directory containing
-        # bin/, include/, lib/, libexec/ - not those directories at the
-        # archive root.
-        set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}/avr")
+        # Despite the name, this is the *root* directory that gets mirrored
+        # wholesale into avr-toolchain/ below (copy_directory copies
+        # AVR_TOOLCHAIN_BIN_DIR's *contents*, so it needs to be "the thing
+        # containing bin/, libexec/, etc.", not bin/ itself) - src/
+        # avr_toolchain.cpp then looks for avr-toolchain/bin/avr-g++.exe.
+        # Layout differs by platform archive, confirmed by actually
+        # extracting and looking (not assumed): the macOS/Linux archives
+        # nest the *entire* toolchain (bin/, include/, lib/, libexec/, the
+        # "avr-"-prefixed compiler drivers and all) one level down inside a
+        # top-level "avr/" directory. The Windows zip is flatter - bin/
+        # (with the real avr-g++.exe/avr-gcc.exe/avr-objcopy.exe) and
+        # libexec/ (cc1plus, needed at compile time) already sit at the
+        # archive root; its own "avr/" subdirectory is just the AVR target
+        # sysroot (unprefixed binutils only - ar.exe, ld.exe, no compiler
+        # driver at all), not a second nested copy of the toolchain. Using
+        # avr/bin/ on Windows silently drops the whole compiler while still
+        # leaving something on disk (a real bug: BUNDLE_AVR_TOOLCHAIN
+        # "succeeded" but Compile & Run still failed with the exact
+        # toolchain-not-found error this whole feature exists to fix).
+        if(EXISTS "${avr_gcc_toolchain_SOURCE_DIR}/bin/avr-g++.exe" OR EXISTS "${avr_gcc_toolchain_SOURCE_DIR}/bin/avr-g++")
+            set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}")
+        else()
+            set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}/avr")
+        endif()
     else()
         message(WARNING "[physicalsim] BUNDLE_AVR_TOOLCHAIN is ON but this platform has no known prebuilt avr-gcc URL - skipping")
     endif()

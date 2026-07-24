@@ -232,6 +232,22 @@ export class WiringLayer {
     this.notifyWiresChanged();
   }
 
+  // Connects two pins directly, bypassing the click-click pending flow
+  // above - for callers that already know both endpoints (e.g. main.ts's
+  // example loader, wiring up a freshly-placed board/component pair
+  // without simulating two pin clicks). Requires both pins' offsets to
+  // already be registered (i.e. both entities' placeElement() has
+  // resolved) - same requirement handlePinClick's second click has,
+  // just not enforced here since there's no marker to fail gracefully
+  // against; callers are expected to await placement first.
+  connect(a: PinRef, b: PinRef): Wire {
+    const wire: Wire = { id: `wire-${this.nextId++}`, a, b, elbow: {} };
+    this.wires.push(wire);
+    this.render();
+    this.notifyWiresChanged();
+    return wire;
+  }
+
   // Selects a wire (clicked - see render()'s hit-path handler), clearing
   // any in-progress pending connection and notifying the scene to drop
   // its own board/pin selection.

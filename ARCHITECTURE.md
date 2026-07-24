@@ -12,7 +12,8 @@ there over HTTP.
 │   httplib::Server ── serves embedded public/ (Vite build output)                            │
 │        │                                                                                     │
 │        ├── GET  /health, /api/hello                                                          │
-│        └── POST /bridge/:adapter/:method, GET /bridge/:adapter/state  (native<->JS bridge)   │
+│        ├── POST /bridge/:adapter/:method, GET /bridge/:adapter/state  (native<->JS bridge)   │
+│        └── POST /compile  (src/avr_toolchain.cpp - in-app sketch compiler, see below)        │
 │                                                                                              │
 │   webview::webview  ── embedded browser engine (WebView2 / WebKitGTK), hidden if --headless  │
 │        │  bind("physicalsimReply", ...)   JS -> C++ replies/events                          │
@@ -356,8 +357,13 @@ bottom-bar toggles). Placing a board plugs it into its
 a visual power LED, not just one or the other).
 
 **Layout.** `.app` is a full-viewport column: a `.topbar` (title), then
-`.body` (a row: a fixed-width `.sidebar` holding only the log output, and
-`.workspace` filling the rest). `.workspace` is a tab bar (`#board-tabs`)
+`.body` (a row: a narrow `.icon-rail` activity bar, a `.sidebar` holding
+the log output + the Monaco sketch editor (see "In-browser editing and
+compiling" below), and `.workspace` filling the rest). `.icon-rail` holds
+two quick-access shortcuts stacked top-down - a cog (Compile & Run) and a
+play triangle (Start) - that call the exact same handlers as the sketch
+panel's own "Compile & Run" button and the simulator overlay's Start
+button; no separate logic lives on the rail itself. `.workspace` is a tab bar (`#board-tabs`)
 over one `.tab-pane` per tab — `tab2`/`tab3` are deliberately empty
 panes (future workspaces with nothing built yet, not placeholder
 canvases drawing an unused grid). Tab 1 holds the "Simulator" panel
@@ -703,6 +709,104 @@ delete already takes its own wires with it via `removeEntity()`, so the
 wire-only path only fires when the selection is a wire itself, not one
 of its endpoints.
 
+**From wires to real pin I/O — the signal chain
+(`web/shell/src/signal-chain.ts`).** Pin-to-pin wiring above is purely
+visual — `WiringLayer` never knows a `Wire` means anything electrical.
+Three more pieces, layered on top, turn *some* wires into real,
+adapter-backed I/O without `WiringLayer` gaining any opinion about it:
+
+- **`component-signal-pin.ts`** (`web/common`) — a small, separate table
+  (`componentSignalPins`, keyed by component type, not reusing
+  `BoardPinMap` — a board's map describes 20+ real pins, this describes
+  "the one pin (of a few electrically-equivalent names) that matters"
+  for a small part) naming which of a component's pins actually carries
+  a signal, and which direction: `role: "write"` means the component
+  drives whatever board pin it's wired to (a pushbutton shorting a pin
+  high while held); `role: "read"` means the component reflects whatever
+  the board pin already is (an LED lighting up because firmware drove
+  its pin). A component with no entry (most of `COMPONENTS.md`'s list,
+  today) has no signal-chain behavior yet — still a purely visual
+  illustration. `pushbutton`/`pushbutton-6mm` list all four of their
+  (mechanically-shorted-in-pairs) legs as equivalent; `led` lists just
+  its anode (`"A"`).
+- **`canvas/signal-net.ts`** (`resolveSignalLinks()`) — resolves
+  `WiringLayer.getWires()` into `SignalLink[]`, a second, narrower model
+  bridged to `Wire` only by `wireId` (the same "two things stay two
+  things" pattern `energy.ts`/`circuit.ts` already established).
+  Deliberately narrow: a link is exactly one component pin wired to
+  exactly one board pin, direction-agnostic on the wire itself (tries
+  both endpoint orderings) — a wire between two boards, two components,
+  or a component pin not in `componentSignalPins` resolves to nothing and
+  stays purely visual, same as every other wire.
+- **`SignalChain`** (`signal-chain.ts`) — constructed once in `main.ts`,
+  subscribes to `scene.wiring.onWiresChanged()` and recomputes on every
+  change (not polled, not on every `render()` — dragging a wire fires
+  that constantly). For each live link it resolves the board pin's
+  on-canvas marker name to the adapter's real pin id
+  (`resolveBoardPinName()` + `boardPinMaps`, `web/common/src/boards/`)
+  and constructs a `CircuitPin` against the board's own
+  `SimulatorAdapter` client. A `role: "write"` component gets wrapped in
+  a `Button` driven by the placed element's own `button-press`/
+  `button-release` DOM events (already dispatched by `wokwi-pushbutton`'s
+  built-in mouse handling — clicking it in the canvas presses it for
+  real); a `role: "read"` component skips the `Led` wrapper entirely and
+  drives the placed element's own `value` property directly from
+  `CircuitPin.read()`/`onChange()`, since there's no external
+  change-hook to redraw a DOM property from otherwise. Each attachment is
+  disposed (listeners removed, subscription dropped) the moment its wire
+  disappears, so deleting a wire — or the board/component at either
+  end — cleanly stops driving/reading that pin rather than leaking a
+  stale subscription. Board-agnostic by construction: everything it
+  reads (`boardPinMaps`, `componentSignalPins`, the board's own
+  `adapterId`) is a per-type lookup table, so a second placeable board
+  type needs no change here, only a new `boardPinMaps` entry.
+
+This means the "Explicitly out of scope" note below needs one
+clarification: **digital** logic now does propagate along a drawn
+wire — a pushbutton wired to pin 2 and an LED wired to pin 13 genuinely
+drive/reflect real AVR GPIO state once "Examples" (next) wires them up.
+What's still out of scope is everything *analog* — voltage/current
+values, Ohm's-law current flow, any SPICE/MNA-style topology solve.
+`SignalChain` moves a `0`/`1` between a pin and a component's on/off
+state; it does not compute what a resistor between them would do to
+that signal.
+
+**Examples: canvas layout + sketch, loaded together
+(`main.ts`'s `EXAMPLES` table).** The circuit-building tools above
+(`Scene.showBoard()`/`addComponentAt()`, `WiringLayer.connect()`) are
+also what a fresh launch uses to start from something already working,
+not an empty canvas the user has to wire up by hand before "Compile &
+Run" does anything visible. `WiringLayer.connect(a, b)` is the
+programmatic equivalent of two pin clicks (added specifically for this),
+bypassing `handlePinClick()`'s click-click pending state entirely since
+there's no marker element to visually track a pending click against.
+
+Each `EXAMPLES` entry pairs a `build()` (places a board + components via
+the same `Scene` API the canvas's own right-click menu uses, then wires
+them with `connect()`) with a matching sketch string — picking one
+replaces both together, so the code always matches the circuit it's
+about to run against. `loadExample(DEFAULT_EXAMPLE_ID)` runs
+unconditionally on startup (today: "Blink LED" — an Arduino Uno with an
+LED wired to pin 13, matching `LED_BUILTIN`), so `Compile & Run` already
+does something the very first time it's clicked. A second example
+("Button Control" — a pushbutton on pin 2 driving an LED on pin 13)
+exercises the write-role half of the signal chain above, not just the
+read-role half the first example does alone.
+
+**The gallery (`#example-gallery-overlay`, `renderExampleGallery()`).** A
+full-viewport modal (90vw × 90vh, rounded corners) shown right after the
+default example finishes building underneath it — closing without
+picking a different one just leaves that default in place, so the
+gallery is never the only thing standing between a fresh launch and a
+working circuit. Reopenable any time via the sidebar's "Choose
+Example…" button. One `.example-card` button per `EXAMPLES` entry, built
+fresh from the table (`grid-template-columns: repeat(4, 1fr)`, so more
+examples naturally fill out more of the grid without any HTML to edit).
+This is deliberately the one place in the app that breaks from the flat,
+sharp-cornered node-editor look everywhere else (`.panel`, `button`, etc.
+are all 1px borders, no radius, no shadow) — a full-viewport picker reads
+as a launcher/dialog, not another canvas panel.
+
 **Right-click context menu (`canvas/context-menu.ts`).** Three flyout
 submenus — Boards, Sensors, Connections — each one entry per registered
 type (`circuit.ts`'s `boardTagName`/`boardDisplayName` for boards,
@@ -781,11 +885,14 @@ matching the code-level split, not merged rows in one table.
 **Explicitly out of scope, tracked here on purpose.** Per-pin voltage,
 real circuit-topology solving (Ohm's law across actual wires), any
 SPICE/MNA solver (hand-rolled or `eecircuit-engine`/ngspice-WASM). Pin-
-to-pin wiring (above) is a *visual* connection model — which pin points
-at which — not an electrical one; nothing propagates a voltage or
-current along a drawn wire yet. All of the above is the natural
-Pipeline-A-shaped next step now that there's an actual netlist (the
-wires) for a solver to work on — not guessed at or half-built here.
+to-pin wiring (above) is still a *visual* connection model on its own —
+which pin points at which — and nothing propagates a voltage or current
+along a drawn wire; the signal chain (below) layers *digital* logic
+(`0`/`1`) on top of specific wires for specific, registered component
+pins, which is a narrower thing than an electrical solve, not a first
+version of one. All of the above is the natural Pipeline-A-shaped next
+step now that there's an actual netlist (the wires) for a solver to work
+on — not guessed at or half-built here.
 
 **Board elements: real size, not scaled to fit.** Placing an element
 creates the wrapper + custom element, then **awaits `updateComplete`**
@@ -847,23 +954,110 @@ as the theme/chrome-hidden toggles; the panel's own header has a second,
 lighter-weight collapse button that just shrinks it to that header
 without hiding it.
 
-**Three stages, deliberately — two built.** The natural next step after
-a Serial Monitor exists is "let me write and run an Arduino sketch
-here," and the honest constraint is that nothing about an editor widget
-is the hard part — there is no compiler anywhere in this codebase.
-`avr8js` only emulates a CPU executing whatever's already sitting in its
-flash; turning an Arduino sketch into AVR machine code is a separate,
-much larger undertaking (a WASM-ported `avr-gcc`, or a server-side
-compile step) that a text editor doesn't get you any closer to.
+**Three stages — all three now built.** The natural next step after a
+Serial Monitor exists is "let me write and run an Arduino sketch here,"
+and the honest constraint was always that nothing about an editor widget
+is the hard part — `avr8js` only emulates a CPU executing whatever's
+already sitting in its flash; turning an Arduino sketch into AVR machine
+code needs a real compiler, not a text editor.
 
-1. **Surface whatever the firmware transmits over UART** — this
-   section, above.
-2. **Firmware loading** — done; see below. Accepts a compiled `.hex`
-   file, so no in-browser editor or compiler was needed to make the
-   terminal actually show something.
-3. **In-browser editing and compiling** — still needs a real AVR
-   toolchain running somewhere. A large, separate project, not a
-   natural extension of adding an editor widget.
+1. **Surface whatever the firmware transmits over UART** — see above.
+2. **Firmware loading** — accepts a compiled `.hex` file (below), so the
+   terminal could show something real before an in-browser editor or
+   compiler existed at all.
+3. **In-browser editing and compiling** — a real AVR toolchain, reached
+   from a real code editor, both now exist. See below.
+
+**The editor (`web/shell/src/sketch-editor.ts`).** Monaco (VS Code's own
+editor engine), not the plain `<textarea>` the sketch panel used before
+this. `index.html`'s CSP carries `style-src 'unsafe-inline'` specifically
+for this — Monaco's theming engine injects a runtime `<style>` tag with
+computed CSS, and there's no working nonce-based alternative today (a
+still-open upstream limitation, confirmed by checking rather than
+assumed: microsoft/monaco-editor#271, #4927); `script-src` stays `'self'`
+regardless, low-risk here specifically because physicalsim binds to
+`127.0.0.1` only. Two things needed to make it actually work, both
+confirmed live rather than assumed correct:
+- The `cpp` Monarch tokenizer is imported and registered *eagerly*
+  (`monaco.languages.setMonarchTokensProvider`), not left to Monaco's own
+  lazy-load-on-first-tokenize path — that path depends on an internal
+  animation-frame-driven scheduler that doesn't reliably run in every
+  host/embedding; every token stayed the plain, uncolored `"mtk1"` even
+  seconds after the lazy load must have finished, until this was made
+  eager.
+- The constructor forces one real content-change event right after
+  creation (`model.setValue(getValue() + " ")` then immediately
+  `slice(0, -1)` back) followed by an explicit `layout()`/`render(true)` —
+  Monaco's own first paint/tokenization pass is deferred to that same
+  unreliable scheduler, and a `setValue()` with *identical* content is a
+  silent no-op (no change event, nothing to retokenize), so only a real,
+  reverted change actually forces the first real paint.
+- A small hand-written completion list (`ARDUINO_CORE_COMPLETIONS`) for
+  the Arduino core's most common calls (`pinMode`, `digitalWrite`,
+  `delay`, `Serial.print`, …) — not a real language server; `avr8js`
+  itself only emulates GPIO/Timer/USART today, so semantic analysis
+  against real Arduino headers wouldn't buy much yet either.
+
+**The compiler (`src/avr_toolchain.cpp`, native side).** `POST /compile`
+(body `{"source": "<sketch text>"}`) wraps the source in
+`#include <Arduino.h>\n` + the sketch body (the same assumption the real
+`.ino` → `.cpp` wrapping step makes — sketches are plain function bodies
+plus `setup()`/`loop()`, not full translation units), compiles it and
+every `.c`/`.cpp` file in the vendored Arduino core
+(`simulators/ArduinoCore-avr/cores/arduino`) against `-mmcu=atmega328p`,
+links with `avr-gcc`, and runs `avr-objcopy` to Intel HEX — the exact
+same format, and the exact same
+`parseIntelHex()` → `loadFirmware()` path, "Load .hex…" already used, so
+compiling was never a second firmware-loading code path to maintain.
+Each compile step (`run_and_wait()`) spawns synchronously with a 30s
+timeout and its own temp working directory, wiped afterward (success or
+failure) so repeated "Compile & Run" clicks don't leak files.
+
+`find_toolchain()` looks for two things independently, each with its own
+fallback chain, and only proceeds if both resolve:
+- **The compiler bin dir** (`find_toolchain_bin_dir()`) — a bundled copy
+  next to physicalsim's own executable (`avr-toolchain/bin/`, see
+  "Distribution" below) first, then `avr-g++`/`avr-gcc` on `PATH`, then a
+  real Arduino IDE install's own bundled toolchain
+  (`%LOCALAPPDATA%\Arduino15\packages\arduino\tools\avr-gcc\<version>\bin`
+  on Windows) — reusing it rather than requiring a second copy if the
+  user already has the IDE installed.
+- **The core/variant dirs** (`find_core_dir()`/`find_variant_dir()`) — a
+  bundled `avr-core/` next to the executable first (packaged builds copy
+  `simulators/ArduinoCore-avr`'s `cores/arduino` + `variants/standard`
+  there unconditionally at build time, since it's small enough to always
+  ship, unlike the toolchain), falling back to
+  `simulators/ArduinoCore-avr` straight from the source tree
+  (`PHYSICALSIM_SOURCE_DIR`, a compile-time define) for a dev build run
+  before that copy step has ever happened.
+
+**Distribution: bundled vs. system avr-gcc.** `BUNDLE_AVR_TOOLCHAIN`
+(`CMakeLists.txt`) mirrors `BUNDLE_QEMU_ARM`'s pattern exactly: off by
+default, `FetchContent`-fetches Arduino's own prebuilt `avr-gcc` archive
+per platform when on, `package_release.bat` turns it on automatically for
+every Release package. One real bug found and fixed by actually
+extracting the archive and looking, not by trusting the URL/layout
+comment that shipped with the original code: the Windows zip's layout
+doesn't match the macOS/Linux tarballs'. The macOS/Linux archives nest
+the *entire* toolchain — `bin/`, `include/`, `lib/`, `libexec/` (which
+holds `cc1plus`, needed at compile time), the real `avr-`-prefixed
+compiler drivers and all — one level down inside a single top-level
+`avr/` directory. The Windows zip is flatter: the real `avr-g++.exe`/
+`avr-gcc.exe`/`avr-objcopy.exe` and `libexec/` already sit at the archive
+*root*; its own `avr/` subdirectory is just the AVR target sysroot
+(unprefixed binutils only — `ar.exe`, `ld.exe` — no compiler driver at
+all). Pointing at `avr/bin/` on Windows (what a first pass at this
+CMake logic did) silently "succeeded" — a real `avr-toolchain/` folder
+landed next to the exe — while dropping the compiler driver from it
+entirely, so `Compile & Run` still failed with the exact
+toolchain-not-found error `BUNDLE_AVR_TOOLCHAIN` exists to fix. Fixed by
+checking which layout the extracted archive actually has
+(`EXISTS ".../bin/avr-g++.exe"`) and mirroring the correct root wholesale
+into `avr-toolchain/` either way. `build_and_run.bat` also passes
+`-DBUNDLE_AVR_TOOLCHAIN=ON` now, so a Debug dev build gets a working
+in-app compiler the same way a packaged Release does, rather than
+requiring a separately-installed toolchain just to exercise this feature
+locally.
 
 **The RPC surface** — three additions, mirroring the pin I/O pipeline
 above almost exactly (`web/common/src/adapter-types.ts`,

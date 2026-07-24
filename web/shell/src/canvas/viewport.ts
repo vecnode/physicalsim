@@ -108,6 +108,19 @@ export class Viewport {
     this.apply();
   }
 
+  // Sets pan and zoom together in one apply() - unlike setZoomAt(), which
+  // solves for pan while deliberately holding one specific world point
+  // fixed under the cursor, a caller here has already computed both
+  // values jointly (CanvasController.zoomToFit() below fits a whole
+  // bounding box, not a single point) and just needs them applied
+  // atomically rather than as two separate state changes.
+  setPanZoom(panX: number, panY: number, zoom: number): void {
+    this.zoom = Math.min(this.maxZoom, Math.max(this.minZoom, zoom));
+    this.panX = panX;
+    this.panY = panY;
+    this.apply();
+  }
+
   // Pans so (worldX, worldY) becomes the center of the visible viewport -
   // used by the minimap's click/drag-to-pan.
   centerOn(worldX: number, worldY: number): void {

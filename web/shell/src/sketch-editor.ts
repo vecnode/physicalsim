@@ -128,6 +128,13 @@ export class SketchEditor {
     return this.editor.getValue();
   }
 
+  // Replaces the whole sketch (an example's "Load" action) - a real model
+  // change, not just re-rendering, so undo history/tokenization reset the
+  // same way a user retyping the whole thing would.
+  setValue(value: string): void {
+    this.editor.setValue(value);
+  }
+
   // automaticLayout (a ResizeObserver internally) is not a reliable signal
   // in every host/embedding here - same underlying issue as the
   // constructor's own forced layout()+render(true) - so main.ts calls this

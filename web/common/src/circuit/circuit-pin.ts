@@ -40,6 +40,16 @@ export class CircuitPin {
     await this.client.call("writePin", { pin: this.pin, value });
   }
 
+  // Analog counterpart to write() - drives an ADC channel with a voltage
+  // rather than a GPIO pin with a bit. Rejects (via the RPC error path -
+  // see worker-host.ts) for any adapter that doesn't implement
+  // writeAnalogPin?; callers wiring up components that may land on a
+  // non-ADC board (analog-chain.ts) already swallow that rejection the
+  // same way protocol-chain.ts's attach() swallows an unresolvable pin.
+  async writeAnalog(voltage: number): Promise<void> {
+    await this.client.call("writeAnalogPin", { pin: this.pin, voltage });
+  }
+
   onChange(cb: (value: number) => void): () => void {
     if (!this.client.onPinChange) {
       throw new Error(

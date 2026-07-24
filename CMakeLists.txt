@@ -36,6 +36,12 @@ set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing q
 # download, only needed to actually compile sketches - src/avr_toolchain.cpp
 # falls back to PATH/an existing Arduino IDE install when unbundled.
 option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for the in-app sketch compiler" OFF)
+# Same shape and reasoning as BUNDLE_AVR_TOOLCHAIN above, for the RP2040
+# sketch compiler (src/rp2040_toolchain.cpp) - a ~330MB xPack arm-none-eabi-
+# gcc release rather than Arduino's own avr-gcc mirror, since Arduino
+# doesn't publish a prebuilt arm-none-eabi-gcc at the same well-known URL
+# pattern BUNDLE_AVR_TOOLCHAIN's avr-gcc lives at (confirmed by trying).
+option(BUNDLE_ARM_TOOLCHAIN "Fetch and bundle a prebuilt arm-none-eabi-gcc toolchain for the in-app RP2040 sketch compiler" OFF)
 
 include(FetchContent)
 
@@ -166,13 +172,47 @@ if(BUNDLE_AVR_TOOLCHAIN)
     endif()
 endif()
 
+# Prebuilt arm-none-eabi-gcc toolchain (see BUNDLE_ARM_TOOLCHAIN above) - the
+# xPack release archive is flat (bin/, lib/, etc. at its root, confirmed by
+# extracting one), unlike the AVR archive's per-platform layout quirks above,
+# so this doesn't need the same nested-vs-flat detection.
+set(ARM_TOOLCHAIN_BIN_DIR "")
+if(BUNDLE_ARM_TOOLCHAIN)
+    set(_arm_toolchain_version "v15.2.1-1.1")
+    set(_arm_toolchain_base "https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/download/${_arm_toolchain_version}/xpack-arm-none-eabi-gcc-15.2.1-1.1")
+    if(WIN32)
+        set(_arm_toolchain_url "${_arm_toolchain_base}-win32-x64.zip")
+    elseif(APPLE)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+            set(_arm_toolchain_url "${_arm_toolchain_base}-darwin-arm64.tar.gz")
+        else()
+            set(_arm_toolchain_url "${_arm_toolchain_base}-darwin-x64.tar.gz")
+        endif()
+    elseif(UNIX)
+        if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
+            set(_arm_toolchain_url "${_arm_toolchain_base}-linux-arm64.tar.gz")
+        else()
+            set(_arm_toolchain_url "${_arm_toolchain_base}-linux-x64.tar.gz")
+        endif()
+    endif()
+
+    if(_arm_toolchain_url)
+        FetchContent_Declare(arm_gcc_toolchain URL ${_arm_toolchain_url})
+        FetchContent_MakeAvailable(arm_gcc_toolchain)
+        set(ARM_TOOLCHAIN_BIN_DIR "${arm_gcc_toolchain_SOURCE_DIR}")
+    else()
+        message(WARNING "[physicalsim] BUNDLE_ARM_TOOLCHAIN is ON but this platform has no known prebuilt arm-none-eabi-gcc URL - skipping")
+    endif()
+endif()
+
 cpp_embedlib_add(WebAssets
     FOLDER    ${CMAKE_CURRENT_SOURCE_DIR}/public
     NAMESPACE Web
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp src/avr_toolchain.cpp)
+add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp src/avr_toolchain.cpp
+    src/rp2040_toolchain.cpp src/process_exec.cpp)
 
 # Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
 # straight from the source tree before the POST_BUILD copy below has ever
@@ -359,10 +399,17 @@ endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
 # The vendored core (simulators/ArduinoCore-avr's trimmed cores/arduino +
-# variants/standard, LGPL 2.1) is small enough to always copy next to the
-# executable, dev or packaged build alike - src/avr_toolchain.cpp looks for
-# it there first, falling back to the source tree (PHYSICALSIM_SOURCE_DIR
-# above) only if this hasn't run yet.
+# variants/standard + variants/mega, LGPL 2.1) is small enough to always
+# copy next to the executable, dev or packaged build alike -
+# src/avr_toolchain.cpp looks for it there first, falling back to the
+# source tree (PHYSICALSIM_SOURCE_DIR above) only if this hasn't run yet.
+# Both variants are copied unconditionally (not just "standard") because
+# avr_toolchain.cpp's resolve_board_target() picks between them per board
+# at compile time, not at CMake configure time - Arduino Mega needs
+# variants/mega's own pins_arduino.h (different port/pin mapping than the
+# atmega328p boards' "standard" variant - see arduino-mega.ts on the JS
+# side for the same D0-D53/A0-A15 mapping this variant's own tables
+# encode).
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
@@ -374,7 +421,10 @@ add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
         $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
-    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard)"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
+    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega)"
 )
 
 # Vendored Arduino libraries a sketch can #include - same "small enough to
@@ -420,6 +470,47 @@ if(BUNDLE_AVR_TOOLCHAIN AND AVR_TOOLCHAIN_BIN_DIR)
                 ${_avr_toolchain_license_files}
                 $<TARGET_FILE_DIR:physicalsim>/avr-toolchain/
             COMMENT "Bundling avr-gcc toolchain license"
+        )
+    endif()
+endif()
+
+# ---- RP2040 sketch-compiler assets (cross-platform, not gated on WIN32) ----
+# simulators/pico-sdk is vendored *untrimmed* (unlike ArduinoCore-avr) -
+# ~9MB, small enough to always ship, and its CMake build reaches into many
+# more of its own subdirectories dynamically than ArduinoCore-avr's flat
+# cores/arduino ever did, so there's no clean per-file trim boundary the way
+# there was there (see ARCHITECTURE.md's "RP2040 firmware pipeline" section
+# for how this was confirmed, not assumed).
+add_custom_command(TARGET physicalsim POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/pico-sdk
+        $<TARGET_FILE_DIR:physicalsim>/pico-sdk
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/src/rp2040_sketch_template
+        $<TARGET_FILE_DIR:physicalsim>/rp2040-sketch-template
+    COMMENT "Copying vendored pico-sdk + RP2040 sketch template"
+)
+
+# The toolchain itself, only when BUNDLE_ARM_TOOLCHAIN actually fetched one -
+# same "off unless packaging a release" posture as BUNDLE_AVR_TOOLCHAIN.
+if(BUNDLE_ARM_TOOLCHAIN AND ARM_TOOLCHAIN_BIN_DIR)
+    add_custom_command(TARGET physicalsim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${ARM_TOOLCHAIN_BIN_DIR}"
+            $<TARGET_FILE_DIR:physicalsim>/arm-toolchain
+        COMMENT "Bundling arm-none-eabi-gcc toolchain"
+    )
+
+    file(GLOB _arm_toolchain_license_files
+        "${ARM_TOOLCHAIN_BIN_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
+        "${ARM_TOOLCHAIN_BIN_DIR}/*COPYING*"
+    )
+    if(_arm_toolchain_license_files)
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_arm_toolchain_license_files}
+                $<TARGET_FILE_DIR:physicalsim>/arm-toolchain/
+            COMMENT "Bundling arm-none-eabi-gcc toolchain license"
         )
     endif()
 endif()

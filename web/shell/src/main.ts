@@ -4,6 +4,7 @@ import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { SignalChain } from "./signal-chain.js";
 import { ProtocolChain } from "./protocol-chain.js";
+import { AnalogChain } from "./analog-chain.js";
 import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
@@ -144,6 +145,14 @@ new SignalChain(canvas.scene, getAdapterClient);
 // behavior needs several correlated pins (an LCD's RS/E/D4-D7 bus) -
 // see protocol-chain.ts. Constructed the same way, for the same reason.
 new ProtocolChain(canvas.scene, getAdapterClient);
+
+// Analog counterpart to SignalChain, for components that drive a
+// continuous ADC voltage rather than a digital bit (potentiometer,
+// slide-potentiometer, analog-joystick's VERT/HORZ) - see analog-
+// chain.ts. Only avr8 boards have an ADC wired up as of this addition;
+// wiring one of these to an rp2040/cortex-m board is inert (caught
+// inside AnalogChain.attach()), not an error.
+new AnalogChain(canvas.scene, getAdapterClient);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop
@@ -460,10 +469,10 @@ void loop() {
     },
   },
   "toggle-switch": {
-    label: "Toggle Switch",
-    description: "Press the button once to turn the LED on, press again to turn it off.",
+    label: "Toggle Switch (Mega)",
+    description: "Press the button once to turn the LED on, press again to turn it off - on an Arduino Mega.",
     level: "beginner",
-    board: "Arduino Uno",
+    board: "Arduino Mega",
     glyph: "🔁",
     // Same two component types as "Button Control" (pushbutton write,
     // LED read - the only two component-signal-pin.ts actually has an
@@ -471,6 +480,11 @@ void loop() {
     // (LOW -> HIGH) and flips a stored ledState each press, instead of
     // just mirroring whatever the button currently reads. A real,
     // distinct beginner example, not a second copy of Button Control.
+    // Runs on an Arduino Mega rather than an Uno specifically so there's
+    // at least one example proving the board-aware compiler (see
+    // avr_toolchain.cpp's resolve_board_target()) end to end - pins "2"
+    // and "13" resolve through boards/arduino-mega.ts to E4/B7, the real
+    // ATmega2560 pinout, not the Uno's own D2/D13 (D4/B5).
     sketch: `const int buttonPin = 2;
 const int ledPin = 13;
 
@@ -492,7 +506,7 @@ void loop() {
   lastButtonState = buttonState;
 }`,
     build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
+      const board = await canvas.scene.showBoard("arduino-mega");
       if (!board) return;
       const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
       if (!button) return;
@@ -500,6 +514,70 @@ void loop() {
       if (!led) return;
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "rp2040-blink": {
+    label: "Blink LED (RP2040)",
+    description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware.",
+    level: "beginner",
+    board: "Arduino Nano RP2040 Connect",
+    glyph: "💡",
+    // pico-sdk's own C API (gpio_init/gpio_put), not Arduino's
+    // (digitalWrite/delay) - no Arduino-compatible core is vendored for
+    // RP2040 yet (see ARCHITECTURE.md's "RP2040 firmware pipeline"
+    // section for why, and what a future arduino-pico integration would
+    // change here). Compiled by src/rp2040_toolchain.cpp - a genuinely
+    // different toolchain from the AVR boards' avr-gcc (arm-none-eabi-gcc
+    // + a vendored pico-sdk, driven through cmake), routed by board type
+    // in main.cpp's /compile handler.
+    //
+    // A hand-rolled cycle-count delay, not sleep_ms() - confirmed by hand
+    // (see ARCHITECTURE.md) that sleep_ms() hangs forever here: it busy-
+    // waits on the RP2040's hardware timer, whose tick source rp2040js
+    // doesn't fully emulate (the same PLL/CLOCKS peripheral gaps that log
+    // "Unimplemented peripheral" warnings during pico-sdk's own runtime
+    // clock init). digitalDelay() sidesteps that dependency entirely -
+    // this is the one thing about this example that's not "just write a
+    // normal pico-sdk sketch" yet, documented here so it isn't a silent
+    // surprise.
+    sketch: `void setup(void) {
+  gpio_init(25);
+  gpio_set_dir(25, GPIO_OUT);
+}
+
+static void digitalDelay(volatile unsigned int cycles) {
+  while (cycles--) {
+    __asm volatile("nop");
+  }
+}
+
+void loop(void) {
+  gpio_put(25, 1);
+  digitalDelay(3000000);
+  gpio_put(25, 0);
+  digitalDelay(3000000);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("nano-rp2040-connect");
+      if (!board) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 40);
+      if (!led) return;
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 120);
+      if (!resistor) return;
+      // "D2" resolves through boards/nano-rp2040-connect.ts to "GP25",
+      // matching the sketch's gpio_init(25) above - the signal path
+      // (board -> LED anode) is a direct wire, same as every other
+      // example's LED wiring. The resistor sits between the LED's
+      // cathode and board ground - the real position a current-limiting
+      // resistor belongs in, not on the signal path - which is also why
+      // it doesn't need to be (and isn't) in componentSignalPins: it's
+      // genuinely just placed and wired, not part of what makes the LED
+      // light up in this simulation (physicalsim has no per-component
+      // current/resistance solver - see ARCHITECTURE.md's "current"/
+      // AC-DC section).
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D2" }, { entityId: led.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "lcd-display": {
@@ -814,7 +892,24 @@ void loadExample(DEFAULT_EXAMPLE_ID).then(showExampleGallery);
 interface CompileResponse {
   ok: boolean;
   hexText?: string;
+  // Set instead of hexText for RP2040 boards - a raw flash binary
+  // (rp2040_toolchain.cpp's output, hex-pair-per-byte, no Intel HEX record
+  // framing, since RP2040 has no such convention) rather than AVR's Intel
+  // HEX text. Two response shapes, not one overloaded field, since the two
+  // toolchains' outputs are genuinely different things.
+  binHex?: string;
   log: string;
+}
+
+// Decodes CompileResponse.binHex ("a1b2c3..." - two hex chars per byte, no
+// framing) into raw bytes - the RP2040 counterpart to parseIntelHex() for
+// AVR, much simpler since there's no Intel HEX record structure to parse.
+function parseHexBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
 }
 
 async function compileAndRun(): Promise<void> {
@@ -848,10 +943,19 @@ async function compileAndRun(): Promise<void> {
   }, 250);
 
   try {
+    // Which board is actually placed, not just which adapter is active -
+    // "avr8" backs both arduino-uno and arduino-nano (same chip, same
+    // compile target), but the C++ side's resolve_board_target()
+    // (avr_toolchain.cpp) needs the specific board string to know which
+    // ARDUINO_AVR_* define/variant to use, and "avr8-mega" needs it to
+    // pick -mmcu=atmega2560 + variants/mega over the default Uno target.
+    // Falls back to undefined (server-side default: Arduino Uno) if no
+    // board is placed yet - matches this endpoint's original behavior.
+    const board = canvas.scene.findBoardByAdapter(activeAdapterId ?? "")?.type;
     const res = await fetch("/compile", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source }),
+      body: JSON.stringify({ source, board }),
     });
     const body = (await res.json()) as CompileResponse;
     // Done ticking before the final message is written below - the ticks
@@ -867,8 +971,13 @@ async function compileAndRun(): Promise<void> {
       return;
     }
 
-    const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
-    const bytes = parsed.bytes.slice(0, parsed.usedBytes);
+    let bytes: Uint8Array;
+    if (board === "nano-rp2040-connect") {
+      bytes = parseHexBytes(body.binHex ?? "");
+    } else {
+      const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
+      bytes = parsed.bytes.slice(0, parsed.usedBytes);
+    }
     await client.call("loadFirmware", bytes);
     terminal.clear();
     terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);

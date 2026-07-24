@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Avr8Adapter } from "./adapter.js";
+import { ATMEGA2560 } from "./chip.js";
 
 // AVRIOPort internals accessed directly to drive the CPU's write hooks the
 // same way real AVR instructions (e.g. SBI DDRB,5 / OUT PORTB,r) would -
@@ -9,7 +10,8 @@ function cpuOf(adapter: Avr8Adapter) {
   return (adapter as unknown as { cpu: { writeData(addr: number, value: number): void; data: Uint8Array } }).cpu;
 }
 function portBOf(adapter: Avr8Adapter) {
-  return (adapter as unknown as { portB: { portConfig: { DDR: number; PORT: number } } }).portB;
+  const ports = (adapter as unknown as { ports: Map<string, { portConfig: { DDR: number; PORT: number } }> }).ports;
+  return ports.get("B")!;
 }
 
 // AVRUSART's UDR register address (usart0Config.UDR from avr8js) - writing
@@ -75,6 +77,150 @@ describe("Avr8Adapter pin I/O", () => {
   });
 });
 
+// avr8js's adcConfig register addresses (already SRAM-mapped, same as
+// portBOf()'s DDR/PORT above - no raw I/O offset translation needed).
+const ADMUX_ADDRESS = 0x7c;
+const ADCSRA_ADDRESS = 0x7a;
+const ADCL_ADDRESS = 0x78;
+const ADCH_ADDRESS = 0x79;
+const ADMUX_REFS_AVCC = 0x40; // REFS1:0 = 01 -> AVCC as reference (avr8js's ADCReference.AVCC)
+const ADCSRA_ADEN_ADSC = 0xc0; // ADEN | ADSC - enable and start a conversion in one write
+
+describe("Avr8Adapter analog input", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  function readAdcChannel0(): number {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(ADMUX_ADDRESS, ADMUX_REFS_AVCC); // channel 0 (low 5 bits already 0), AVCC reference
+    cpu.writeData(ADCSRA_ADDRESS, ADCSRA_ADEN_ADSC);
+    adapter.step(500); // plenty past sampleCycles (~50 at default prescaler) to let the conversion complete
+    return cpu.data[ADCL_ADDRESS] | (cpu.data[ADCH_ADDRESS] << 8);
+  }
+
+  it("writeAnalogPin on an A0-A5 pin feeds the matching ADC channel", () => {
+    adapter.writeAnalogPin("C0", 5); // A0, full-scale against the 5V AVCC reference
+    expect(readAdcChannel0()).toBe(1023);
+
+    adapter.writeAnalogPin("C0", 0);
+    expect(readAdcChannel0()).toBe(0);
+
+    adapter.writeAnalogPin("C0", 2.5); // mid-rail
+    expect(readAdcChannel0()).toBeCloseTo(511, -1);
+  });
+
+  it("clamps out-of-range voltages to 0..5", () => {
+    adapter.writeAnalogPin("C0", 10);
+    expect(readAdcChannel0()).toBe(1023);
+
+    adapter.writeAnalogPin("C0", -1);
+    expect(readAdcChannel0()).toBe(0);
+  });
+
+  it("rejects a non-ADC-capable pin", () => {
+    expect(() => adapter.writeAnalogPin("B5", 3)).toThrow(/ADC-capable/);
+  });
+});
+
+// twiConfig's register addresses (avr8js) - already SRAM-mapped, same as
+// the ADC/GPIO addresses above.
+const TWCR_ADDRESS = 0xbc;
+const TWDR_ADDRESS = 0xbb;
+const TWSR_ADDRESS = 0xb9;
+const TWCR_START = 0xa4; // TWSTA | TWINT | TWEN
+const TWCR_GO = 0x84; // TWINT | TWEN - clears TWINT, lets the bus continue
+const TWCR_GO_ACK = 0xc4; // TWEA | TWINT | TWEN - continue, ack the next received byte
+const DS1307_WRITE = 0x68 << 1; // SLA+W
+const DS1307_READ = (0x68 << 1) | 1; // SLA+R
+
+describe("Avr8Adapter I2C (DS1307 RTC)", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  // Drives the exact register sequence the Arduino Wire library's own
+  // TWI driver produces for `Wire.beginTransmission(0x68); Wire.write(reg);
+  // Wire.endTransmission(false); Wire.requestFrom(0x68, 1);` - START,
+  // SLA+W, register pointer byte, repeated START, SLA+R, one data byte -
+  // confirmed against avr8js's own twi.ts state machine (status codes in
+  // its STATUS_* constants) rather than general I2C folklore, the same
+  // rigor hd44780-decoder.test.ts holds its own protocol replay to.
+  function readRegister(reg: number): number {
+    const cpu = cpuOf(adapter);
+
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, DS1307_WRITE);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, reg);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+
+    cpu.writeData(TWCR_ADDRESS, TWCR_START); // repeated start
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, DS1307_READ);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO_ACK);
+    adapter.step(20);
+
+    return cpu.data[TWDR_ADDRESS];
+  }
+
+  it("acks the DS1307's real address (0x68) and reports the bus idle beforehand", () => {
+    const cpu = cpuOf(adapter);
+    expect(cpu.data[TWSR_ADDRESS] & 0xf8).toBe(0xf8); // STATUS_TWI_IDLE
+  });
+
+  it("register 0 (seconds) reads back a valid BCD seconds value", () => {
+    const value = readRegister(0);
+    const high = value >> 4;
+    const low = value & 0xf;
+    expect(high).toBeLessThanOrEqual(5); // BCD tens-of-seconds digit: 0-5
+    expect(low).toBeLessThanOrEqual(9);
+    expect(high * 10 + low).toBeLessThanOrEqual(59);
+  });
+
+  it("NVRAM (register 0x08+) round-trips a written byte", () => {
+    const cpu = cpuOf(adapter);
+
+    // Write 0x42 to NVRAM register 0x08.
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, DS1307_WRITE);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, 0x08);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, 0x42);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWCR_ADDRESS, 0x94); // TWSTO | TWINT | TWEN - stop
+    adapter.step(20);
+
+    expect(readRegister(0x08)).toBe(0x42);
+  });
+
+  it("NACKs an address that isn't the DS1307's", () => {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, 0x50 << 1); // some other device's address
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    expect(cpu.data[TWSR_ADDRESS] & 0xf8).toBe(0x20); // STATUS_SLAW_NACK
+  });
+});
+
 describe("Avr8Adapter serial output", () => {
   let adapter: Avr8Adapter;
 
@@ -118,6 +264,100 @@ describe("Avr8Adapter serial output", () => {
     cpu.writeData(UDR_ADDRESS, 42);
 
     expect(cb).toHaveBeenCalledWith(42);
+  });
+});
+
+// eepromConfig's register addresses (avr8js) - already SRAM-mapped.
+const EECR_ADDRESS = 0x3f;
+const EEDR_ADDRESS = 0x40;
+const EEARL_ADDRESS = 0x41;
+const EEARH_ADDRESS = 0x42;
+const EECR_EEMPE_EEPE = 0x06; // EEMPE | EEPE - arm and immediately commit an erase+write
+const EECR_EERE = 0x01; // EERE - synchronous read
+
+describe("Avr8Adapter EEPROM", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  // Drives the exact register sequence avr-libc's eeprom_write_byte()/
+  // eeprom_read_byte() compile down to (EEAR then EEDR then EECR) -
+  // confirmed against avr8js's own eeprom.ts write hook, which performs
+  // the erase+write (or the read) synchronously within that one EECR
+  // write, not behind the write-complete timer it also schedules (that
+  // timer only gates a *second* write attempt / the ready interrupt, not
+  // the actual memory mutation - see eeprom.ts's own writeCompleteCycles
+  // handling), so no cycle-stepping is needed to observe the result.
+  function writeByte(addr: number, value: number): void {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(EEARL_ADDRESS, addr & 0xff);
+    cpu.writeData(EEARH_ADDRESS, (addr >> 8) & 0xff);
+    cpu.writeData(EEDR_ADDRESS, value);
+    cpu.writeData(EECR_ADDRESS, EECR_EEMPE_EEPE);
+  }
+
+  function readByte(addr: number): number {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(EEARL_ADDRESS, addr & 0xff);
+    cpu.writeData(EEARH_ADDRESS, (addr >> 8) & 0xff);
+    cpu.writeData(EECR_ADDRESS, EECR_EERE);
+    return cpu.data[EEDR_ADDRESS];
+  }
+
+  it("starts erased (0xff), matching a fresh chip's real reset state", () => {
+    expect(readByte(0)).toBe(0xff);
+    expect(readByte(1023)).toBe(0xff); // last byte of the atmega328p's 1KB EEPROM
+  });
+
+  it("round-trips a written byte", () => {
+    writeByte(5, 0x42);
+    expect(readByte(5)).toBe(0x42);
+    expect(readByte(4)).toBe(0xff); // neighboring byte untouched
+  });
+
+  it("survives reset() - EEPROM is battery-backed, not wiped by a power cycle", () => {
+    writeByte(10, 0x99);
+    adapter.reset();
+    expect(readByte(10)).toBe(0x99);
+  });
+
+  it("survives loadFirmware() - the same physical chip, new sketch", () => {
+    writeByte(20, 0x7a);
+    adapter.loadFirmware(new Uint8Array([0xff, 0xff]));
+    expect(readByte(20)).toBe(0x7a);
+  });
+});
+
+describe("Avr8Adapter chip variants", () => {
+  it("defaults to the atmega328p's 3-port, 32KB-flash shape", async () => {
+    const adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+    const ports = (adapter as unknown as { ports: Map<string, unknown> }).ports;
+    expect([...ports.keys()].sort()).toEqual(["B", "C", "D"]);
+    expect((adapter as unknown as { program: Uint16Array }).program.length).toBe(0x8000);
+  });
+
+  it("ATMEGA2560 gives the adapter all 11 Mega ports and 256KB of flash", async () => {
+    const adapter = new Avr8Adapter(ATMEGA2560);
+    await adapter.init(undefined);
+    const ports = (adapter as unknown as { ports: Map<string, unknown> }).ports;
+    expect([...ports.keys()].sort()).toEqual(["A", "B", "C", "D", "E", "F", "G", "H", "J", "K", "L"]);
+    expect((adapter as unknown as { program: Uint16Array }).program.length).toBe(0x20000);
+
+    // A digital pin genuinely off the atmega328p's port set (e.g. "A0" -
+    // PORTA doesn't exist on an Uno at all) now resolves and round-trips.
+    expect(adapter.readPin("A0")).toBe(0);
+    adapter.writePin("A0", 1);
+    expect(adapter.readPin("A0")).toBe(1);
+
+    // A0 (the Arduino silkscreen analog pin, PORTF bit 0 on a Mega - see
+    // boards/arduino-mega.ts) is ADC-capable; PORTA isn't part of the
+    // ADC at all on this chip.
+    adapter.writeAnalogPin("F0", 3);
+    expect(() => adapter.writeAnalogPin("A0", 3)).toThrow(/ADC-capable/);
   });
 });
 

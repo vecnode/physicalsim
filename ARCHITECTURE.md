@@ -1327,6 +1327,455 @@ just unit-by-unit: a hand-assembled 3-word program (`LDI r16, 'H'` /
 instruction decoder) loaded through the real UI and produced a live
 stream of `H` characters in the terminal once Started.
 
+## Feature parity vs. velxio (davidmonterocrespo24/velxio)
+
+velxio (velxio.dev) is the closest comparable project: an open-source,
+browser-based Arduino/RP2040/ESP32 emulator built on the same two core
+libraries physicalsim vendors (`avr8js`, `rp2040js`), plus `wokwi-elements`
+for its components. Its docs (`/docs/emulator`, `/docs/roadmap`,
+`/docs/components`) were reviewed 2026-07-24 to check what it has wired up
+that physicalsim doesn't. Kept here, not just as a chat answer, because the
+gap is concrete and actionable — it's a to-do list, not a vibe.
+
+### What velxio has that physicalsim doesn't (yet)
+
+*(Updated 2026-07-24 — ADC, SPI/I2C bus-level, Nano/Mega/RP2040 boards,
+and EEPROM shipped since this section was first written; see "Shipped"
+below. The bullets below are what's still actually open.)*
+
+- **SPI/I2C device-specific decoding** for `ILI9341`, the SD card
+  element, `SSD1306`, and `MPU6050` — `AVRSPI`/`AVRTWI` are constructed
+  now (fixes the hang bug for all of them), and one I2C device
+  (`DS1307`) has real protocol-level behavior, but these four still don't
+  decode what a sketch actually sends them. I2C-mode `LCD1602`/`LCD2004`
+  is the same story (today's LCD support is HD44780 4-bit parallel only,
+  via `ProtocolChain`/`Hd44780Decoder` — a different, already-solid
+  mechanism, just not the I2C variant).
+- **RP2040 (Raspberry Pi Pico) I2C/SPI/PIO** — UART0 and GPIO26-29's ADC
+  are wired now (see "Shipped"); `simulators/rp2040js/src/peripherals/`
+  also ships `i2c.ts`, `spi.ts`, `pio.ts`, `dma.ts`, `usb.ts`, `rtc.ts`,
+  all live the moment `new RP2040()` runs (it's a monolithic full-chip
+  model) but not yet exposed through `Rp2040Adapter`'s own RPC surface.
+- **ESP32 / ESP32-S3 (Xtensa LX6/LX7)** — velxio runs these through a
+  QEMU fork with a custom Xtensa target (`lcgamboa`'s `libqemu-xtensa`),
+  bridged over WebSocket from a Python backend. physicalsim's existing
+  `cortex-m` adapter is architecturally the right shape for this (a
+  native-backed adapter reached only through the bridge, per "Two adapter
+  kinds" above) but targets `qemu-system-arm`, not Xtensa — a genuinely
+  different QEMU build, not a config tweak.
+- **ESP32-C3 (RISC-V RV32IMC)** — velxio has *two* paths: the same
+  QEMU-Xtensa-family pipeline with a RISC-V target, and a from-scratch
+  TypeScript RV32IMC interpreter (`RiscVCore.ts`) used for ISA unit
+  testing, not production. physicalsim has no RISC-V story at all yet.
+- **Raspberry Pi 3 (QEMU, ARM Cortex-A)** — unrelated to Arduino-shaped
+  work, but in velxio's catalog; would be a `cortex-a` adapter kind,
+  architecturally identical in spirit to `cortex-m`'s native-backed QEMU
+  bridge, targeting a different QEMU machine.
+
+**Other gaps, smaller:**
+
+- **Serial RX** — `AVRUSART.writeByte()` (injecting a byte the CPU's
+  `Serial.read()` would see) already exists in `avr8js` and is already
+  noted as unused in the Serial Monitor section above; velxio's Serial
+  Monitor supports sending input, physicalsim's is transmit-only.
+- **Capacitor / Inductor** as placeable passive components (velxio has
+  both; physicalsim only has Resistor/Potentiometer in that category).
+- **Oscilloscope component** (plot analog pin voltage over time) — on
+  velxio's roadmap, not shipped by either project. A land-first
+  opportunity, same spirit as EEPROM was (see "Shipped" below — that one's
+  done now, and velxio still doesn't have it).
+- **Wire-level electrical validation** (short-circuit / invalid-connection
+  detection) — velxio lists this as "in progress"; physicalsim's wires are
+  logical routing only (see "Pin-to-pin wiring" above), same as velxio's
+  shipped state today.
+- **Product-surface features** (Monaco multi-file workspace, arduino-cli
+  backend compile via FastAPI, cloud project persistence, auth, Library
+  Manager, multiplayer): real velxio features, but SaaS/editor surface,
+  not simulator core — physicalsim already has an equivalent in-app
+  compiler (`POST /compile`, `src/avr_toolchain.cpp`) with a different,
+  arguably stronger architecture (see below), so these aren't tracked here
+  as gaps so much as a different product shape.
+
+### Where physicalsim is already stronger
+
+- **No backend process required for any of it.** velxio's own docs are
+  explicit that ESP32/ESP32-S3/ESP32-C3/RPi3 emulation "requires the
+  velxio backend to be running... not in a pure static frontend
+  deployment" — those boards don't work in a self-contained build at all.
+  physicalsim's native shell *is* the backend: `qemu-system-arm` is
+  spawned directly by `src/main.cpp`, no separate server process, no
+  network hop, works fully offline in one binary.
+- **One uniform adapter interface across two genuinely different
+  execution models.** velxio bridges its QEMU-backed boards over a
+  bespoke WebSocket protocol per chip family (`Esp32Bridge`, etc.);
+  physicalsim's `SimulatorAdapter`/`SimClient` interface already
+  abstracts Worker-backed (`avr8`, `rp2040`) and native-backed
+  (`cortex-m`) adapters behind one shape (see "Two adapter kinds" above),
+  so `adapter-registry.ts` and the UI don't know or care which kind they
+  got. Adding Xtensa/RISC-V/Cortex-A means new adapter *packages*, not new
+  UI-level plumbing.
+- **An external automation surface velxio doesn't have.** The native
+  `POST /bridge/:adapter/:method` HTTP surface (see "The native <-> JS
+  bridge" above) lets an outside tool (droidcli) drive any adapter without
+  going through a browser tab at all — velxio's WebSocket bridges are
+  reached only from its own frontend.
+- **Multi-pin protocol decoding verified against real vendored source, not
+  general datasheet folklore.** `Hd44780Decoder` is checked line-by-line
+  against `simulators/LiquidCrystal/src/LiquidCrystal.cpp`'s actual pulse
+  sequence (nibble pairing, latch edge, priority-encoded instruction
+  decode) and tested by replaying that exact sequence
+  (`hd44780-decoder.test.ts`) — velxio's docs don't describe an equivalent
+  verification methodology for its own component decoders.
+- **Vendored, editable forks, not npm dependencies.** `avr8js`,
+  `rp2040js`, and `wokwi-elements` are all `vecnode/*` git submodules
+  physicalsim can patch directly (see the build pipeline note below on
+  `useDefineForClassFields`) rather than being locked to whatever upstream
+  publishes.
+- **No account, no cloud, no lock-in.** Every velxio feature above the
+  "Implemented" line in its roadmap that isn't board/peripheral emulation
+  is auth, persistence, or collaboration tooling — a different product
+  bet. physicalsim's single-binary, everything-local model is a
+  deliberate tradeoff, not a gap to close.
+
+### On "current"/AC-DC: what physicalsim models today, and what it doesn't
+
+Neither project does analog circuit simulation. `web/shell/src/energy.ts`
+(`computeEnergy()`) is explicitly a **nominal, not-solved** model — a
+fixed idle/running mA lookup per board type (see its own header comment:
+"Nominal values only, not solved from a real topology... there's no
+wiring between components yet for anything Ohm's-law-shaped to apply
+to"). It reports one number for "how much current this board draws," not
+a per-wire or per-component current, and there is no AC modeling anywhere
+— every board here is a DC logic-level MCU (5V or 3.3V rails), which is
+also all velxio's docs describe (their wire system is digital/analog
+*signal* routing with color-coded types, not a solved electrical network
+either — "electrical signal routing and validation" is still "in
+progress" on their own roadmap, not a SPICE-style solver). A real
+per-component voltage/current readout — the natural target if "illustrate
+current" means "show what's flowing through this wire" rather than "board
+power draw" — would need a real topology solver (nodal/MNA-style, as
+`energy.ts`'s own comment anticipates), which is a materially bigger,
+separate project, not a peripheral-wiring task like ADC/SPI/I2C above.
+
+### Shipped (2026-07-24, following the plan above)
+
+Items 1-5 of the original plan landed in one pass:
+
+- **AVR ADC** — `AVRADC` constructed in `Avr8Adapter.attachPeripherals()`;
+  a new `writeAnalogPin?` capability on `SimulatorAdapter`
+  (`adapter-types.ts`), routed end-to-end through a new `CircuitPin.
+  writeAnalog()`, a new `componentAnalogPins` registry (`component-
+  analog-pin.ts`, the analog counterpart to `componentSignalPins`), and a
+  new `AnalogChain` (`analog-chain.ts`, structurally the same shape as
+  `SignalChain`/`ProtocolChain`) wired into `main.ts`. Potentiometer,
+  slide-potentiometer, and analog-joystick's VERT/HORZ now drive real
+  `analogRead()` values. Covered by `adapter.test.ts`'s "Avr8Adapter
+  analog input" block (a real ADMUX/ADCSRA/ADCL/ADCH register round trip,
+  not just a channelValues-level check).
+- **AVR SPI / I2C** — `AVRSPI` and `AVRTWI` are now constructed
+  unconditionally in `attachPeripherals()`, which alone fixes every
+  sketch that touches `SPI.transfer()`/`Wire.endTransmission()` from
+  hanging forever (previously, writes to `SPDR`/`TWCR` had no
+  `writeHooks` at all, so the completion flag those calls poll for never
+  set). One concrete I2C device decoder shipped on top:
+  **`DS1307Device`** (`ds1307.ts`), a real `TWIEventHandler` implementing
+  the DS1307's actual register map (0x00-0x06 BCD clock/calendar,
+  0x08-0x3F NVRAM), bound unconditionally at I2C address 0x68 (I2C is
+  address-based, not wire-routed, so it doesn't need a placed-and-wired
+  `wokwi-ds1307` element to be "on the bus" — the same reasoning Serial
+  output doesn't depend on the Serial Monitor pane being open). Clock
+  registers are computed live from the host machine's wall-clock time on
+  every read (a documented simplification — `rtc.adjust()` acks correctly
+  but doesn't stick); NVRAM genuinely round-trips. SSD1306/MPU6050/
+  ILI9341/SD still have no device-specific decoder — the *bus* now works
+  correctly for them (no more hangs), but nothing decodes what they'd be
+  sent yet. Covered by `adapter.test.ts`'s "Avr8Adapter I2C (DS1307 RTC)"
+  block, replaying the real Wire-library register sequence (START, SLA+W,
+  pointer byte, repeated START, SLA+R) against avr8js's own TWI state
+  machine.
+- **Arduino Nano and Mega boards** — Nano was already fully registered
+  (this doc undersold that). Mega needed more than a registry entry: it's
+  a different chip (`ATmega2560`, 11 GPIO ports vs the Uno/Nano's 3, 256KB
+  flash vs 32KB), so `Avr8Adapter` was refactored to take an `AvrChipConfig`
+  (`chip.ts` — `ATMEGA328P`/`ATMEGA2560`) instead of hardcoding
+  `portB`/`portC`/`portD`/`FLASH_WORDS`; a new `avr8-mega` `AdapterId` and
+  `worker-mega.ts` entry point keep it from sharing a CPU instance with
+  Uno/Nano's `avr8` (clients are cached one-per-id — two boards of a
+  *different* chip sharing one would corrupt state, unlike Uno+Nano
+  sharing `avr8` today, which is correct since they're the same chip).
+  `boards/arduino-mega.ts`'s D0-D53/A0-A15 → port.bit pin map is the real
+  ATmega2560 datasheet pinout, not derived from the Uno's. Mega's ADC is
+  scoped to A0-A7 (`PORTF`) only — A8-A15 (`PORTK`) would need the
+  `ADCSRB` MUX5 bit for a 16-channel ADC, which this fork's `adcConfig`
+  doesn't model; a documented gap, not a silent one. Covered by
+  `adapter.test.ts`'s "Avr8Adapter chip variants" block.
+
+  **The sketch compiler needed the same chip-awareness.** CPU emulation
+  alone wasn't enough for a real Mega example: `src/avr_toolchain.cpp`
+  was hardcoded to `-mmcu=atmega328p` + ArduinoCore-avr's "standard"
+  variant for every compile, so a sketch's `pinMode(13, ...)` always
+  compiled down to the Uno's PB5 regardless of which board was actually
+  placed - wiring an LED to a Mega's real D13 (PB7, per `arduino-mega.ts`
+  above) would've stayed dark. Fixed by making the whole compile path
+  board-aware: `avr_toolchain.cpp` gained `resolve_board_target()`
+  (board string -> `{mcu, variant, define}` - Mega gets `atmega2560` +
+  `variants/mega`), `POST /compile`'s body gained an optional `"board"`
+  field, and `main.ts`'s `compileAndRun()` now sends whichever board is
+  actually backing the active adapter. `ArduinoCore-avr/variants/mega`
+  (a single `pins_arduino.h`, restored verbatim from upstream
+  `arduino/ArduinoCore-avr` - it had been dropped in the original
+  "cores/arduino + variants/standard only" trim) had to come back for
+  this to even be possible; CMakeLists.txt's POST_BUILD copy step now
+  bundles both variants unconditionally, the same "small enough to
+  always ship" posture the trim already established.
+
+  Verified end-to-end, not just unit-by-unit: built and ran the real
+  packaged `physicalsim.exe` headless against its own bundled `avr-gcc`,
+  compiled the same Blink sketch for both `arduino-uno` and
+  `arduino-mega` via the real `/compile` endpoint, and confirmed the two
+  resulting Intel HEX outputs genuinely differ (13128 vs 7284 hex-text
+  bytes - Mega's larger core/vector table, not just a different byte or
+  two) while an omitted `board` field still produces byte-identical
+  output to an explicit `"arduino-uno"` (the pre-existing default
+  preserved exactly). A new `"mega-blink"` example (`main.ts`'s
+  `EXAMPLES`) exercises the same path end-to-end from the UI.
+- **RP2040 UART + ADC, and a placeable RP2040 board** — `Rp2040Adapter`
+  gained `onSerialData?` (wired to `mcu.uart[0].onByte` once in the
+  constructor — RP2040 is one monolithic class whose peripherals survive
+  `reset()`, unlike avr8's per-reset CPU recreation) and `writeAnalogPin?`
+  (GPIO26-29 → `mcu.adc.channelValues[0..3]`, scaled against the Pico's
+  3.3V reference — rp2040js's ADC stores raw 12-bit codes directly, unlike
+  avr8js's voltage-based `channelValues`). Discovered along the way: no
+  plain "Raspberry Pi Pico" element exists in the vendored
+  `wokwi-elements` fork — the one RP2040-family element is `wokwi-nano-
+  rp2040-connect` (Arduino Nano RP2040 Connect, Arduino-Nano-shaped D/A
+  pin markers, not bare `GP<n>`). `boards/nano-rp2040-connect.ts`'s pin
+  map comes straight from that element's own `pinInfo.description`
+  fields (e.g. `D10` → `GPIO05`), not guessed. `rp2040-board.ts`'s
+  existing generic `GP<n>` identity map was left alone (nothing placeable
+  uses it; it exists for `board.test.ts`'s own coverage). Covered by
+  `adapter.test.ts`'s "Rp2040Adapter analog input"/"serial output" blocks.
+- **AVR EEPROM** — `AVREEPROM` + `EEPROMMemoryBackend`, sized per chip
+  variant (1KB atmega328p / 4KB atmega2560, via `chip.ts`'s new
+  `eepromBytes`). The backend is constructed once in the adapter's own
+  constructor, not per-reset in `attachPeripherals()` — real EEPROM is
+  battery-backed, so its contents survive Stop/Start, Reset, and even
+  `loadFirmware()`'s reboot into a new sketch, matching real hardware.
+  It does *not* survive this Worker being torn down (a full page reload)
+  — in-memory only, a documented gap, not persisted to IndexedDB/disk.
+  velxio still doesn't have this at all (their own roadmap: "planned:
+  mid-term") — genuinely ahead here, not catching up. Covered by
+  `adapter.test.ts`'s "Avr8Adapter EEPROM" block (real EECR/EEDR/EEARL/
+  EEARH register round trip, including the erase-then-write semantics a
+  real chip's `EEPROMMemoryBackend.writeMemory()`'s AND-not-assign
+  behavior requires).
+- **RP2040 I2C (DS1307)** — unlike avr8's SPI/TWI, `rp2040js`'s `RP2040`
+  class already constructs I2C0/I2C1/SPI0/SPI1/PIO0/PIO1 unconditionally
+  (`rp2040.ts`'s own `readonly i2c = [...]` etc.) — there was never a
+  "bus hangs, nothing's wired" bug to fix here the way there was for
+  avr8. What was missing was the same device-specific layer:
+  `adapters/rp2040/src/ds1307.ts` is a second `DS1307Device`, a
+  near-duplicate of avr8's own one, written against `RPI2C`'s different
+  callback shape (`onStart`/`onConnect`/`onWriteByte`/`onReadByte`/
+  `onStop` flat callbacks, vs. avr8js's `TWIEventHandler` interface
+  object) — different enough APIs that sharing one implementation wasn't
+  a clean fit, so this is deliberate duplication, not an oversight. Bound
+  to I2C0 unconditionally in `Rp2040Adapter`'s constructor, same "address-
+  based, not wire-routed" reasoning as the avr8 version. Covered by
+  `ds1307.test.ts`, using a lightweight fake of the 5 callbacks
+  `DS1307Device` actually touches rather than driving `RPI2C`'s own much
+  larger DesignWare-style FIFO/register state machine.
+
+All of the above passes `npm run typecheck` and `npm test` (69 tests) across
+every workspace, and the app was smoke-tested in a running dev server with
+zero console/build errors after each stage.
+
+### Still open
+
+- **Device-specific SPI decoders** for ILI9341 and the SD card element
+  (avr8) — the bus-level hang bug is fixed (`AVRSPI` is constructed), but
+  neither decodes what it's actually sent yet. Same shape of project as
+  `DS1307Device`, against `AVRSPI`'s `onByte` hook instead of a
+  `TWIEventHandler`.
+- **SSD1306 / MPU6050 (I2C)** — same story, but these fit the exact
+  `TWIEventHandler`/`RPI2C`-callback pattern `DS1307Device` already
+  established on both adapters, so they're the more mechanical follow-up
+  of the two SPI/I2C gaps above.
+- **RP2040 PIO** — genuinely no AVR analog (PIO is RP2040-specific
+  assembly-programmable state machines, used for things like WS2812/
+  NeoPixel timing); `rp2040js`'s `pio.ts` is constructed and live, but
+  nothing decodes a running PIO program's output yet. A real project on
+  its own, not a small follow-up.
+- **RP2040 board-placement parity** beyond GPIO/UART/ADC/I2C — no SPI
+  exposure yet, and no second RP2040-family element exists in the
+  vendored fork to place a "real" Pico with (see above).
+- **A `cortex-a` (Raspberry Pi 3, QEMU) or Xtensa/RISC-V (ESP32 family)
+  adapter**, if broader board coverage matters more than the peripheral
+  depth just added. Same shape as `cortex-m` (native-backed, QEMU-driven,
+  no JS/TS library exists for these architectures) — see "Two adapter
+  kinds" above. A bigger lift than everything above (a working QEMU build
+  for a new target architecture, a GDB-stub-based step protocol for it,
+  etc.).
+- **Wire-level electrical validation** (short-circuit / invalid-connection
+  detection) and an **oscilloscope component** are both still open on
+  velxio's own roadmap too — real, documented user-facing features either
+  project could ship next, lower priority than the device decoders above.
+
+## RP2040 firmware pipeline
+
+physicalsim can run real compiled firmware on `avr8`/`avr8-mega`
+(`src/avr_toolchain.cpp` + `loadFirmware()`) and, as of 2026-07-24, on
+`rp2040` too (`src/rp2040_toolchain.cpp` + `Rp2040Adapter.loadFirmware()`).
+This section covers the design that was scoped first (still accurate),
+what actually shipped, and one real limitation discovered while building
+it (`sleep_ms()` doesn't work yet - see "Known limitation" below).
+
+**Not QEMU.** `cortex-m` uses QEMU specifically because *no JS/TS CPU
+emulator exists for generic ARM Cortex-M* (see "Two adapter kinds"
+above). That reasoning doesn't apply to RP2040: `rp2040js` already *is*
+a complete, actively-maintained RP2040 emulator (dual Cortex-M0+, all the
+peripherals this project has been wiring into `Rp2040Adapter`) - it's
+what Wokwi's own real product runs. Standing up a second, separate QEMU
+process specifically for RP2040 would be strictly worse (QEMU's RP2040
+board support is comparatively immature) and would fight the reason
+`rp2040js` was chosen as physicalsim's second board family in the first
+place. The missing piece isn't emulation - it's compilation.
+
+**What's missing is exactly one thing: a compiler.** Confirmed directly
+against `rp2040js`'s own demo code
+(`demo/load-flash.ts`, `demo/bootrom.ts` in the `wokwi/rp2040js` repo):
+
+- `RP2040`'s bootrom (the real Raspberry Pi bootrom ROM image, `pico-
+  bootrom` revision B1) is already built into the class - `new RP2040()`
+  boots exactly like real hardware, no extra setup needed.
+- Loading a compiled program is `rp2040.flash.set(bytes, flashAddress -
+  FLASH_START_ADDRESS)` - literally a `Uint8Array.set()` at an offset,
+  no HEX/UF2 framing required for a plain flash image starting at
+  address 0 (the same shape `Avr8Adapter.loadFirmware()` already has,
+  even simpler - no Intel HEX parsing step, since AVR's HEX convention
+  doesn't apply to RP2040 at all).
+- What's needed to *produce* that image: a real ELF, linked with a
+  correct stage-2 bootloader stub + checksum (what a normal pico-sdk/
+  arduino-pico CMake build already embeds via its linker script),
+  `objcopy -O binary`'d down to raw bytes.
+
+**The toolchain that actually shipped: `arm-none-eabi-gcc` + raw
+`pico-sdk`, not `arduino-pico`.** The original plan above called for
+`earlephilhower/arduino-pico` (an Arduino-API-compatible wrapper). Once
+`arm-none-eabi-gcc` was actually in hand (a real xPack prebuilt release,
+`downloads.arduino.cc` has no arm-none-eabi-gcc mirror at the
+`BUNDLE_AVR_TOOLCHAIN`-style well-known URL, confirmed by trying), a
+from-scratch spike proved `arduino-pico`'s ~300MB, deeply CMake-generated-
+header-dependent tree wasn't necessary for a first working slice - raw
+`raspberrypi/pico-sdk` (forked untrimmed to `vecnode/pico-sdk`, ~9MB) gets
+a real sketch compiling and running with far less surface area. This means
+today's RP2040 sketches use **pico-sdk's own C API** (`gpio_init()`,
+`gpio_put()`) inside the same `setup()`/`loop()` shape AVR sketches use,
+**not** Arduino's (`pinMode()`/`digitalWrite()`) - a real, documented
+difference from the AVR boards, not an oversight. `arduino-pico` remains
+the right target for a future Arduino-API-compatible layer on top of what
+exists now; nothing below forecloses that.
+
+- **`simulators/pico-sdk`** - a genuine fork of `raspberrypi/pico-sdk`
+  (`gh repo fork`, real `parent`/upstream-tracking relationship, matching
+  how `ArduinoCore-avr` was redone the same session), vendored
+  **untrimmed** - unlike `ArduinoCore-avr`'s `cores/arduino`+one-variant
+  trim, `pico-sdk`'s CMake build reaches into many of its own
+  subdirectories dynamically (confirmed while getting a real build
+  working - `pico/config_autogen.h` alone is generated by scanning
+  `// PICO_CONFIG:`-annotated comments across the whole tree), so there's
+  no clean per-file trim boundary the way `ArduinoCore-avr`'s flat
+  `cores/arduino` had. At ~9MB it doesn't need one - small enough to
+  always ship, the same "small enough, don't bother trimming" call
+  `LiquidCrystal` and `ArduinoCore-avr` (now) both already made.
+- **`src/rp2040_toolchain.cpp`+`src/rp2040_sketch_template/CMakeLists.txt`**
+  - genuinely different shape from `avr_toolchain.cpp`'s flat "invoke gcc
+  per file": `pico-sdk` needs real CMake (the config-header generation
+  above, plus the boot stage-2 bootloader's own checksummed-assembly
+  build step - see "Known limitation" below for how that checksum was
+  confirmed correct without hand-reimplementing it). `compile_sketch()`
+  configures a **persistent** CMake+Ninja build directory once per
+  process (a from-scratch `pico-sdk` build is ~70 translation units -
+  redoing that per click, the way `avr_toolchain.cpp`'s per-request temp
+  dirs do, would make every "Compile & Run" slow), then just overwrites
+  `sketch.c` and reruns `cmake --build` - Ninja's own incremental
+  rebuild only recompiles what changed. `PICO_NO_PICOTOOL=1` is passed
+  unconditionally: `picotool` (UF2/signing metadata post-processing,
+  optional) failed to build with the host MinGW `gcc` this environment
+  happened to have on `PATH` (`intrin.h` doesn't exist outside MSVC) -
+  irrelevant anyway, since nothing downstream needs UF2 framing (see
+  below).
+- **`src/process_exec.hpp`/`.cpp`** - the Windows-`CreateProcess`/POSIX-
+  `posix_spawn` blocking-process-runner extracted out of
+  `avr_toolchain.cpp` (which originated it) once `rp2040_toolchain.cpp`
+  needed the identical logic - a second ~150-line copy would've been a
+  real duplication smell, unlike the small per-file config differences
+  the two toolchains otherwise don't share.
+- **`Rp2040Adapter.loadFirmware(bytes)`** - confirmed directly against
+  `rp2040js`'s own `demo/load-flash.ts`/`demo/bootrom.ts` that loading a
+  compiled program is genuinely just `mcu.flash.set(bytes, 0)`, no UF2/
+  HEX framing needed for a plain image at flash offset 0. What the plan
+  above got wrong: it assumed simulating the real ROM bootrom's cold-boot
+  sequence (`mcu.core.reset()` with `VTOR=0`) would work end-to-end.
+  It doesn't - `rp2040js`'s `CLOCKS`/`PLL_SYS`/`PLL_USB`/`VREG_AND_CHIP_
+  RESET` peripherals log "Unimplemented peripheral" for several registers
+  real bootrom's hardware bring-up touches, and execution never leaves
+  ROM. The fix, confirmed working: skip bootrom/boot2 execution
+  entirely and jump straight to the **application's own vector table**
+  (read `SP`/`PC` from flash offset `0x100` - the fixed size every
+  RP2040 boot2 region reserves, a hardware constant, not toolchain-
+  specific) - exactly what an attached hardware debugger's "reset and
+  run" does. `boot2`'s own code is still linked into the binary
+  (`pico-sdk`'s linker script requires the space to exist), it's just
+  never executed - since `rp2040js` reads flash directly out of its own
+  array rather than a physical SPI chip, `boot2`'s real job
+  (configuring the flash controller for XIP reads) has nothing to warm
+  up here. `mcu.loadBootrom()` is still called (real ROM image, vendored
+  verbatim into `web/adapters/rp2040/src/bootrom-b1.ts` since it's not
+  part of `rp2040js`'s own `src/index.ts` exports) because `pico-sdk`'s
+  runtime calls a handful of ROM-provided double/float math shims at
+  runtime - unrelated to the boot sequence, and confirmed still needed
+  even though boot code itself is skipped.
+- **Routing** - `POST /compile`'s `board` field (added for the Mega work
+  above) routes `"nano-rp2040-connect"` to `rp2040_toolchain.cpp` instead
+  of `avr_toolchain.cpp` in `main.cpp`'s handler; the response carries a
+  new `binHex` field (plain hex-pair-per-byte, no Intel HEX framing -
+  RP2040 has no such convention) instead of `hexText`, decoded on the
+  frontend by a new `parseHexBytes()` in `main.ts` (a few lines - nowhere
+  near `parseIntelHex()`'s complexity, since there's no record structure
+  to parse).
+
+**Known limitation: `sleep_ms()` hangs.** Confirmed by hand, isolated from
+everything else: a `pico-sdk` program using `sleep_ms()` compiles,
+loads, and starts correctly (GPIO output, direction, and the surrounding
+program logic all run) but never returns from its first `sleep_ms()`
+call - `rp2040js`'s incomplete `CLOCKS`/`PLL` peripheral emulation (the
+same gap that blocks real bootrom cold-boot, above) means the hardware
+timer `sleep_ms()` busy-waits on never advances the way it would need to.
+Confirmed the diagnosis, not just observed the symptom: the *exact same*
+program compiled with a hand-rolled cycle-count busy-wait instead of
+`sleep_ms()` runs correctly (verified both in isolation against
+`rp2040js` directly, and live through the real running app - GPIO25
+toggling, LED visibly blinking). The shipped `"rp2040-blink"` example
+(`main.ts`'s `EXAMPLES`) uses that busy-wait, with a comment explaining
+why, rather than `sleep_ms()` - not a permanent design choice, a
+documented workaround for a real, narrower peripheral-emulation gap
+(distinct from the boot2/bootrom gap above, discovered while chasing it)
+worth fixing in `rp2040js` directly at some point.
+
+Verified end-to-end through every layer, not just unit-by-unit: a real
+`arm-none-eabi-gcc` (xPack prebuilt) compiling real `pico-sdk` source
+through real `cmake`+`ninja`; the resulting binary run directly against
+`rp2040js` in isolation (GPIO25 toggling, confirmed by a step-by-step
+trace); the *exact* bytes physicalsim's own `/compile` endpoint produced
+(via a direct HTTP request against the real built `physicalsim.exe`) run
+the same way with the same result; and the full path from the browser UI
+- clicking the `"rp2040-blink"` example, clicking "Compile & Run", then
+"Start" - producing a live-running simulation (`CYCLES` advancing,
+`VOLTAGE`/`CURRENT` reflecting the RP2040 power profile) with the LED
+genuinely blinking, confirmed via `wokwi-led`'s own `value` property
+changing over time in the running page.
+
 ## Build pipeline
 
 `public/` is never authored by hand — it's Vite's build output

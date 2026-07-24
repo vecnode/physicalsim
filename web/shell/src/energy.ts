@@ -62,6 +62,39 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
       { name: "Vin header", voltage: 9 },
     ],
   },
+  // Same atmega328p as the Uno, same nominal draw - COMPONENTS.md's
+  // "Adding a new board" section calls out a missing entry here as
+  // reading zero rather than erroring, which is what arduino-nano was
+  // doing until now (a pre-existing gap, fixed in passing while adding
+  // arduino-mega below for the same reason).
+  "arduino-nano": {
+    supplyVoltage: 5,
+    currentMa: { idle: 45, running: 60 },
+    sources: [
+      { name: "USB (Mini-B)", voltage: 5, maxCurrentMa: 500 },
+      { name: "Vin header", voltage: 9 },
+    ],
+  },
+  // atmega2560 at the same 16MHz - a bigger die than the 328p but the
+  // real datasheet's active-current figures land in a similar range;
+  // approximate, like arduino-uno's own figures above, not measured from
+  // this simulation.
+  "arduino-mega": {
+    supplyVoltage: 5,
+    currentMa: { idle: 55, running: 90 },
+    sources: [
+      { name: "USB", voltage: 5, maxCurrentMa: 500 },
+      { name: "DC barrel jack (wall adapter)", voltage: 9 },
+      { name: "Vin header", voltage: 9 },
+    ],
+  },
+  // RP2040's own logic level is 3.3V, not 5V - genuinely different from
+  // every other board here, not a copy/paste of the AVR boards' profile.
+  "nano-rp2040-connect": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 20, running: 35 },
+    sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
+  },
 };
 
 // board.powered decides voltage on/off; `running` (the adapter's own

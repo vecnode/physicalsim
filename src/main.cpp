@@ -39,6 +39,7 @@
 #include "webview/webview.h"
 #include "qemu_adapter.hpp"
 #include "avr_toolchain.hpp"
+#include "rp2040_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
 #include <boost/asio.hpp>
@@ -520,7 +521,20 @@ int main(int argc, char **argv) {
   // instance the way pin I/O is, it's a standalone build step whose
   // output (hex text) the browser then feeds through the exact same
   // parseIntelHex() -> loadFirmware() path "Load .hex..." already uses.
-  // POST /compile  body: {"source": "<sketch text>"}
+  // POST /compile  body: {"source": "<sketch text>", "board": "<CircuitBoard.type, optional>"}
+  // "board" selects the -mmcu=/variant target (see avr_toolchain.hpp's
+  // resolve_board_target()) - omitted or unrecognized falls back to
+  // Arduino Uno, matching this endpoint's original single-board behavior.
+  // "nano-rp2040-connect" routes to rp2040_toolchain.cpp instead (a
+  // genuinely different toolchain - arm-none-eabi-gcc + pico-sdk, driven
+  // through cmake rather than avr_toolchain.cpp's flat per-file gcc
+  // invocations - see rp2040_toolchain.hpp and ARCHITECTURE.md's "RP2040
+  // firmware pipeline" section). Its output is a raw flash binary, not
+  // Intel HEX (RP2040 has no such convention), so it comes back as
+  // "binHex" (plain hex-pair-per-byte, no Intel HEX record framing) rather
+  // than reusing "hexText" - the two boards' compile outputs are shaped
+  // differently enough that overloading one field name would be
+  // misleading, not simplifying.
   server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
     json body;
     try {
@@ -538,8 +552,28 @@ int main(int argc, char **argv) {
       res.set_content(R"({"ok":false,"log":"empty sketch source"})", "application/json");
       return;
     }
+    const std::string board = body.value("board", std::string{"arduino-uno"});
 
-    const auto result = avrtoolchain::compile_sketch(source);
+    if (board == "nano-rp2040-connect") {
+      const auto result = rp2040toolchain::compile_sketch(source);
+      json out = {{"ok", result.ok}, {"log", result.log}};
+      if (result.ok) {
+        static const char *hex_digits = "0123456789abcdef";
+        std::string hex;
+        hex.reserve(result.binary.size() * 2);
+        for (unsigned char byte : result.binary) {
+          hex.push_back(hex_digits[byte >> 4]);
+          hex.push_back(hex_digits[byte & 0xf]);
+        }
+        out["binHex"] = hex;
+      }
+      res.set_header("Cache-Control", "no-store");
+      res.status = result.ok ? 200 : 422;
+      res.set_content(out.dump(), "application/json");
+      return;
+    }
+
+    const auto result = avrtoolchain::compile_sketch(source, board);
     json out = {{"ok", result.ok}, {"log", result.log}};
     if (result.ok) {
       out["hexText"] = result.hex_text;

@@ -4,22 +4,17 @@
 #include "avr_toolchain.hpp"
 
 #include <atomic>
-#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <sstream>
-#include <thread>
 #include <vector>
+
+#include "process_exec.hpp"
 
 #ifdef _WIN32
 #include <windows.h>
 #else
-#include <fcntl.h>
-#include <signal.h>
-#include <spawn.h>
-#include <sys/wait.h>
 #include <unistd.h>
-extern char **environ;
 #endif
 
 #ifndef PHYSICALSIM_SOURCE_DIR
@@ -175,15 +170,39 @@ std::optional<std::filesystem::path> find_core_dir() {
   return std::nullopt;
 }
 
-std::optional<std::filesystem::path> find_variant_dir() {
-  const auto bundled = executable_dir() / "avr-core" / "variants" / "standard";
+// Board -> {-mmcu= value, ArduinoCore-avr variants/ subdirectory, the
+// ARDUINO_AVR_* define real Arduino board.txt files set for it}. Every
+// entry here is atmega328p + "standard" except Mega, which is a genuinely
+// different chip (see chip.ts's own AvrChipConfig on the JS/TS side for
+// the CPU-emulation half of this same board/chip split) - not just a
+// different define. Keyed by circuit.ts's CircuitBoard.type string, so
+// it stays in lockstep with boardAdapterId there without either file
+// importing the other (this is native C++, that's TS - there's no shared
+// module to put one canonical table in).
+struct BoardTarget {
+  std::string mcu;      // avr-gcc -mmcu=
+  std::string variant;  // ArduinoCore-avr/variants/<variant>
+  std::string define;   // -D<define>
+};
+
+BoardTarget resolve_board_target(const std::string &board) {
+  if (board == "arduino-nano") return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_NANO"};
+  if (board == "arduino-mega") return BoardTarget{"atmega2560", "mega", "ARDUINO_AVR_MEGA2560"};
+  // "arduino-uno", empty, or anything unrecognized - the original
+  // single-board behavior this function generalizes, preserved as the
+  // fallback rather than failing outright.
+  return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_UNO"};
+}
+
+std::optional<std::filesystem::path> find_variant_dir(const std::string &variant) {
+  const auto bundled = executable_dir() / "avr-core" / "variants" / variant;
   std::error_code ec;
   if (std::filesystem::exists(bundled / "pins_arduino.h", ec)) {
     return bundled;
   }
   if (std::string(PHYSICALSIM_SOURCE_DIR).size() > 0) {
     const auto from_source = std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" /
-                              "ArduinoCore-avr" / "variants" / "standard";
+                              "ArduinoCore-avr" / "variants" / variant;
     if (std::filesystem::exists(from_source / "pins_arduino.h", ec)) {
       return from_source;
     }
@@ -229,156 +248,23 @@ std::vector<std::filesystem::path> find_library_dirs() {
   return dirs;
 }
 
-// ---- Process spawning: run one command, wait for it, capture output ------
-// A simpler, blocking-wait version of qemu_adapter.cpp's process-spawn
-// pattern (that file keeps its process running long-term and talks to it
-// over sockets; this one just runs a tool to completion and reads back
-// what it printed).
+using procexec::RunResult;
+using procexec::run_and_wait;
 
 std::atomic<int> g_step_counter{0};
 
-// Minimal quoting adequate for the controlled arguments this file passes
-// (temp file paths, plain flag strings) - not a general-purpose
-// command-line quoting implementation.
-std::string quote_arg_windows(const std::string &arg) {
-  std::string out = "\"";
-  for (char c : arg) {
-    if (c == '"') {
-      out += "\\\"";
-    } else {
-      out += c;
-    }
-  }
-  out += "\"";
-  return out;
-}
-
-struct RunResult {
-  int exit_code = -1;
-  std::string output;
-};
-
-RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::string> &args,
-                        const std::filesystem::path &cwd) {
-  RunResult result;
-  const auto log_path =
-      cwd / ("step-" + std::to_string(g_step_counter.fetch_add(1)) + ".log");
-
-#ifdef _WIN32
-  std::ostringstream cmd;
-  cmd << quote_arg_windows(exe.string());
-  for (const auto &a : args) cmd << " " << quote_arg_windows(a);
-  std::string cmd_str = cmd.str();
-
-  SECURITY_ATTRIBUTES sa{};
-  sa.nLength = sizeof(sa);
-  sa.bInheritHandle = TRUE;
-  HANDLE log_handle = CreateFileW(log_path.wstring().c_str(), GENERIC_WRITE, FILE_SHARE_READ,
-                                   &sa, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
-  if (log_handle == INVALID_HANDLE_VALUE) {
-    result.output = "failed to create compiler log file at " + log_path.string();
-    return result;
-  }
-
-  STARTUPINFOA startup_info{};
-  startup_info.cb = sizeof(startup_info);
-  startup_info.dwFlags = STARTF_USESTDHANDLES;
-  startup_info.hStdOutput = log_handle;
-  startup_info.hStdError = log_handle;
-  startup_info.hStdInput = GetStdHandle(STD_INPUT_HANDLE);
-
-  PROCESS_INFORMATION process_info{};
-  const std::string cwd_str = cwd.string();
-  const BOOL spawned =
-      CreateProcessA(nullptr, cmd_str.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr,
-                      cwd_str.c_str(), &startup_info, &process_info);
-  CloseHandle(log_handle);
-  if (!spawned) {
-    result.output = "failed to spawn " + exe.string();
-    return result;
-  }
-
-  // 30s per step: generous for compiling one translation unit, but still
-  // bounded so a wedged process can't hang the HTTP request thread
-  // forever.
-  const DWORD wait_result = WaitForSingleObject(process_info.hProcess, 30000);
-  if (wait_result == WAIT_TIMEOUT) {
-    TerminateProcess(process_info.hProcess, 1);
-    WaitForSingleObject(process_info.hProcess, 2000);
-  }
-  DWORD exit_code = 1;
-  GetExitCodeProcess(process_info.hProcess, &exit_code);
-  CloseHandle(process_info.hProcess);
-  CloseHandle(process_info.hThread);
-  result.exit_code = static_cast<int>(exit_code);
-#else
-  std::vector<std::string> arg_storage;
-  arg_storage.push_back(exe.string());
-  for (const auto &a : args) arg_storage.push_back(a);
-  std::vector<char *> argv;
-  for (auto &a : arg_storage) argv.push_back(a.data());
-  argv.push_back(nullptr);
-
-  posix_spawn_file_actions_t actions;
-  posix_spawn_file_actions_init(&actions);
-  posix_spawn_file_actions_addopen(&actions, STDOUT_FILENO, log_path.c_str(),
-                                    O_WRONLY | O_CREAT | O_TRUNC, 0644);
-  posix_spawn_file_actions_adddup2(&actions, STDOUT_FILENO, STDERR_FILENO);
-
-  posix_spawnattr_t attr;
-  posix_spawnattr_init(&attr);
-
-  pid_t pid = -1;
-  const std::string prev_cwd = std::filesystem::current_path().string();
-  std::filesystem::current_path(cwd);
-  const int rc =
-      posix_spawn(&pid, exe.c_str(), &actions, &attr, argv.data(), environ);
-  std::filesystem::current_path(prev_cwd);
-  posix_spawn_file_actions_destroy(&actions);
-  posix_spawnattr_destroy(&attr);
-
-  if (rc != 0) {
-    result.output = "failed to spawn " + exe.string();
-    return result;
-  }
-
-  int status = 0;
-  // Bounded poll, matching the 30s cap the Windows branch enforces.
-  const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
-  while (true) {
-    pid_t r = waitpid(pid, &status, WNOHANG);
-    if (r == pid) break;
-    if (std::chrono::steady_clock::now() > deadline) {
-      kill(pid, SIGKILL);
-      waitpid(pid, &status, 0);
-      break;
-    }
-    std::this_thread::sleep_for(std::chrono::milliseconds(50));
-  }
-  result.exit_code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
-#endif
-
-  std::ifstream log_file(log_path);
-  if (log_file) {
-    std::ostringstream ss;
-    ss << log_file.rdbuf();
-    result.output = ss.str();
-  }
-  std::error_code ec;
-  std::filesystem::remove(log_path, ec);
-  return result;
-}
-
-// Common flags shared by every compile step, matching what a real Arduino
-// Uno build uses (arduino-cli's own defaults for this board): -Os for
-// flash-size-conscious code, LTO + --gc-sections to drop unused core
-// functions, ARDUINO_AVR_UNO/ARDUINO_ARCH_AVR since some core code
-// branches on them.
-std::vector<std::string> common_flags(const ToolchainPaths &tc) {
+// Common flags shared by every compile step, matching what a real
+// arduino-cli build uses for the target board: -Os for flash-size-
+// conscious code, LTO + --gc-sections to drop unused core functions, and
+// the board's own ARDUINO_AVR_*/ARDUINO_ARCH_AVR defines since some core
+// code branches on them. F_CPU is 16MHz for every AVR board physicalsim
+// supports today (Uno/Nano/Mega all run their crystal at 16MHz) - not
+// yet parameterized per board because nothing here needs it to be.
+std::vector<std::string> common_flags(const ToolchainPaths &tc, const BoardTarget &target) {
   std::vector<std::string> flags = {
       "-w", "-Os", "-g", "-ffunction-sections", "-fdata-sections", "-flto",
-      "-mmcu=atmega328p", "-DF_CPU=16000000L", "-DARDUINO=10819",
-      "-DARDUINO_AVR_UNO", "-DARDUINO_ARCH_AVR",
+      "-mmcu=" + target.mcu, "-DF_CPU=16000000L", "-DARDUINO=10819",
+      "-D" + target.define, "-DARDUINO_ARCH_AVR",
       "-I" + tc.core_dir.string(), "-I" + tc.variant_dir.string(),
   };
   // Each vendored library's own src/ dir, so "#include <LiquidCrystal.h>"
@@ -392,26 +278,28 @@ std::vector<std::string> common_flags(const ToolchainPaths &tc) {
 
 }  // namespace
 
-std::optional<ToolchainPaths> find_toolchain() {
+std::optional<ToolchainPaths> find_toolchain(const std::string &board) {
   auto bin_dir = find_toolchain_bin_dir();
   auto core_dir = find_core_dir();
-  auto variant_dir = find_variant_dir();
+  auto variant_dir = find_variant_dir(resolve_board_target(board).variant);
   if (!bin_dir || !core_dir || !variant_dir) {
     return std::nullopt;
   }
   return ToolchainPaths{*bin_dir, *core_dir, *variant_dir, find_library_dirs()};
 }
 
-CompileResult compile_sketch(const std::string &source) {
+CompileResult compile_sketch(const std::string &source, const std::string &board) {
   CompileResult result;
 
-  const auto toolchain = find_toolchain();
+  const auto target = resolve_board_target(board);
+  const auto toolchain = find_toolchain(board);
   if (!toolchain) {
     result.log =
-        "AVR toolchain not found. Expected either a bundled copy next to "
-        "physicalsim's executable (avr-toolchain/bin/), avr-g++ on PATH, or "
-        "an Arduino IDE install; and the vendored core (avr-core/ next to "
-        "the executable, or simulators/ArduinoCore-avr in a dev build).";
+        "AVR toolchain not found for board \"" + board + "\" (resolved variant \"" + target.variant +
+        "\"). Expected either a bundled copy next to physicalsim's executable "
+        "(avr-toolchain/bin/), avr-g++ on PATH, or an Arduino IDE install; and "
+        "the vendored core + variant (avr-core/ next to the executable, or "
+        "simulators/ArduinoCore-avr in a dev build).";
     return result;
   }
 
@@ -440,7 +328,7 @@ CompileResult compile_sketch(const std::string &source) {
   const auto gxx = toolchain->bin_dir / kGxxName;
   const auto gcc = toolchain->bin_dir / kGccName;
   const auto objcopy = toolchain->bin_dir / kObjcopyName;
-  const auto flags = common_flags(*toolchain);
+  const auto flags = common_flags(*toolchain, target);
 
   std::vector<std::filesystem::path> object_files;
   std::ostringstream full_log;
@@ -522,7 +410,7 @@ CompileResult compile_sketch(const std::string &source) {
   {
     std::vector<std::string> link_args = {
         "-w", "-Os", "-g", "-flto", "-fuse-linker-plugin", "-Wl,--gc-sections",
-        "-mmcu=atmega328p", "-o", elf_path.string(),
+        "-mmcu=" + target.mcu, "-o", elf_path.string(),
     };
     for (const auto &obj : object_files) link_args.push_back(obj.string());
     link_args.push_back("-lm");

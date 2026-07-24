@@ -1,5 +1,7 @@
 import { arduinoUno } from "./arduino-uno.js";
 import { arduinoNano } from "./arduino-nano.js";
+import { arduinoMega } from "./arduino-mega.js";
+import { nanoRp2040Connect } from "./nano-rp2040-connect.js";
 import type { BoardPinMap } from "./board.js";
 
 // Board type (circuit.ts's CircuitBoard.type, shell-side) -> its
@@ -11,6 +13,8 @@ import type { BoardPinMap } from "./board.js";
 export const boardPinMaps: Record<string, BoardPinMap> = {
   "arduino-uno": arduinoUno,
   "arduino-nano": arduinoNano,
+  "arduino-mega": arduinoMega,
+  "nano-rp2040-connect": nanoRp2040Connect,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'
@@ -25,6 +29,10 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
 export const boardPinNameFromMarker: Record<string, (marker: string) => string> = {
   "arduino-uno": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
   "arduino-nano": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
+  // arduino-mega-element.ts uses the identical bare-digit convention for
+  // its digital pins (its A0-A15 markers already say "A0".."A15", same
+  // as the other two boards, so only the digit-only case needs mapping).
+  "arduino-mega": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
 };
 
 export function resolveBoardPinName(boardType: string, marker: string): string {

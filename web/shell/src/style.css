@@ -634,9 +634,9 @@ button:disabled {
    this dev preview both are - follows the element's own border-radius
    when rounding an outline). */
 .board-item.selected {
-  outline: 2px solid #cccccc;
+  outline: 2px solid #e6e6e6;
   outline-offset: 4px;
-  border-radius: 4px;
+  border-radius: 2px;
 }
 
 /* One per pin (see canvas/scene.ts's overlayPinMarkers()), positioned in

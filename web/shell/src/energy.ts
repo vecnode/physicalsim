@@ -95,6 +95,15 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
     currentMa: { idle: 20, running: 35 },
     sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
   },
+  // Same RP2040 chip as nano-rp2040-connect - same figures. A plain Pico
+  // has no WiFi/IMU/mic drawing extra current the Nano RP2040 Connect's
+  // additional silicon would, but that's not modeled by either profile
+  // anyway (both are nominal chip-level estimates, not per-component).
+  "pi-pico": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 20, running: 35 },
+    sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
+  },
 };
 
 // board.powered decides voltage on/off; `running` (the adapter's own

@@ -3,7 +3,8 @@ import { getAdapterClient, type AdapterId } from "./adapter-registry.js";
 import { boardPowerSetter } from "./circuit.js";
 import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { SignalChain } from "./signal-chain.js";
-import { CanvasController } from "./canvas/index.js";
+import { ProtocolChain } from "./protocol-chain.js";
+import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
 import "./native-bridge.js";
@@ -15,12 +16,12 @@ import "./native-bridge.js";
 // once more boards are wired up.
 import "@wokwi/elements";
 
-// Start/Pause/Stop/Load .hex… all live on the icon-rail now - see
-// index.html's own comment. No adapter-select/apply-btn anymore either:
-// a board is always placed by picking an Example (EXAMPLES table below),
-// never a dropdown+Apply. (The rail's own Compile & Run button -
-// railCompileBtn - is declared further down, next to compileRunBtn, the
-// sketch panel's matching button; the two share one handler.)
+// Compile & Run/Start/Pause/Stop/Load .hex… all live on the icon-rail
+// now - see index.html's own comment (the sketch panel's own Compile &
+// Run button was removed; railCompileBtn, declared further down, is the
+// only one left). No adapter-select/apply-btn anymore either: a board is
+// always placed by picking an Example (EXAMPLES table below), never a
+// dropdown+Apply.
 const startBtn = document.getElementById("rail-run-btn") as HTMLButtonElement;
 const pauseBtn = document.getElementById("rail-pause-btn") as HTMLButtonElement;
 const stopBtn = document.getElementById("rail-stop-btn") as HTMLButtonElement;
@@ -139,6 +140,11 @@ canvas.scene.onBoardPlaced((board) => apply(board.adapterId));
 // further wiring from this file (see signal-chain.ts).
 new SignalChain(canvas.scene, getAdapterClient);
 
+// The multi-pin counterpart to SignalChain, for components whose
+// behavior needs several correlated pins (an LCD's RS/E/D4-D7 bus) -
+// see protocol-chain.ts. Constructed the same way, for the same reason.
+new ProtocolChain(canvas.scene, getAdapterClient);
+
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop
 // readouts shouldn't keep pointing at it.
@@ -198,13 +204,12 @@ stopBtn.addEventListener("click", () => {
   terminal.writeLine("stopped");
 });
 
-// The rail's own Compile & Run shortcut - startBtn/pauseBtn/stopBtn
-// above are already the rail's Start/Pause/Stop buttons themselves (see
-// the const declarations at the top of this file), so no proxying is
-// needed for those three; only Compile & Run has two separate buttons
-// (the rail's and the sketch panel's own compileRunBtn) sharing one
-// handler. compileAndRun() is a plain function declaration, hoisted, so
-// this can call it despite being declared before it in this file.
+// The rail's Compile & Run button - startBtn/pauseBtn/stopBtn above are
+// already the rail's Start/Pause/Stop buttons themselves (see the const
+// declarations at the top of this file), so no proxying is needed for
+// those three either. compileAndRun() is a plain function declaration,
+// hoisted, so this can call it despite being declared before it in this
+// file.
 const railCompileBtn = document.getElementById("rail-compile-btn") as HTMLButtonElement;
 railCompileBtn.addEventListener("click", () => void compileAndRun());
 
@@ -242,7 +247,7 @@ const FIRMWARE_PARSE_SANITY_LIMIT_BYTES = 1024 * 1024;
 
 loadFirmwareBtn.addEventListener("click", () => {
   if (!activeClient()) {
-    terminal.writeLine("place a board (Apply) before loading firmware");
+    terminal.writeLine("pick an Example (or place a board) before loading firmware");
     return;
   }
   firmwareFileInput.click();
@@ -257,7 +262,7 @@ firmwareFileInput.addEventListener("change", () => {
 async function loadFirmwareFile(file: File): Promise<void> {
   const client = activeClient();
   if (!client) {
-    terminal.writeLine("place a board (Apply) before loading firmware");
+    terminal.writeLine("pick an Example (or place a board) before loading firmware");
     return;
   }
 
@@ -316,7 +321,6 @@ const sketchEditor = new SketchEditor(
   document.getElementById("sketch-editor") as HTMLElement,
   LED_BLINK_SKETCH,
 );
-const compileRunBtn = document.getElementById("compile-run-btn") as HTMLButtonElement;
 
 // -----------------------------------------------------------------------
 // Examples: a canvas layout (board + wired components) and a matching
@@ -403,6 +407,151 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
     },
   },
+  "traffic-light": {
+    label: "Traffic Light",
+    description: "Classic red/yellow/green sequence on three LEDs.",
+    level: "beginner",
+    board: "Arduino Uno",
+    glyph: "🚦",
+    sketch: `const int redPin = 11;
+const int yellowPin = 12;
+const int greenPin = 13;
+
+void setup() {
+  pinMode(redPin, OUTPUT);
+  pinMode(yellowPin, OUTPUT);
+  pinMode(greenPin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(redPin, HIGH);
+  delay(2000);
+  digitalWrite(yellowPin, HIGH);
+  delay(500);
+  digitalWrite(redPin, LOW);
+  digitalWrite(yellowPin, LOW);
+
+  digitalWrite(greenPin, HIGH);
+  delay(2000);
+  digitalWrite(greenPin, LOW);
+  digitalWrite(yellowPin, HIGH);
+  delay(500);
+  digitalWrite(yellowPin, LOW);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      // Same "led" component three times, told apart with its own
+      // "color" attribute (a plain wokwi-led @property, set via
+      // addComponentAt()'s attrs param - see scene.ts's placeElement())
+      // rather than needing a distinct component-registry.ts entry per
+      // color.
+      const red = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 10, { color: "red" });
+      const yellow = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 90, {
+        color: "yellow",
+      });
+      const green = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 170, {
+        color: "green",
+      });
+      if (!red || !yellow || !green) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "11" }, { entityId: red.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "12" }, { entityId: yellow.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: green.id, pin: "A" });
+    },
+  },
+  "toggle-switch": {
+    label: "Toggle Switch",
+    description: "Press the button once to turn the LED on, press again to turn it off.",
+    level: "beginner",
+    board: "Arduino Uno",
+    glyph: "🔁",
+    // Same two component types as "Button Control" (pushbutton write,
+    // LED read - the only two component-signal-pin.ts actually has an
+    // entry for), different sketch logic: this one tracks a rising edge
+    // (LOW -> HIGH) and flips a stored ledState each press, instead of
+    // just mirroring whatever the button currently reads. A real,
+    // distinct beginner example, not a second copy of Button Control.
+    sketch: `const int buttonPin = 2;
+const int ledPin = 13;
+
+int ledState = LOW;
+int lastButtonState = LOW;
+
+void setup() {
+  pinMode(buttonPin, INPUT);
+  pinMode(ledPin, OUTPUT);
+}
+
+void loop() {
+  int buttonState = digitalRead(buttonPin);
+  if (buttonState == HIGH && lastButtonState == LOW) {
+    ledState = !ledState;
+    digitalWrite(ledPin, ledState);
+    delay(50); // simple debounce
+  }
+  lastButtonState = buttonState;
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
+      if (!button) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 160);
+      if (!led) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "lcd-display": {
+    label: "LCD Display",
+    description: "16x2 LCD driven by real LiquidCrystal firmware over its RS/E/D4-D7 bus.",
+    level: "beginner",
+    board: "Arduino Uno",
+    glyph: "🖥️",
+    // The exact wiring and sketch from the vendored library's own
+    // examples/HelloWorld/HelloWorld.ino (simulators/LiquidCrystal) -
+    // public domain per that file's own header - not a hand-rolled
+    // approximation. This now genuinely runs: the sketch's own
+    // digitalWrite() calls on pins 12/11/5/4/3/2 are decoded back into
+    // characters by protocol-chain.ts's Hd44780Decoder (web/common/src/
+    // circuit/protocols/hd44780-decoder.ts), not a static preset
+    // property - the first LCD example (removed) only had the latter.
+    sketch: `#include <LiquidCrystal.h>
+
+// initialize the library by associating any needed LCD interface pin
+// with the Arduino pin number it is connected to
+const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
+
+void setup() {
+  // set up the LCD's number of columns and rows:
+  lcd.begin(16, 2);
+  // Print a message to the LCD.
+  lcd.print("hello, world!");
+}
+
+void loop() {
+  // set the cursor to column 0, line 1
+  // (note: line 1 is the second row, since counting begins with 0):
+  lcd.setCursor(0, 1);
+  // print the number of seconds since reset:
+  lcd.print(millis() / 1000);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      // wokwi-lcd1602 defaults to pins: "full" already, exposing RS/E/
+      // D4-D7 (among others) by name - no attrs needed to select it.
+      const lcd = await canvas.scene.addComponentAt("lcd1602", board.x + 620, board.y + 10);
+      if (!lcd) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "12" }, { entityId: lcd.id, pin: "RS" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "11" }, { entityId: lcd.id, pin: "E" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "5" }, { entityId: lcd.id, pin: "D4" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "4" }, { entityId: lcd.id, pin: "D5" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "3" }, { entityId: lcd.id, pin: "D6" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: lcd.id, pin: "D7" });
+    },
+  },
 };
 
 const openExampleGalleryBtn = document.getElementById("open-example-gallery-btn") as HTMLButtonElement;
@@ -413,6 +562,17 @@ const exampleGalleryCloseBtn = document.getElementById("example-gallery-close-bt
 async function loadExample(id: string): Promise<void> {
   const example = EXAMPLES[id];
   if (!example) return;
+  // Scene.showBoard() (every example's build() calls it) replaces the
+  // whole scene via clearScene(), which tears down the old board's DOM/
+  // wiring directly rather than going through deleteEntity() - so it
+  // never fires onEntityDeleted, and the previously active adapter just
+  // keeps ticking in the background against firmware that no longer has
+  // a visible board. stopBtn's own click handler is exactly "power off
+  // for real" (adapter reset() + setPowered(false) + terminal.clear()) -
+  // reusing it here, before the old board disappears, so a fresh example
+  // always starts from a genuinely stopped simulation, not a stale one
+  // still running underneath it.
+  stopBtn.click();
   await example.build();
   // Zooms out (never in - see zoomToFit()'s own doc comment) to fit
   // whatever the example just placed - a fresh circuit should be fully
@@ -486,12 +646,10 @@ interface CompileResponse {
   log: string;
 }
 
-compileRunBtn.addEventListener("click", () => void compileAndRun());
-
 async function compileAndRun(): Promise<void> {
   const client = activeClient();
   if (!client) {
-    terminal.writeLine("place a board (Apply) before compiling");
+    terminal.writeLine("pick an Example (or place a board) before compiling");
     return;
   }
   const source = sketchEditor.getValue();
@@ -500,7 +658,6 @@ async function compileAndRun(): Promise<void> {
     return;
   }
 
-  compileRunBtn.disabled = true;
   railCompileBtn.disabled = true;
 
   // Compiling the sketch + the whole Arduino core (avr_toolchain.cpp
@@ -554,7 +711,6 @@ async function compileAndRun(): Promise<void> {
         : "compile failed",
     );
   } finally {
-    compileRunBtn.disabled = false;
     railCompileBtn.disabled = false;
   }
 }
@@ -643,6 +799,41 @@ renderLinkStyleIcon();
 linkStyleBtn.addEventListener("click", () => {
   canvas.scene.wiring.cycleStyle();
   renderLinkStyleIcon();
+});
+
+// The cable color palette (#wire-color-panel) - nine swatches, one
+// click sets every wire's color (WiringLayer.setColor(), the same
+// "global setting, applies immediately" posture cycleStyle() above has).
+// Not persisted, same reasoning as link style. Hidden by default; the
+// toggle button just flips a class, no state beyond that to track.
+const WIRE_COLORS = [
+  DEFAULT_WIRE_COLOR,
+  "#ff6b6b", // red
+  "#51cf66", // green
+  "#339af0", // blue
+  "#cc5de8", // purple
+  "#ff922b", // orange
+  "#20c997", // teal
+  "#f06595", // pink
+  "#ffffff", // white
+];
+
+const wireColorToggleBtn = document.getElementById("wire-color-toggle-btn") as HTMLButtonElement;
+const wireColorPanel = document.getElementById("wire-color-panel") as HTMLElement;
+const wireColorSwatches = document.getElementById("wire-color-swatches") as HTMLElement;
+
+for (const color of WIRE_COLORS) {
+  const swatch = document.createElement("button");
+  swatch.type = "button";
+  swatch.className = "wire-color-swatch";
+  swatch.style.background = color;
+  swatch.title = color;
+  swatch.addEventListener("click", () => canvas.scene.wiring.setColor(color));
+  wireColorSwatches.appendChild(swatch);
+}
+
+wireColorToggleBtn.addEventListener("click", () => {
+  wireColorPanel.classList.toggle("hidden");
 });
 
 // Hides/shows the simulator panel and the zoom-controls/minimap overlay,

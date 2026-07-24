@@ -10,3 +10,6 @@
 [submodule "simulators/ArduinoCore-avr"]
 	path = simulators/ArduinoCore-avr
 	url = https://github.com/vecnode/ArduinoCore-avr.git
+[submodule "simulators/LiquidCrystal"]
+	path = simulators/LiquidCrystal
+	url = https://github.com/vecnode/LiquidCrystal.git

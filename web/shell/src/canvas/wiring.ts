@@ -71,12 +71,21 @@ export interface Wire {
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
+// The stroke/fill every wire renders in unless selected (selected always
+// reads as white - see render()) - a global setting, same posture as
+// LinkStyle above: "what color are cables drawn in" is one property of
+// the canvas, not something you'd want a per-wire mix of by default.
+// Exported so the palette panel (main.ts/index.html's #wire-color-panel)
+// can offer it as one of its swatches, alongside eight others.
+export const DEFAULT_WIRE_COLOR = "#ffd54a";
+
 export class WiringLayer {
   private readonly svg: SVGSVGElement;
   private wires: Wire[] = [];
   private nextId = 1;
   private selectedWireId: string | null = null;
   private style: LinkStyle = "straight";
+  private color = DEFAULT_WIRE_COLOR;
 
   // Set while one of the elbow style's three segment handles is being
   // dragged - a persistent window-level mousemove/mouseup (registered
@@ -160,6 +169,19 @@ export class WiringLayer {
     this.style = order[(order.indexOf(this.style) + 1) % order.length];
     this.render();
     return this.style;
+  }
+
+  getColor(): string {
+    return this.color;
+  }
+
+  // Sets every wire's color - the palette panel's whole job. Applies to
+  // every existing wire immediately (this.color is read fresh by
+  // render(), not baked into each Wire), not just ones drawn after the
+  // click - the same "one global setting" posture as cycleStyle() above.
+  setColor(color: string): void {
+    this.color = color;
+    this.render();
   }
 
   registerPin(entityId: string, pin: string, x: number, y: number): void {
@@ -367,6 +389,14 @@ export class WiringLayer {
       // the content layer's own CSS scale - without this, a wire looks
       // thicker at 250% zoom and hairline-thin at 25%.
       visible.setAttribute("vector-effect", "non-scaling-stroke");
+      // Set inline (not left to .wire-line's CSS default) so the palette
+      // panel's chosen color always wins - an inline style always beats
+      // an external stylesheet rule at equal or lower specificity, which
+      // a plain CSS class override wouldn't reliably do here. Selected
+      // stays white regardless of the chosen color - the same "brighter,
+      // this is what Backspace/Delete acts on" language .wire-endpoint.
+      // selected already uses below.
+      visible.style.stroke = selected ? "#ffffff" : this.color;
 
       this.svg.append(hit, visible);
 
@@ -380,6 +410,7 @@ export class WiringLayer {
         dot.setAttribute("r", "3");
         dot.setAttribute("class", selected ? "wire-endpoint selected" : "wire-endpoint");
         dot.setAttribute("vector-effect", "non-scaling-stroke");
+        dot.style.fill = selected ? "#ffffff" : this.color;
         this.svg.appendChild(dot);
       }
 

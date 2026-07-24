@@ -191,6 +191,44 @@ std::optional<std::filesystem::path> find_variant_dir() {
   return std::nullopt;
 }
 
+// Every vendored Arduino library a sketch is allowed to #include - one
+// git submodule per name (simulators/<name>), each following the modern
+// Arduino 1.5+ layout (headers/sources directly under its own src/).
+// Adding a second library is one more name here plus one more line in
+// CMakeLists.txt's own AVR_LIBRARIES list - nothing else in this file
+// needs to change, since compile_sketch() below just iterates whatever
+// find_library_dirs() returns.
+const std::vector<std::string> &known_libraries() {
+  static const std::vector<std::string> libs = {"LiquidCrystal"};
+  return libs;
+}
+
+// Same bundled-next-to-executable-first, source-tree-fallback shape as
+// find_core_dir()/find_variant_dir() above, just per-library and
+// tolerant of a missing one (returns whatever resolved, not all-or-
+// nothing) - a library that hasn't been bundled yet (or was dropped from
+// CMakeLists.txt) just isn't available to #include, it doesn't break
+// every other sketch.
+std::vector<std::filesystem::path> find_library_dirs() {
+  std::vector<std::filesystem::path> dirs;
+  std::error_code ec;
+  for (const auto &name : known_libraries()) {
+    const auto bundled = executable_dir() / "avr-libraries" / name / "src";
+    if (std::filesystem::is_directory(bundled, ec)) {
+      dirs.push_back(bundled);
+      continue;
+    }
+    if (std::string(PHYSICALSIM_SOURCE_DIR).size() > 0) {
+      const auto from_source =
+          std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" / name / "src";
+      if (std::filesystem::is_directory(from_source, ec)) {
+        dirs.push_back(from_source);
+      }
+    }
+  }
+  return dirs;
+}
+
 // ---- Process spawning: run one command, wait for it, capture output ------
 // A simpler, blocking-wait version of qemu_adapter.cpp's process-spawn
 // pattern (that file keeps its process running long-term and talks to it
@@ -337,12 +375,19 @@ RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::
 // functions, ARDUINO_AVR_UNO/ARDUINO_ARCH_AVR since some core code
 // branches on them.
 std::vector<std::string> common_flags(const ToolchainPaths &tc) {
-  return {
+  std::vector<std::string> flags = {
       "-w", "-Os", "-g", "-ffunction-sections", "-fdata-sections", "-flto",
       "-mmcu=atmega328p", "-DF_CPU=16000000L", "-DARDUINO=10819",
       "-DARDUINO_AVR_UNO", "-DARDUINO_ARCH_AVR",
       "-I" + tc.core_dir.string(), "-I" + tc.variant_dir.string(),
   };
+  // Each vendored library's own src/ dir, so "#include <LiquidCrystal.h>"
+  // resolves the same way it would against a real Arduino IDE install -
+  // one -I per library, not a single shared include root, since each
+  // library's headers live directly under its own src/ (no shared parent
+  // directory to point at instead).
+  for (const auto &dir : tc.library_dirs) flags.push_back("-I" + dir.string());
+  return flags;
 }
 
 }  // namespace
@@ -354,7 +399,7 @@ std::optional<ToolchainPaths> find_toolchain() {
   if (!bin_dir || !core_dir || !variant_dir) {
     return std::nullopt;
   }
-  return ToolchainPaths{*bin_dir, *core_dir, *variant_dir};
+  return ToolchainPaths{*bin_dir, *core_dir, *variant_dir, find_library_dirs()};
 }
 
 CompileResult compile_sketch(const std::string &source) {
@@ -401,7 +446,13 @@ CompileResult compile_sketch(const std::string &source) {
   std::ostringstream full_log;
 
   auto compile_one = [&](const std::filesystem::path &src, bool is_cpp) -> bool {
-    const auto obj = work_dir / (src.filename().string() + ".o");
+    // Prefixed with a running counter, not just the filename - core and
+    // library directories are compiled from separate source trees now
+    // (see the library loop below), so two files sharing a basename
+    // (e.g. two "utility.cpp"s) would otherwise silently overwrite each
+    // other's .o in this shared work_dir.
+    const auto obj =
+        work_dir / (std::to_string(g_step_counter.fetch_add(1)) + "-" + src.filename().string() + ".o");
     std::vector<std::string> args = flags;
     if (is_cpp) {
       args.insert(args.end(), {"-std=gnu++11", "-fpermissive", "-fno-exceptions",
@@ -432,6 +483,28 @@ CompileResult compile_sketch(const std::string &source) {
         ok = compile_one(entry.path(), /*is_cpp=*/false);
       } else if (ext == ".cpp") {
         ok = compile_one(entry.path(), /*is_cpp=*/true);
+      }
+    }
+  }
+
+  // Every vendored library's own sources, compiled unconditionally
+  // alongside the core - same posture as the core loop above: whether a
+  // given sketch actually #includes a library or not, -ffunction-
+  // sections/--gc-sections (already in common_flags()/the link step
+  // below) drops whatever the linker never reaches, so there's no need
+  // to detect which #includes a sketch actually has first.
+  if (ok) {
+    for (const auto &lib_dir : toolchain->library_dirs) {
+      if (!ok) break;
+      for (const auto &entry : std::filesystem::directory_iterator(lib_dir, ec)) {
+        if (!ok) break;
+        if (!entry.is_regular_file()) continue;
+        const auto ext = entry.path().extension().string();
+        if (ext == ".c") {
+          ok = compile_one(entry.path(), /*is_cpp=*/false);
+        } else if (ext == ".cpp") {
+          ok = compile_one(entry.path(), /*is_cpp=*/true);
+        }
       }
     }
   }

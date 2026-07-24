@@ -1059,6 +1059,166 @@ in-app compiler the same way a packaged Release does, rather than
 requiring a separately-installed toolchain just to exercise this feature
 locally.
 
+**Vendored Arduino libraries (`simulators/LiquidCrystal`, etc.).** A
+sketch can `#include` a real Arduino library now, not just the core -
+each is its own git submodule under `simulators/`, following the modern
+Arduino 1.5+ layout (headers/sources directly under the library's own
+`src/`). `find_library_dirs()` resolves each name in a fixed
+`known_libraries()` list (currently just `LiquidCrystal`) the same
+bundled-first-then-source-tree way `find_core_dir()`/`find_variant_dir()`
+already do — a bundled `avr-libraries/<name>/src` next to the executable
+(`CMakeLists.txt`'s `AVR_LIBRARIES` list copies each one there
+unconditionally, the same "small enough to always ship" posture as
+`avr-core/`), falling back to `simulators/<name>/src` for a dev build.
+Missing libraries are dropped individually, not all-or-nothing -
+`find_toolchain()` still succeeds without any of them, since most
+sketches don't need one. Each resolved directory becomes both a `-I`
+(`common_flags()`) and a set of `.c`/`.cpp` files compiled unconditionally
+alongside the core, sketch-independent — same reasoning as the core
+itself being fully compiled regardless of which functions a given sketch
+actually calls: `-ffunction-sections`/`--gc-sections` (already in place)
+drops whatever the linker doesn't reach, so there's no need to detect a
+sketch's actual `#include`s first. `compile_one()`'s object filenames
+gained a running-counter prefix at the same time — once the core and N
+library directories can each contribute a file, two different
+directories sharing a basename (e.g. two `utility.cpp`s) would otherwise
+silently overwrite each other's `.o` in the shared temp `work_dir`.
+
+Verified end-to-end, not just "it links": a real sketch (`#include
+<LiquidCrystal.h>`, `lcd.begin()`/`lcd.print()`) posted to `/compile`
+produced a genuine, non-empty Intel HEX image with an empty compiler log,
+and a plain non-LCD sketch still compiled afterward with no regression.
+I2C-based LCD libraries (`LiquidCrystal_I2C`, most real-world backpacks)
+remain a separate, larger gap - `avr8js` has no I2C/TWI peripheral
+emulated at all, unlike parallel `LiquidCrystal` below, which only ever
+needs plain GPIO.
+
+## Multi-pin protocols: from real GPIO writes to a real display
+
+The compiler above gets a `LiquidCrystal`-based sketch to compile and run
+against a real CPU; this section is what makes its `digitalWrite()` calls
+actually turn into characters on the canvas's LCD - the *simulation*
+half of the same feature, deliberately built as a second, general
+mechanism rather than one LCD-shaped special case.
+
+**Why this couldn't just be `signal-chain.ts` again.** Every component
+`SignalChain` (see "Pin-to-pin wiring"/"From wires to real pin I/O"
+above) drives is *one pin, one 0/1 value* - a pushbutton's write, an
+LED's read. An LCD's HD44780 bus needs **six pins correlated together**
+(RS, E, D4, D5, D6, D7) read as one unit, not six independent signals -
+a shape `componentSignalPins`/`SignalChain` has no way to express. Rather
+than bolt multi-pin support onto that file (and risk the already-working
+LED/pushbutton path along the way), this is a parallel system, the same
+"two things that don't need to share a struct stay two things" posture
+`circuit.ts`/`energy.ts` already established:
+
+- **`web/common/src/circuit/component-protocol-pin.ts`** —
+  `componentProtocols`, keyed by component type, each naming a set of
+  required *roles* (`rs`, `e`, `d4`.. for `lcd1602`) and which of the
+  component's own `pinInfo` names satisfy each one. The counterpart to
+  `component-signal-pin.ts`'s single-pin roles, deliberately kept
+  separate rather than folded in - forcing "one pin, one role" and
+  "several correlated pins, one decoder" into one table would leave one
+  shape's fields unused by the other.
+- **`web/shell/src/canvas/protocol-net.ts`** — `resolveProtocolLinks()`,
+  the multi-pin counterpart to `signal-net.ts`'s `resolveSignalLinks()`:
+  groups wires by the *component instance* they touch (not the wire
+  alone), and only emits a `ProtocolLink` once **every** role
+  `componentProtocols` names for that component type has a wired pin - a
+  partially-wired LCD (say, missing `D7`) simply doesn't appear yet, the
+  same way an entirely unwired one wouldn't.
+- **`web/shell/src/protocol-chain.ts`** — `ProtocolChain`, the multi-pin
+  counterpart to `SignalChain`: recomputes on `onWiresChanged()`, and for
+  each complete link resolves one real `CircuitPin` per role through
+  **the exact same three pieces `SignalChain` already uses** -
+  `boardPinMaps`, `resolveBoardPinName()`, `CircuitPin.forBoardPin()` -
+  then hands them to a small `PROTOCOL_ATTACHERS` registry keyed by
+  component type (today: `lcd1602` → constructs an `Hd44780Decoder` and
+  assigns its output to the placed `wokwi-lcd1602` element's own
+  `characters` property). Disposal is per-component, not per-wire: the
+  moment any one of the six wires disappears, the whole decoder detaches.
+
+**Why this is already board-agnostic, not just component-agnostic.**
+Nothing above - `componentProtocols`, `resolveProtocolLinks()`,
+`ProtocolChain` - ever names a board type or talks to an adapter
+directly; every board-specific lookup goes through the same
+`BoardPinMap`/`CircuitPin.forBoardPin()`/`PinClient` surface
+`SignalChain` and the whole pin I/O pipeline already share. A second
+placeable board type (an ESP32-over-QEMU board, say) needs one new
+`boardPinMaps` entry and a working `readPin`/`writePin`/`onPinChange` on
+its adapter (`cortex-m`'s QEMU bridge doesn't have this yet - see "Why
+cortex-m has no real pin I/O" above, a documented, separate future spike)
+- nothing in this section changes. A second multi-pin component (a relay
+needing its own vendored library and its own multi-pin decoder, say)
+needs one `componentProtocols` entry, one decoder class, and one
+`PROTOCOL_ATTACHERS` entry - again, nothing else here changes. This
+extensibility was a deliberate design goal, not an incidental side
+effect of how it happened to get built.
+
+**`Hd44780Decoder`
+(`web/common/src/circuit/protocols/hd44780-decoder.ts`).** Board- and
+DOM-agnostic on purpose (only ever talks to `CircuitPin`, and reports
+character-buffer updates through a plain callback) - it's tested in
+isolation the same tier `Led`/`Button` are
+(`hd44780-decoder.test.ts`, `vitest`), not only through the full app.
+Every decoding choice below is derived directly from the exact vendored
+source it decodes (`simulators/LiquidCrystal/src/LiquidCrystal.cpp`), not
+general HD44780 folklore:
+
+- **Never a reactive `read()` at the moment a pulse latches.** Pin I/O is
+  an async Worker RPC round-trip (see the pin I/O pipeline above); a
+  fresh `read()` triggered *by* `E`'s falling edge could easily resolve
+  after the firmware has already moved on to the next nibble. Instead,
+  all six pins are subscribed via `onChange()` into a local shadow
+  `Record<role, value>`, kept current purely by event order - `write4bits()`
+  always sets all four data lines *before* calling `pulseEnable()`, so
+  their change events are guaranteed to arrive before `E`'s own, in the
+  CPU's real program order.
+- **Latches on `E`'s falling edge** (`pulseEnable()`: `LOW → HIGH → LOW`,
+  data lines never touched while `E` is high) - matches the real
+  datasheet's own latch point, not just "whichever edge is convenient."
+- **Nibble pairing, not per-call framing.** `send()` always issues two
+  nibble pulses (high, then low) with one shared `RS` value set once
+  before both - so the decoder holds the first nibble until a second
+  arrives, then decodes the combined byte with the first nibble's `RS`.
+  The one place unpaired nibbles exist in the real source at all -
+  `begin()`'s 4-bit-mode reset dance, four standalone `write4bits()`
+  calls (`0x3, 0x3, 0x3, 0x2`) - isn't special-cased: naive pairing turns
+  them into two bogus "bytes" (`0x33`, `0x32`), and both happen to decode
+  as `FUNCTION SET` (bit `0x20` is the highest set bit in each) under the
+  real HD44780 priority encoding below - which this decoder treats as an
+  intentional no-op anyway, since the wokwi-lcd1602 element it drives is
+  a fixed 16×2, 5×8-font display regardless of what any sketch requests.
+  The mispairing is inert by construction, not a tolerated bug.
+- **Instruction decoding is real HD44780 priority encoding** - each
+  command is one distinct flag bit (`0x80` down to `0x01`) with payload
+  bits reserved below it, so checking from the highest bit down and
+  stopping at the first match is exactly what the real chip's hardware
+  does, not an approximation of it. `SETDDRAMADDR`/character writes and
+  cursor increment/decrement (entry mode's `I/D` bit) are fully
+  implemented; `SETCGRAMADDR` (custom glyphs via `createChar()`) and
+  whole-display shifting (`scrollDisplayLeft/Right`, `autoscroll()`) are
+  documented no-ops - the sketch itself still compiles and runs correctly
+  either way, they just don't draw on this canvas yet. `CLEARDISPLAY`
+  also resets entry mode to increment, matching the real datasheet (not
+  only `LiquidCrystal`'s own default), since `clear()` is the one command
+  real firmware can call at any point to reach a fully known state.
+- **Display on/off blanks without discarding** - `noDisplay()`/`display()`
+  toggle whether the buffer is rendered, not whether it's written to, the
+  same as a real LCD's backlight-off-but-still-holding-content behavior.
+
+Verified against the *exact* pulse sequence the real source produces
+(`hd44780-decoder.test.ts` replays `begin()`'s full init dance,
+`print("Hi")`, `setCursor(0,1)` + a second `print()`, and `clear()` by
+hand, asserting the decoded buffer at each step) and, separately, against
+the real running app: a genuine `LiquidCrystal`-based sketch
+(`simulators/LiquidCrystal`'s own `examples/HelloWorld/HelloWorld.ino`,
+public domain, used verbatim as the "LCD Display" canvas example)
+compiled, loaded, and run through the full pipeline - `lcd.print("hello,
+world!")` and a live `millis()/1000` counter on row 2 both appeared on
+the placed `wokwi-lcd1602` element and kept advancing in real time, with
+no static/preset text involved anywhere in the path.
+
 **The RPC surface** — three additions, mirroring the pin I/O pipeline
 above almost exactly (`web/common/src/adapter-types.ts`,
 `worker-host.ts`):

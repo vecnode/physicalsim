@@ -328,10 +328,20 @@ export class Scene {
     entity: PlacedEntity,
     tagName: string,
     center: { x: number; y: number } | null,
+    // Element-specific properties to set before the first render (e.g.
+    // wokwi-led's "color") - a plain Lit @property, not something
+    // component-registry.ts's tag lookup knows about, so it's set here
+    // rather than baked into the registry. Optional and rare: only an
+    // Example's build() (main.ts) uses this today, to tell otherwise-
+    // identical LEDs apart (a traffic light's red/yellow/green).
+    attrs?: Record<string, string>,
   ): Promise<void> {
     const wrapper = document.createElement("div");
     wrapper.className = "board-item";
     const boardEl = document.createElement(tagName);
+    if (attrs) {
+      for (const [key, value] of Object.entries(attrs)) boardEl.setAttribute(key, value);
+    }
     wrapper.appendChild(boardEl);
     this.content.appendChild(wrapper);
     // A newly-appended wrapper is now the content layer's last child,
@@ -423,13 +433,18 @@ export class Scene {
   // whatever's already placed. Components aren't backed by any
   // SimulatorAdapter and have no power state; they're purely placed on
   // the canvas for now (see PlacedComponent's doc comment in circuit.ts).
-  async addComponentAt(type: string, x: number, y: number): Promise<PlacedComponent | null> {
+  async addComponentAt(
+    type: string,
+    x: number,
+    y: number,
+    attrs?: Record<string, string>,
+  ): Promise<PlacedComponent | null> {
     const tagName = componentRegistry[type]?.tagName;
     const component = createComponent(type);
     if (!tagName || !component) return null;
 
     this.circuit.components.push(component);
-    await this.placeElement(component, tagName, { x, y });
+    await this.placeElement(component, tagName, { x, y }, attrs);
     return component;
   }
 }

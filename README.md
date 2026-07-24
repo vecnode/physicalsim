@@ -4,11 +4,14 @@ Native desktop PComp simulator host.
 
 CPU Emulators:
 
-- Arduino 8-bit AVR `avr8js`
+- `vecnode/avr8js`
 	- Arduino Uno
+  - Arduino Nano
+
+Find supported components here: [COMPONENTS.md](COMPONENTS.md)
 
 (idle) 
-- RP2040 `rp2040js`
+- RP2040 `vecnode/rp2040js`
 - ARM Cortex-M `qemu-system-arm` (QEMU, spawned as a native process)
 
 

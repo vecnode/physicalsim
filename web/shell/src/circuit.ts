@@ -1,5 +1,5 @@
 import type { AdapterId } from "./adapter-registry.js";
-import type { ArduinoUnoElement } from "@wokwi/elements";
+import type { ArduinoUnoElement, ArduinoNanoElement } from "@wokwi/elements";
 import { componentRegistry } from "./component-registry.js";
 
 // Not the same thing as @physicalsim/common's Circuit class
@@ -44,9 +44,15 @@ export interface Circuit {
   components: PlacedComponent[];
 }
 
-// Board id -> custom element tag name (@wokwi/elements).
+// Board id -> custom element tag name (@wokwi/elements). Arduino Nano is
+// the same ATmega328p MCU as the Uno (see boards/arduino-nano.ts's own
+// comment on why its BoardPinMap is identical) - a second placeable board
+// type, reachable from the canvas's own right-click "Boards" menu the
+// exact same way Arduino Uno already is, since context-menu.ts builds
+// that menu generically from this table.
 export const boardTagName: Record<string, string> = {
   "arduino-uno": "wokwi-arduino-uno",
+  "arduino-nano": "wokwi-arduino-nano",
 };
 
 // Board id -> human-readable label, for menus that list board types (the
@@ -55,6 +61,7 @@ export const boardTagName: Record<string, string> = {
 // board types needs its own label lookup, not to reach into the DOM.
 export const boardDisplayName: Record<string, string> = {
   "arduino-uno": "Arduino Uno",
+  "arduino-nano": "Arduino Nano",
 };
 
 // Board id -> the SimulatorAdapter that powers it. This is what "plugging
@@ -62,6 +69,7 @@ export const boardDisplayName: Record<string, string> = {
 // which calls apply(boardAdapterId[type]) right after placing a board.
 export const boardAdapterId: Record<string, AdapterId> = {
   "arduino-uno": "avr8",
+  "arduino-nano": "avr8",
 };
 
 // Board id -> how to reflect powered on/off on its placed element. Board-
@@ -69,9 +77,13 @@ export const boardAdapterId: Record<string, AdapterId> = {
 // (or any property at all) for this - Arduino Uno's power-supply LED
 // ("ON" on the silkscreen) is independent of any GPIO pin, unlike
 // led13/ledTX/ledRX which track real pin state (not wired up yet).
+// wokwi-arduino-nano happens to expose the identical property name.
 export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => void> = {
   "arduino-uno": (el, on) => {
     (el as ArduinoUnoElement).ledPower = on;
+  },
+  "arduino-nano": (el, on) => {
+    (el as ArduinoNanoElement).ledPower = on;
   },
 };
 

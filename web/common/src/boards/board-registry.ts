@@ -1,4 +1,5 @@
 import { arduinoUno } from "./arduino-uno.js";
+import { arduinoNano } from "./arduino-nano.js";
 import type { BoardPinMap } from "./board.js";
 
 // Board type (circuit.ts's CircuitBoard.type, shell-side) -> its
@@ -9,6 +10,7 @@ import type { BoardPinMap } from "./board.js";
 // this table needs to change.
 export const boardPinMaps: Record<string, BoardPinMap> = {
   "arduino-uno": arduinoUno,
+  "arduino-nano": arduinoNano,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'
@@ -18,9 +20,11 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
 // "13", not silkscreen-style "D13" - arduino-uno.ts's map still uses
 // "D13" so a pin's name reads the same as the real datasheet regardless
 // of how the SVG happens to label the marker. A board with no entry here
-// is assumed to already match (identity).
+// is assumed to already match (identity). Arduino Nano's element uses the
+// exact same bare-digit convention, so it shares the identical resolver.
 export const boardPinNameFromMarker: Record<string, (marker: string) => string> = {
   "arduino-uno": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
+  "arduino-nano": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
 };
 
 export function resolveBoardPinName(boardType: string, marker: string): string {

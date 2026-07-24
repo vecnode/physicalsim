@@ -1,5 +1,17 @@
 import { RP2040 } from "rp2040js";
 import type { GPIOPin } from "rp2040js";
+
+// RP2040's own `clock` field is typed as the minimal `IClock` interface
+// (just `nanos`/`createAlarm`) - `tick()`/`nanosToNextAlarm` only exist
+// on the concrete `SimulationClock` implementation `new RP2040()`
+// actually constructs by default (rp2040.ts's own `clock: IClock = new
+// SimulationClock()`), but `SimulationClock` itself isn't re-exported
+// from rp2040js's own index.ts, so this names just the two members
+// stepOnce() below needs rather than importing the concrete class.
+interface TickableClock {
+  tick(deltaNanos: number): void;
+  readonly nanosToNextAlarm: number;
+}
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 import { DS1307Device } from "./ds1307.js";
 import { bootromB1 } from "./bootrom-b1.js";
@@ -98,7 +110,7 @@ export class Rp2040Adapter implements SimulatorAdapter {
 
   step(n: number): void {
     for (let i = 0; i < n; i++) {
-      this.mcu.step();
+      this.stepOnce();
     }
     this.emitState();
   }
@@ -242,6 +254,36 @@ export class Rp2040Adapter implements SimulatorAdapter {
     return gpio;
   }
 
+  // RP2040.step() (rp2040js's own, see rp2040.ts) is *only*
+  // `this.core.executeInstruction()` - it never advances `this.clock`.
+  // Timer/alarm-driven peripherals (the hardware TIMER sleep_ms()/
+  // busy_wait_until() poll, WFI wake-up scheduling) depend entirely on
+  // `clock.tick(nanos)` being called with real elapsed time - skip that,
+  // and any sketch that sleeps or waits-for-interrupt hangs forever,
+  // spinning on a condition nothing will ever advance. Confirmed by hand
+  // (see ARCHITECTURE.md's "RP2040 firmware pipeline" section) this was
+  // the actual root cause of the previously-documented sleep_ms() hang -
+  // not an rp2040js peripheral-completeness gap the way it first looked,
+  // a missing clock.tick() call in this adapter's own execution loop.
+  // Mirrors rp2040js's own reference Simulator.execute() (demo code,
+  // wokwi/rp2040js's src/simulator.ts) exactly, including the WFI-aware
+  // fast-forward: when the core is idle waiting for an interrupt,
+  // jumping the clock straight to the next scheduled alarm is both
+  // correct (nothing observable happens in between) and far faster than
+  // single-stepping through do-nothing cycles.
+  private readonly cycleNanos = 1e9 / 125_000_000; // 125MHz, matching rp2040js's own reference runner
+
+  private stepOnce(): void {
+    const { core } = this.mcu;
+    const clock = this.mcu.clock as unknown as TickableClock;
+    if (core.waiting) {
+      clock.tick(clock.nanosToNextAlarm);
+    } else {
+      const cycles = core.executeInstruction();
+      clock.tick(cycles * this.cycleNanos);
+    }
+  }
+
   private notifyPinChange(pin: string, value: number): void {
     if (this.lastPinValues.get(pin) === value) return;
     this.lastPinValues.set(pin, value);
@@ -253,7 +295,7 @@ export class Rp2040Adapter implements SimulatorAdapter {
       if (!this.running) return;
       const start = performance.now();
       for (let i = 0; i < this.batchSteps; i++) {
-        this.mcu.step();
+        this.stepOnce();
       }
       const elapsedMs = performance.now() - start;
       if (elapsedMs > 0) {

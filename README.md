@@ -7,12 +7,13 @@ CPU Emulators:
 - `vecnode/avr8js`
 	- Arduino Uno
   - Arduino Nano
+  - Arduino Mega
+
+- `vecnode/rp2040js`
+  - Raspberry Pi Pico
+  - Arduino Nano RP2040 Connect
 
 Find supported components here: [COMPONENTS.md](COMPONENTS.md)
-
-(idle) 
-- RP2040 `vecnode/rp2040js`
-- ARM Cortex-M `qemu-system-arm` (QEMU, spawned as a native process)
 
 
 ## Repository layout

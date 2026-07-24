@@ -1627,8 +1627,10 @@ physicalsim can run real compiled firmware on `avr8`/`avr8-mega`
 (`src/avr_toolchain.cpp` + `loadFirmware()`) and, as of 2026-07-24, on
 `rp2040` too (`src/rp2040_toolchain.cpp` + `Rp2040Adapter.loadFirmware()`).
 This section covers the design that was scoped first (still accurate),
-what actually shipped, and one real limitation discovered while building
-it (`sleep_ms()` doesn't work yet - see "Known limitation" below).
+what actually shipped, and a root-caused-and-fixed clock-advancement bug
+that used to block both `sleep_ms()` and GPIO input into compiled
+firmware (see "Fixed: the adapter never advanced the simulation clock"
+below) - both now work.
 
 **Not QEMU.** `cortex-m` uses QEMU specifically because *no JS/TS CPU
 emulator exists for generic ARM Cortex-M* (see "Two adapter kinds"
@@ -1737,73 +1739,89 @@ exists now; nothing below forecloses that.
   runtime - unrelated to the boot sequence, and confirmed still needed
   even though boot code itself is skipped.
 - **Routing** - `POST /compile`'s `board` field (added for the Mega work
-  above) routes `"nano-rp2040-connect"` to `rp2040_toolchain.cpp` instead
-  of `avr_toolchain.cpp` in `main.cpp`'s handler; the response carries a
-  new `binHex` field (plain hex-pair-per-byte, no Intel HEX framing -
-  RP2040 has no such convention) instead of `hexText`, decoded on the
-  frontend by a new `parseHexBytes()` in `main.ts` (a few lines - nowhere
-  near `parseIntelHex()`'s complexity, since there's no record structure
-  to parse).
+  above) routes `"nano-rp2040-connect"` **and** `"pi-pico"` (added
+  2026-07-24 for the second RP2040-family board, see "Raspberry Pi Pico
+  board" below) to `rp2040_toolchain.cpp` instead of `avr_toolchain.cpp`
+  in `main.cpp`'s handler; the response carries a new `binHex` field
+  (plain hex-pair-per-byte, no Intel HEX framing - RP2040 has no such
+  convention) instead of `hexText`, decoded on the frontend by a new
+  `parseHexBytes()` in `main.ts` (a few lines - nowhere near
+  `parseIntelHex()`'s complexity, since there's no record structure to
+  parse). The frontend's own `compileAndRun()` needed the identical
+  `"pi-pico"` addition to its board check before decoding `binHex` -
+  the same routing decision has to be made on both sides of the `POST
+  /compile` boundary, and initially only the backend got updated when
+  `"pi-pico"` was added (caught while building the "Potentiometer
+  Threshold (Pico)" example below: the board placed and compiled fine
+  but "Compile & Run" tried to Intel-HEX-parse the raw `binHex` bytes -
+  "compile error... missing end-of-file record" - since the frontend
+  still only special-cased `"nano-rp2040-connect"`).
 
-**Known limitation: `sleep_ms()` hangs.** Confirmed by hand, isolated from
-everything else: a `pico-sdk` program using `sleep_ms()` compiles,
-loads, and starts correctly (GPIO output, direction, and the surrounding
-program logic all run) but never returns from its first `sleep_ms()`
-call - `rp2040js`'s incomplete `CLOCKS`/`PLL` peripheral emulation (the
-same gap that blocks real bootrom cold-boot, above) means the hardware
-timer `sleep_ms()` busy-waits on never advances the way it would need to.
-Confirmed the diagnosis, not just observed the symptom: the *exact same*
-program compiled with a hand-rolled cycle-count busy-wait instead of
-`sleep_ms()` runs correctly (verified both in isolation against
-`rp2040js` directly, and live through the real running app - GPIO25
-toggling, LED visibly blinking). The shipped `"rp2040-blink"` example
-(`main.ts`'s `EXAMPLES`) uses that busy-wait, with a comment explaining
-why, rather than `sleep_ms()` - not a permanent design choice, a
-documented workaround for a real, narrower peripheral-emulation gap
-(distinct from the boot2/bootrom gap above, discovered while chasing it)
-worth fixing in `rp2040js` directly at some point.
+**Fixed: the adapter never advanced the simulation clock.** Root cause of
+what were originally two separately-documented, seemingly unrelated
+limitations (`sleep_ms()` hanging, and GPIO *input* reads from compiled
+firmware not seeing externally-injected values) turned out to be one bug:
+`rp2040js`'s own `RP2040.step()` (`src/rp2040.ts`) is *only*
+`this.core.executeInstruction()` - it never calls `this.clock.tick()`.
+`Rp2040Adapter` used to drive execution with a bare `mcu.step()` loop, so
+nothing that depends on the simulation clock advancing (a scheduled
+alarm, WFI wake-up - what `sleep_ms()` and, transitively, the GPIO input
+path's own interrupt-driven update eventually block on) ever progressed.
+Found by comparing against Wokwi's own reference runner
+(`demo/simulator.ts` in `wokwi/rp2040js`), whose `Simulator.execute()`
+does the WFI-aware fast-forward-to-next-alarm-or-advance-by-instruction
+dance a correct driver needs. `Rp2040Adapter` now has its own
+`stepOnce()` (`web/adapters/rp2040/src/adapter.ts`) mirroring that same
+logic, used by both `step()` and `scheduleTick()`'s batch loop. Verified
+with real compiled sketches through the actual adapter: `sleep_ms()` went
+from a permanent hang to producing the expected number of real pin
+transitions; `"rp2040-button-control"`'s GPIO input went from always-0 to
+correctly reflecting `writePin()`-injected values. Both examples now use
+their natural pico-sdk API (`sleep_ms()`, `gpio_get()`) again - no
+busy-wait workaround needed. A regression test
+(`adapter.test.ts`'s "clock advancement" describe block) schedules a bare
+clock alarm and asserts `step()` alone is enough to fire it, without
+needing a compiled sketch to catch a regression here.
 
-**Known limitation: GPIO *input* reads from compiled firmware don't see
-externally-injected values.** `writePin()` (an external component like a
-placed pushbutton driving a pin, via `SignalChain` - see "Pin-to-pin
-wiring" above) correctly updates the pin's state as read back through
-`Rp2040Adapter.readPin()` itself, confirmed directly over the native
-bridge. It does **not**, however, show up when the *compiled sketch's own*
-`gpio_get()` call reads the same pin - the `"rp2040-button-control"`
-example places and wires correctly, compiles and loads correctly (a
-distinct, plausible byte count from `"rp2040-blink"`'s, confirming the
-right source actually compiled), but pressing the button doesn't move the
-LED. Traced partway, not root-caused: `rp2040js`'s `GPIO_IN` register
-(what `gpio_get()` compiles down to reading, confirmed against
-`pico-sdk`'s own `hardware/gpio.h`) is a live getter with no caching
-(`RP2040.gpioValues`, computed fresh from every `GPIOPin.inputValue` on
-each read), and every intermediate step `writePin()` touches
-(`rawInputValue`, `inputEnable` via `padValue`, the `inputOverride`
-register defaulting to pass-through) reads correctly in isolation via
-`readPin()`. The actual disconnect between "the JS-side state is
-correct" and "compiled firmware reading the same register sees something
-else" wasn't found by reading source - it would need runtime
-instrumentation inside `rp2040js` (logging actual register reads during
-execution), not more static tracing. A real, distinct gap from the
-`sleep_ms()` one above: GPIO **output** from compiled firmware (driving
-an LED) is proven solid; GPIO **input** *into* compiled firmware (reading
-a button/sensor) isn't proven working yet. Shipped anyway (per user
-direction, 2026-07-24) since the example is still a correct
-demonstration of the second board's placement/wiring/compile path, with
-this gap documented rather than silently broken.
+**Raspberry Pi Pico board.** A second RP2040-family board (2026-07-24,
+alongside Arduino Nano RP2040 Connect), reusing the same
+`rp2040_toolchain.cpp`/`Rp2040Adapter` - the RP2040 chip is identical,
+only the board's silkscreen/pinout and physical art differ. Registered as
+`"pi-pico"` in `board-registry.ts` (an identity `GP<n>` pin map, since the
+Pico's own silkscreen labels already match the adapter's pin ids
+one-for-one, unlike Nano RP2040 Connect's `D<n>`/`A<n>` labels) and in
+`POST /compile`'s routing (see above). Board art (`board.svg`+
+`board.json`) is vendored from the real `wokwi/wokwi-boards` repo (not
+`wokwi-elements`'s own hand-drawn-SVG convention) into
+`vecnode/wokwi-elements` directly - see the memory note on this for the
+licensing tradeoff (`wokwi-boards` has no LICENSE file; an explicit,
+accepted user decision, not an oversight). First analog-input RP2040
+example, `"pico-potentiometer"` in `main.ts`'s `EXAMPLES`, exercises
+`hardware_adc` (`adc_init()`/`adc_gpio_init()`/`adc_read()`) through
+`AnalogChain` (see "Pin-to-pin wiring" above) - the same
+`writeAnalogPin()` mechanism the avr8 boards' potentiometer/joystick
+examples use, now also implemented on `Rp2040Adapter` (GPIO26-29, the
+Pico's four ADC-capable pins). Required adding `hardware_adc`/
+`hardware_i2c`/`hardware_spi`/`hardware_pwm` to the sketch template's
+`target_link_libraries` (`src/rp2040_sketch_template/CMakeLists.txt`) -
+`pico_stdlib` alone doesn't pull those in, and pico-sdk's own
+`--gc-sections` default link flags mean linking them unconditionally
+costs nothing for sketches that don't use them.
 
 Verified end-to-end through every layer, not just unit-by-unit: a real
 `arm-none-eabi-gcc` (xPack prebuilt) compiling real `pico-sdk` source
-through real `cmake`+`ninja`; the resulting binary run directly against
-`rp2040js` in isolation (GPIO25 toggling, confirmed by a step-by-step
-trace); the *exact* bytes physicalsim's own `/compile` endpoint produced
-(via a direct HTTP request against the real built `physicalsim.exe`) run
-the same way with the same result; and the full path from the browser UI
-- clicking the `"rp2040-blink"` example, clicking "Compile & Run", then
-"Start" - producing a live-running simulation (`CYCLES` advancing,
-`VOLTAGE`/`CURRENT` reflecting the RP2040 power profile) with the LED
-genuinely blinking, confirmed via `wokwi-led`'s own `value` property
-changing over time in the running page.
+through real `cmake`+`ninja`; the resulting binaries (both the digital
+`"rp2040-blink"`/`"rp2040-button-control"` sketches and the ADC-based
+`"pico-potentiometer"` sketch) run directly against `rp2040js` in
+isolation (GPIO25 toggling correctly, GPIO15→GPIO6 correctly reflecting
+an injected button press, and GPIO25 correctly reflecting a thresholded
+`adc_read()` driven by `writeAnalogPin()`); the *exact* bytes
+physicalsim's own `/compile` endpoint produced (via a direct HTTP request
+against the real built `physicalsim.exe`) run the same way with the same
+result; and the full path from the browser UI - clicking an example,
+clicking "Compile & Run", then "Start" - producing a live-running
+simulation (`CYCLES` advancing, `VOLTAGE`/`CURRENT` reflecting the RP2040
+power profile) with no console/compile errors.
 
 ## Build pipeline
 

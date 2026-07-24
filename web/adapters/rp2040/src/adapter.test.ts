@@ -157,3 +157,46 @@ describe("Rp2040Adapter serial output (UART0)", () => {
     expect(cb).toHaveBeenCalledWith(42);
   });
 });
+
+// Regression test for a real bug found and fixed 2026-07-24 (see
+// ARCHITECTURE.md's "RP2040 firmware pipeline" section): rp2040js's own
+// `RP2040.step()` (src/rp2040.ts) is *only* `core.executeInstruction()` -
+// it never calls `clock.tick()`, so nothing that depends on the
+// simulation clock advancing (scheduled alarms, WFI wake-up - which is
+// what `sleep_ms()` and, transitively, plenty of other pico-sdk startup/
+// runtime code eventually blocks on) ever progresses when driven through
+// a bare `mcu.step()` loop, the way this adapter used to be written.
+// Confirmed by hand (compiled real pico-sdk sketches through
+// physicalsim's own /compile endpoint) that this was the actual root
+// cause of two previously-documented, seemingly separate limitations
+// (`sleep_ms()` hanging forever, and GPIO input never reaching compiled
+// firmware) - one fix (`stepOnce()`, mirroring rp2040js's own reference
+// `Simulator.execute()`) resolved both. This test doesn't need a
+// compiled sketch to catch a regression here: a plain scheduled clock
+// alarm (the same primitive `sleep_ms()` itself uses) is enough to prove
+// `step()` actually advances the clock, not just the CPU.
+describe("Rp2040Adapter clock advancement (regression: sleep_ms()/WFI hang)", () => {
+  it("step() advances the simulation clock, not just CPU instructions", async () => {
+    const adapter = new Rp2040Adapter();
+    await adapter.init(undefined);
+
+    const clock = (
+      adapter as unknown as {
+        mcu: { clock: { createAlarm(cb: () => void): { schedule(nanos: number): void } } };
+      }
+    ).mcu.clock;
+
+    let fired = false;
+    // 1000ns - short enough that even a handful of adapter.step() calls
+    // (each advancing the clock by one instruction's worth of real time)
+    // should cross it well within a small step budget, if step() is
+    // advancing the clock at all.
+    clock.createAlarm(() => {
+      fired = true;
+    }).schedule(1000);
+
+    adapter.step(1000);
+
+    expect(fired).toBe(true);
+  });
+});

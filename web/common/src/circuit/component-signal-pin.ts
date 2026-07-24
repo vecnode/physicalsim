@@ -59,4 +59,12 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   "heart-beat-sensor": { pinNames: ["OUT"], role: "read" },
   "ir-receiver": { pinNames: ["DAT"], role: "read" },
   "ntc-temperature-sensor": { pinNames: ["OUT"], role: "read" },
+  // Same demo-only "read" caveat, doubly so here: MPU6050's real job
+  // (accelerometer/gyro data) is entirely over I2C (SDA/SCL), which no
+  // adapter emulates - not "not wired up yet" like the sensors above, but
+  // architecturally out of reach until a TWI peripheral exists. INT is
+  // wired here (an interrupt pin, at least plausibly an output on real
+  // hardware) purely so the indicator LED can demo the same read-role
+  // pattern; it carries no real motion data.
+  mpu6050: { pinNames: ["INT"], role: "read" },
 };

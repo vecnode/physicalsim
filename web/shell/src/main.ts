@@ -563,7 +563,13 @@ void loop() {
     // genuinely a write-role input, a relay coil is genuinely something
     // firmware drives), unlike the sensor glow entries in
     // componentSignalPins.ts, which are read-role for lack of any
-    // interactive alternative today.
+    // interactive alternative today. Prints to Serial on every toggle -
+    // the relay's own glow (added to the vecnode/wokwi-elements fork) is
+    // real but small/easy to miss at a glance, so this gives an
+    // unambiguous, always-visible confirmation that a press actually
+    // reached the board (confirmed separately, directly: relayState does
+    // flip and the glow does render - this is about visibility, not a
+    // bug in the underlying wiring).
     sketch: `const int buttonPin = 2;
 const int relayPin = 13;
 
@@ -573,6 +579,8 @@ int lastButtonState = LOW;
 void setup() {
   pinMode(buttonPin, INPUT);
   pinMode(relayPin, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("Relay Control ready - press the button to toggle");
 }
 
 void loop() {
@@ -580,6 +588,7 @@ void loop() {
   if (buttonState == HIGH && lastButtonState == LOW) {
     relayState = !relayState;
     digitalWrite(relayPin, relayState);
+    Serial.println(relayState ? "Relay ON" : "Relay OFF");
     delay(50); // simple debounce
   }
   lastButtonState = buttonState;
@@ -597,14 +606,18 @@ void loop() {
   },
   "lcd2004-dashboard": {
     label: "LCD2004 Dashboard",
-    description: "Real LiquidCrystal firmware filling all 4 rows of a 20x4 LCD.",
+    description: "Real LiquidCrystal firmware filling all 4 rows of a 20x4 LCD, on an Arduino Nano.",
     level: "intermediate",
-    board: "Arduino Uno",
+    board: "Arduino Nano",
     glyph: "📟",
     // Exercises Hd44780Decoder's generalized row addressing for real -
     // rows 2/3 start at DDRAM addresses `cols` and `0x40 + cols` (20 and
     // 84 here), not a straightforward continuation of rows 0/1 - see
-    // ARCHITECTURE.md's "Generalizing to lcd2004" section.
+    // ARCHITECTURE.md's "Generalizing to lcd2004" section. Also the
+    // second placeable board type (Arduino Nano - see circuit.ts/boards/
+    // arduino-nano.ts): the exact same ATmega328p as the Uno, so nothing
+    // about the sketch/wiring below needed to change, just showBoard()'s
+    // type argument.
     sketch: `#include <LiquidCrystal.h>
 
 const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
@@ -625,7 +638,7 @@ void loop() {
   lcd.print("s   ");
 }`,
     build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
+      const board = await canvas.scene.showBoard("arduino-nano");
       if (!board) return;
       const lcd = await canvas.scene.addComponentAt("lcd2004", board.x + 620, board.y + 10);
       if (!lcd) return;
@@ -672,60 +685,42 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
     },
   },
-  "lcd-button-counter": {
-    label: "LCD Button Counter",
-    description: "Each button press increments a count shown live on the LCD.",
-    level: "intermediate",
+  "mpu6050-indicator": {
+    label: "MPU6050 Indicator",
+    description:
+      "Button toggles the MPU6050's indicator LED - not real motion data (I2C isn't emulated yet).",
+    level: "beginner",
     board: "Arduino Uno",
-    glyph: "🔢",
-    // Combines two independent pieces built this session - the LCD
-    // protocol chain and a plain pushbutton - in one sketch, on
-    // deliberately different pins than "LCD Display" (12/11/6/5/4/3) so
-    // the button (pin 2) doesn't collide with the LCD's own D7 (pin 2
-    // there).
-    sketch: `#include <LiquidCrystal.h>
-
-const int rs = 12, en = 11, d4 = 6, d5 = 5, d6 = 4, d7 = 3;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-
-const int buttonPin = 2;
-int count = 0;
-int lastButtonState = LOW;
+    glyph: "🧭",
+    // Deliberately NOT a "gyro" example - the MPU6050's actual job
+    // (accelerometer/gyro readings) is entirely over I2C (SDA/SCL),
+    // which no adapter emulates (see ARCHITECTURE.md/the memory note on
+    // this). Its `value` property (renamed from the original led1 in
+    // vecnode/wokwi-elements) was never tied to real motion data either
+    // way - this just demos the same read-role indicator pattern as
+    // "Relay Control"/"Joystick Button + LED", with an honest
+    // description saying so, rather than a misleading "gyro sensor"
+    // example that doesn't actually read anything.
+    sketch: `const int buttonPin = 2;
+const int indicatorPin = 13;
 
 void setup() {
   pinMode(buttonPin, INPUT);
-  lcd.begin(16, 2);
-  lcd.print("Button Counter");
-  lcd.setCursor(0, 1);
-  lcd.print("Count: 0");
+  pinMode(indicatorPin, OUTPUT);
 }
 
 void loop() {
-  int buttonState = digitalRead(buttonPin);
-  if (buttonState == HIGH && lastButtonState == LOW) {
-    count++;
-    lcd.setCursor(0, 1);
-    lcd.print("Count: ");
-    lcd.print(count);
-    lcd.print("   ");
-    delay(50); // simple debounce
-  }
-  lastButtonState = buttonState;
+  digitalWrite(indicatorPin, digitalRead(buttonPin));
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("arduino-uno");
       if (!board) return;
-      const lcd = await canvas.scene.addComponentAt("lcd1602", board.x + 620, board.y + 10);
-      if (!lcd) return;
-      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 200);
+      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
       if (!button) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "12" }, { entityId: lcd.id, pin: "RS" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "11" }, { entityId: lcd.id, pin: "E" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "6" }, { entityId: lcd.id, pin: "D4" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "5" }, { entityId: lcd.id, pin: "D5" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "4" }, { entityId: lcd.id, pin: "D6" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "3" }, { entityId: lcd.id, pin: "D7" });
+      const mpu = await canvas.scene.addComponentAt("mpu6050", board.x + 600, board.y + 160);
+      if (!mpu) return;
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: mpu.id, pin: "INT" });
     },
   },
 };

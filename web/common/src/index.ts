@@ -10,5 +10,6 @@ export * from "./circuit/component-protocol-pin.js";
 export * from "./circuit/protocols/hd44780-decoder.js";
 export * from "./boards/board.js";
 export * from "./boards/arduino-uno.js";
+export * from "./boards/arduino-nano.js";
 export * from "./boards/rp2040-board.js";
 export * from "./boards/board-registry.js";

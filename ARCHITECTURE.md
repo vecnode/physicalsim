@@ -1621,14 +1621,14 @@ zero console/build errors after each stage.
   velxio's own roadmap too — real, documented user-facing features either
   project could ship next, lower priority than the device decoders above.
 
-## RP2040 firmware pipeline (planned, not yet built)
+## RP2040 firmware pipeline
 
-physicalsim can already run real compiled firmware on `avr8`/`avr8-mega`
-(`src/avr_toolchain.cpp` + `loadFirmware()`). `rp2040` has neither a
-compiler nor a `loadFirmware()` - this is the concrete plan for closing
-that gap, written up before building it since it's a genuinely larger
-piece of work than anything in "Feature parity vs. velxio" above (a new
-cross-compiler toolchain, not a peripheral-wiring task).
+physicalsim can run real compiled firmware on `avr8`/`avr8-mega`
+(`src/avr_toolchain.cpp` + `loadFirmware()`) and, as of 2026-07-24, on
+`rp2040` too (`src/rp2040_toolchain.cpp` + `Rp2040Adapter.loadFirmware()`).
+This section covers the design that was scoped first (still accurate),
+what actually shipped, and one real limitation discovered while building
+it (`sleep_ms()` doesn't work yet - see "Known limitation" below).
 
 **Not QEMU.** `cortex-m` uses QEMU specifically because *no JS/TS CPU
 emulator exists for generic ARM Cortex-M* (see "Two adapter kinds"
@@ -1659,60 +1659,122 @@ against `rp2040js`'s own demo code
   arduino-pico CMake build already embeds via its linker script),
   `objcopy -O binary`'d down to raw bytes.
 
-**The toolchain: `arm-none-eabi-gcc` + a vendored Arduino-compatible
-RP2040 core**, the exact same shape `avr_toolchain.cpp` already has for
-AVR (shell out to a real compiler + a vendored core providing `setup()`/
-`loop()`/`digitalWrite()`/`Serial`/`analogRead()`), not a new idea:
+**The toolchain that actually shipped: `arm-none-eabi-gcc` + raw
+`pico-sdk`, not `arduino-pico`.** The original plan above called for
+`earlephilhower/arduino-pico` (an Arduino-API-compatible wrapper). Once
+`arm-none-eabi-gcc` was actually in hand (a real xPack prebuilt release,
+`downloads.arduino.cc` has no arm-none-eabi-gcc mirror at the
+`BUNDLE_AVR_TOOLCHAIN`-style well-known URL, confirmed by trying), a
+from-scratch spike proved `arduino-pico`'s ~300MB, deeply CMake-generated-
+header-dependent tree wasn't necessary for a first working slice - raw
+`raspberrypi/pico-sdk` (forked untrimmed to `vecnode/pico-sdk`, ~9MB) gets
+a real sketch compiling and running with far less surface area. This means
+today's RP2040 sketches use **pico-sdk's own C API** (`gpio_init()`,
+`gpio_put()`) inside the same `setup()`/`loop()` shape AVR sketches use,
+**not** Arduino's (`pinMode()`/`digitalWrite()`) - a real, documented
+difference from the AVR boards, not an oversight. `arduino-pico` remains
+the right target for a future Arduino-API-compatible layer on top of what
+exists now; nothing below forecloses that.
 
-- **Core: `earlephilhower/arduino-pico`** (`github.com/earlephilhower/
-  arduino-pico`, LGPL-2.1, 2.8k+ stars, actively maintained) - the de
-  facto standard open-source Arduino core for RP2040, wrapping the
-  official Raspberry Pi `pico-sdk`. It already has support for the exact
-  board physicalsim placed (`boards/nano-rp2040-connect.ts`'s Arduino
-  Nano RP2040 Connect), so its variant work doesn't need to be
-  reinvented. Confirmed size: **~300MB** as a full clone - nowhere near
-  ArduinoCore-avr's ~19MB, because it bundles `pico-sdk` (itself a large
-  tree) plus TinyUSB, lwIP, BTstack, and prebuilt libraries for every
-  supported board's WiFi/Bluetooth chip. None of that is needed for a
-  `digitalWrite()`/`analogRead()`-level beginner sketch - it needs the
-  same kind of aggressive trim ArduinoCore-avr already got (`cores/
-  arduino` + one variant only), just harder: `cores/rp2040` pulls in
-  `pico-sdk` headers (not just Arduino-core-local files) for hardware
-  register definitions, so the trim boundary is less clean-cut than
-  ArduinoCore-avr's was. This is real scoping/trimming work, not a
-  one-line `git submodule add`.
-- **Toolchain: `arm-none-eabi-gcc`**, bundled the same way
-  `BUNDLE_AVR_TOOLCHAIN` already fetches `avr-gcc` (Arduino publishes
-  prebuilt `arm-none-eabi-gcc` archives at the same
-  `downloads.arduino.cc/tools/` location several other Arduino cores
-  use) - a new `BUNDLE_ARM_TOOLCHAIN` CMake option, structurally
-  identical to the existing one.
-- **`src/rp2040_toolchain.cpp`** (new file, mirroring `avr_toolchain.cpp`
-  almost exactly): shells out to `arm-none-eabi-g++`/`-gcc`/`-objcopy`
-  instead of the `avr-*` equivalents, links against the trimmed core +
-  pico-sdk headers, and produces raw binary bytes instead of Intel HEX.
-- **`Rp2040Adapter.loadFirmware(bytes)`**: new method, `this.mcu.flash.
-  set(bytes, 0)` + whatever reset-to-boot sequence matches `Avr8Adapter.
-  loadFirmware()`'s "reuse reset()" pattern.
-- **Routing**: the board-parameterized `/compile` endpoint just added for
-  AVR (see "Feature parity vs. velxio" -> Mega work) already carries a
-  `board` field end to end; routing `nano-rp2040-connect` to
-  `rp2040_toolchain.cpp` instead of `avr_toolchain.cpp` in `main.cpp`'s
-  handler is a small, mechanical extension of that same plumbing, not new
-  architecture.
+- **`simulators/pico-sdk`** - a genuine fork of `raspberrypi/pico-sdk`
+  (`gh repo fork`, real `parent`/upstream-tracking relationship, matching
+  how `ArduinoCore-avr` was redone the same session), vendored
+  **untrimmed** - unlike `ArduinoCore-avr`'s `cores/arduino`+one-variant
+  trim, `pico-sdk`'s CMake build reaches into many of its own
+  subdirectories dynamically (confirmed while getting a real build
+  working - `pico/config_autogen.h` alone is generated by scanning
+  `// PICO_CONFIG:`-annotated comments across the whole tree), so there's
+  no clean per-file trim boundary the way `ArduinoCore-avr`'s flat
+  `cores/arduino` had. At ~9MB it doesn't need one - small enough to
+  always ship, the same "small enough, don't bother trimming" call
+  `LiquidCrystal` and `ArduinoCore-avr` (now) both already made.
+- **`src/rp2040_toolchain.cpp`+`src/rp2040_sketch_template/CMakeLists.txt`**
+  - genuinely different shape from `avr_toolchain.cpp`'s flat "invoke gcc
+  per file": `pico-sdk` needs real CMake (the config-header generation
+  above, plus the boot stage-2 bootloader's own checksummed-assembly
+  build step - see "Known limitation" below for how that checksum was
+  confirmed correct without hand-reimplementing it). `compile_sketch()`
+  configures a **persistent** CMake+Ninja build directory once per
+  process (a from-scratch `pico-sdk` build is ~70 translation units -
+  redoing that per click, the way `avr_toolchain.cpp`'s per-request temp
+  dirs do, would make every "Compile & Run" slow), then just overwrites
+  `sketch.c` and reruns `cmake --build` - Ninja's own incremental
+  rebuild only recompiles what changed. `PICO_NO_PICOTOOL=1` is passed
+  unconditionally: `picotool` (UF2/signing metadata post-processing,
+  optional) failed to build with the host MinGW `gcc` this environment
+  happened to have on `PATH` (`intrin.h` doesn't exist outside MSVC) -
+  irrelevant anyway, since nothing downstream needs UF2 framing (see
+  below).
+- **`src/process_exec.hpp`/`.cpp`** - the Windows-`CreateProcess`/POSIX-
+  `posix_spawn` blocking-process-runner extracted out of
+  `avr_toolchain.cpp` (which originated it) once `rp2040_toolchain.cpp`
+  needed the identical logic - a second ~150-line copy would've been a
+  real duplication smell, unlike the small per-file config differences
+  the two toolchains otherwise don't share.
+- **`Rp2040Adapter.loadFirmware(bytes)`** - confirmed directly against
+  `rp2040js`'s own `demo/load-flash.ts`/`demo/bootrom.ts` that loading a
+  compiled program is genuinely just `mcu.flash.set(bytes, 0)`, no UF2/
+  HEX framing needed for a plain image at flash offset 0. What the plan
+  above got wrong: it assumed simulating the real ROM bootrom's cold-boot
+  sequence (`mcu.core.reset()` with `VTOR=0`) would work end-to-end.
+  It doesn't - `rp2040js`'s `CLOCKS`/`PLL_SYS`/`PLL_USB`/`VREG_AND_CHIP_
+  RESET` peripherals log "Unimplemented peripheral" for several registers
+  real bootrom's hardware bring-up touches, and execution never leaves
+  ROM. The fix, confirmed working: skip bootrom/boot2 execution
+  entirely and jump straight to the **application's own vector table**
+  (read `SP`/`PC` from flash offset `0x100` - the fixed size every
+  RP2040 boot2 region reserves, a hardware constant, not toolchain-
+  specific) - exactly what an attached hardware debugger's "reset and
+  run" does. `boot2`'s own code is still linked into the binary
+  (`pico-sdk`'s linker script requires the space to exist), it's just
+  never executed - since `rp2040js` reads flash directly out of its own
+  array rather than a physical SPI chip, `boot2`'s real job
+  (configuring the flash controller for XIP reads) has nothing to warm
+  up here. `mcu.loadBootrom()` is still called (real ROM image, vendored
+  verbatim into `web/adapters/rp2040/src/bootrom-b1.ts` since it's not
+  part of `rp2040js`'s own `src/index.ts` exports) because `pico-sdk`'s
+  runtime calls a handful of ROM-provided double/float math shims at
+  runtime - unrelated to the boot sequence, and confirmed still needed
+  even though boot code itself is skipped.
+- **Routing** - `POST /compile`'s `board` field (added for the Mega work
+  above) routes `"nano-rp2040-connect"` to `rp2040_toolchain.cpp` instead
+  of `avr_toolchain.cpp` in `main.cpp`'s handler; the response carries a
+  new `binHex` field (plain hex-pair-per-byte, no Intel HEX framing -
+  RP2040 has no such convention) instead of `hexText`, decoded on the
+  frontend by a new `parseHexBytes()` in `main.ts` (a few lines - nowhere
+  near `parseIntelHex()`'s complexity, since there's no record structure
+  to parse).
 
-**Why this wasn't built in the same pass as the Mega compiler fix**: the
-Mega fix reused an existing, working, already-bundled toolchain
-(`avr-gcc`) and an existing vendored core - purely parameter-threading.
-This is a new toolchain, a new (and non-trivially trimmed) vendored
-dependency, and new CMake bundling, none of which is verifiable in this
-dev environment today (`arm-none-eabi-gcc` isn't present or bundled
-anywhere yet, unlike `avr-gcc`, which was already sitting in `build/
-Debug/avr-toolchain/`) - shipping it without being able to compile-test
-even one real sketch end to end isn't the right bar for something this
-size. Recommended next step: fork `earlephilhower/arduino-pico` into
-`vecnode` (cheap, reversible - just secures the dependency), then scope
-the actual trim as its own dedicated pass.
+**Known limitation: `sleep_ms()` hangs.** Confirmed by hand, isolated from
+everything else: a `pico-sdk` program using `sleep_ms()` compiles,
+loads, and starts correctly (GPIO output, direction, and the surrounding
+program logic all run) but never returns from its first `sleep_ms()`
+call - `rp2040js`'s incomplete `CLOCKS`/`PLL` peripheral emulation (the
+same gap that blocks real bootrom cold-boot, above) means the hardware
+timer `sleep_ms()` busy-waits on never advances the way it would need to.
+Confirmed the diagnosis, not just observed the symptom: the *exact same*
+program compiled with a hand-rolled cycle-count busy-wait instead of
+`sleep_ms()` runs correctly (verified both in isolation against
+`rp2040js` directly, and live through the real running app - GPIO25
+toggling, LED visibly blinking). The shipped `"rp2040-blink"` example
+(`main.ts`'s `EXAMPLES`) uses that busy-wait, with a comment explaining
+why, rather than `sleep_ms()` - not a permanent design choice, a
+documented workaround for a real, narrower peripheral-emulation gap
+(distinct from the boot2/bootrom gap above, discovered while chasing it)
+worth fixing in `rp2040js` directly at some point.
+
+Verified end-to-end through every layer, not just unit-by-unit: a real
+`arm-none-eabi-gcc` (xPack prebuilt) compiling real `pico-sdk` source
+through real `cmake`+`ninja`; the resulting binary run directly against
+`rp2040js` in isolation (GPIO25 toggling, confirmed by a step-by-step
+trace); the *exact* bytes physicalsim's own `/compile` endpoint produced
+(via a direct HTTP request against the real built `physicalsim.exe`) run
+the same way with the same result; and the full path from the browser UI
+- clicking the `"rp2040-blink"` example, clicking "Compile & Run", then
+"Start" - producing a live-running simulation (`CYCLES` advancing,
+`VOLTAGE`/`CURRENT` reflecting the RP2040 power profile) with the LED
+genuinely blinking, confirmed via `wokwi-led`'s own `value` property
+changing over time in the running page.
 
 ## Build pipeline
 

@@ -2,6 +2,14 @@ import { RP2040 } from "rp2040js";
 import type { GPIOPin } from "rp2040js";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 import { DS1307Device } from "./ds1307.js";
+import { bootromB1 } from "./bootrom-b1.js";
+
+// The application's own vector table sits immediately after the 256-byte
+// boot stage-2 region (a fixed RP2040 hardware constant - real flash always
+// reserves exactly this much for boot2, regardless of what boot2
+// implementation a given toolchain links in). Word 0 is the initial stack
+// pointer, word 1 is the reset handler address - see loadFirmware() below.
+const APP_VECTOR_TABLE_OFFSET = 0x100;
 
 // Caps how often a *running* simulation posts a state update. The tick loop
 // itself runs unthrottled (as fast as the event loop allows) — this only
@@ -39,6 +47,12 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private serialListeners = new Set<(byte: number) => void>();
 
   constructor() {
+    // Real ROM (see bootrom-b1.ts) - pico-sdk's runtime calls into a
+    // handful of bootrom-provided functions (double/float math shims), so
+    // this needs to be genuinely loaded, not left at rp2040js's all-zero
+    // default, even though loadFirmware() below skips actually *executing*
+    // bootrom's own cold-boot code (see that method's own comment).
+    this.mcu.loadBootrom(bootromB1);
     // Unlike Avr8Adapter, RP2040 is one monolithic class - reset() below
     // only resets the core, it never recreates `this.mcu` (see rp2040js's
     // own RP2040.core.reset()), so this.mcu.uart[0]/this.mcu.adc keep
@@ -167,6 +181,39 @@ export class Rp2040Adapter implements SimulatorAdapter {
   onSerialData(cb: (byte: number) => void): () => void {
     this.serialListeners.add(cb);
     return () => this.serialListeners.delete(cb);
+  }
+
+  // Writes a raw flash image (rp2040_toolchain.cpp's compiled output - a
+  // flat binary, not Intel HEX like avr8's loadFirmware(); RP2040 has no
+  // such convention) and boots into it.
+  //
+  // Deliberately does NOT simulate the real ROM bootrom's own cold-boot
+  // sequence (crystal oscillator / PLL / voltage-regulator bring-up,
+  // followed by validating and jumping into the flash-resident boot stage
+  // 2) the way real hardware does - confirmed by hand (see
+  // ARCHITECTURE.md's "RP2040 firmware pipeline" section) that rp2040js's
+  // own peripheral emulation doesn't fully model the registers that cold
+  // boot sequence polls, and stalls indefinitely partway through PLL init.
+  // Instead this jumps straight to the *application's* own vector table -
+  // exactly what an attached hardware debugger does when it "resets and
+  // runs" a target, skipping ROM entirely. The compiled binary's boot2
+  // region (its first 256 bytes) is still present in `bytes` and still
+  // linked by the sketch template's CMakeLists.txt (pico-sdk's own build
+  // requires reserving that space), it's just never executed - since
+  // rp2040js reads flash directly out of its own `flash` array rather than
+  // a physical SPI chip, boot2's real job (configuring the flash
+  // controller for XIP reads) has nothing to warm up here.
+  loadFirmware(bytes: Uint8Array): void {
+    this.mcu.flash.fill(0xff);
+    this.mcu.flash.set(bytes, 0);
+    const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const initialSp = view.getUint32(APP_VECTOR_TABLE_OFFSET, true);
+    const resetHandler = view.getUint32(APP_VECTOR_TABLE_OFFSET + 4, true);
+    this.stop();
+    this.mcu.core.reset();
+    this.mcu.core.SP = initialSp;
+    this.mcu.core.PC = resetHandler & ~1;
+    this.emitState();
   }
 
   // A GPIOPin's own `.value` only reports Low/High while it's actively

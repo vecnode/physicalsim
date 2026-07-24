@@ -516,6 +516,70 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
     },
   },
+  "rp2040-blink": {
+    label: "Blink LED (RP2040)",
+    description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware.",
+    level: "beginner",
+    board: "Arduino Nano RP2040 Connect",
+    glyph: "💡",
+    // pico-sdk's own C API (gpio_init/gpio_put), not Arduino's
+    // (digitalWrite/delay) - no Arduino-compatible core is vendored for
+    // RP2040 yet (see ARCHITECTURE.md's "RP2040 firmware pipeline"
+    // section for why, and what a future arduino-pico integration would
+    // change here). Compiled by src/rp2040_toolchain.cpp - a genuinely
+    // different toolchain from the AVR boards' avr-gcc (arm-none-eabi-gcc
+    // + a vendored pico-sdk, driven through cmake), routed by board type
+    // in main.cpp's /compile handler.
+    //
+    // A hand-rolled cycle-count delay, not sleep_ms() - confirmed by hand
+    // (see ARCHITECTURE.md) that sleep_ms() hangs forever here: it busy-
+    // waits on the RP2040's hardware timer, whose tick source rp2040js
+    // doesn't fully emulate (the same PLL/CLOCKS peripheral gaps that log
+    // "Unimplemented peripheral" warnings during pico-sdk's own runtime
+    // clock init). digitalDelay() sidesteps that dependency entirely -
+    // this is the one thing about this example that's not "just write a
+    // normal pico-sdk sketch" yet, documented here so it isn't a silent
+    // surprise.
+    sketch: `void setup(void) {
+  gpio_init(25);
+  gpio_set_dir(25, GPIO_OUT);
+}
+
+static void digitalDelay(volatile unsigned int cycles) {
+  while (cycles--) {
+    __asm volatile("nop");
+  }
+}
+
+void loop(void) {
+  gpio_put(25, 1);
+  digitalDelay(3000000);
+  gpio_put(25, 0);
+  digitalDelay(3000000);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("nano-rp2040-connect");
+      if (!board) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 40);
+      if (!led) return;
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 120);
+      if (!resistor) return;
+      // "D2" resolves through boards/nano-rp2040-connect.ts to "GP25",
+      // matching the sketch's gpio_init(25) above - the signal path
+      // (board -> LED anode) is a direct wire, same as every other
+      // example's LED wiring. The resistor sits between the LED's
+      // cathode and board ground - the real position a current-limiting
+      // resistor belongs in, not on the signal path - which is also why
+      // it doesn't need to be (and isn't) in componentSignalPins: it's
+      // genuinely just placed and wired, not part of what makes the LED
+      // light up in this simulation (physicalsim has no per-component
+      // current/resistance solver - see ARCHITECTURE.md's "current"/
+      // AC-DC section).
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D2" }, { entityId: led.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+    },
+  },
   "lcd-display": {
     label: "LCD Display",
     description: "16x2 LCD driven by real LiquidCrystal firmware over its RS/E/D4-D7 bus.",
@@ -828,7 +892,24 @@ void loadExample(DEFAULT_EXAMPLE_ID).then(showExampleGallery);
 interface CompileResponse {
   ok: boolean;
   hexText?: string;
+  // Set instead of hexText for RP2040 boards - a raw flash binary
+  // (rp2040_toolchain.cpp's output, hex-pair-per-byte, no Intel HEX record
+  // framing, since RP2040 has no such convention) rather than AVR's Intel
+  // HEX text. Two response shapes, not one overloaded field, since the two
+  // toolchains' outputs are genuinely different things.
+  binHex?: string;
   log: string;
+}
+
+// Decodes CompileResponse.binHex ("a1b2c3..." - two hex chars per byte, no
+// framing) into raw bytes - the RP2040 counterpart to parseIntelHex() for
+// AVR, much simpler since there's no Intel HEX record structure to parse.
+function parseHexBytes(hex: string): Uint8Array {
+  const bytes = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+  }
+  return bytes;
 }
 
 async function compileAndRun(): Promise<void> {
@@ -890,8 +971,13 @@ async function compileAndRun(): Promise<void> {
       return;
     }
 
-    const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
-    const bytes = parsed.bytes.slice(0, parsed.usedBytes);
+    let bytes: Uint8Array;
+    if (board === "nano-rp2040-connect") {
+      bytes = parseHexBytes(body.binHex ?? "");
+    } else {
+      const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
+      bytes = parsed.bytes.slice(0, parsed.usedBytes);
+    }
     await client.call("loadFirmware", bytes);
     terminal.clear();
     terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);

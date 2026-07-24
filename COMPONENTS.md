@@ -15,12 +15,24 @@ Registered in `web/shell/src/circuit.ts`.
 | Board | Custom element | Adapter |
 |---|---|---|
 | Arduino Uno | `wokwi-arduino-uno` | `avr8` |
+| Arduino Nano | `wokwi-arduino-nano` | `avr8` |
+| Arduino Mega | `wokwi-arduino-mega` | `avr8-mega` |
+| Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040` |
+| Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040` |
 
-`@wokwi/elements` also ships `wokwi-arduino-mega`, `wokwi-arduino-nano`,
-`wokwi-esp32-devkit-v1`, `wokwi-franzininho`, and
-`wokwi-nano-rp2040-connect` - not registered as boards yet, since none of
-them has a matching `SimulatorAdapter`/pin map wired up (see "Adding a
-new board" below).
+Nano and Uno share `avr8` (same ATmega328p chip, see `web/adapters/avr8/
+src/chip.ts`); Mega gets its own `avr8-mega` adapter id since it's a
+genuinely different chip (ATmega2560). The two RP2040 boards share
+`rp2040` the same way Uno/Nano do. `wokwi-pi-pico` is vendored from
+`wokwi/wokwi-boards`' own official board art (Uri Shaked), not drawn from
+scratch - see [ARCHITECTURE.md](ARCHITECTURE.md)'s "RP2040 firmware
+pipeline" section for the sketch-compiling story these boards actually
+run.
+
+`@wokwi/elements` also ships `wokwi-esp32-devkit-v1` and
+`wokwi-franzininho` - not registered as boards yet, since neither has a
+matching `SimulatorAdapter`/pin map wired up (see "Adding a new board"
+below).
 
 ## Sensors
 

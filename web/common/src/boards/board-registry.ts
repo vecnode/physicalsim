@@ -2,6 +2,7 @@ import { arduinoUno } from "./arduino-uno.js";
 import { arduinoNano } from "./arduino-nano.js";
 import { arduinoMega } from "./arduino-mega.js";
 import { nanoRp2040Connect } from "./nano-rp2040-connect.js";
+import { rp2040Board } from "./rp2040-board.js";
 import type { BoardPinMap } from "./board.js";
 
 // Board type (circuit.ts's CircuitBoard.type, shell-side) -> its
@@ -15,6 +16,12 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   "arduino-nano": arduinoNano,
   "arduino-mega": arduinoMega,
   "nano-rp2040-connect": nanoRp2040Connect,
+  // rp2040-board.ts's own generic GP<n> identity map - written before any
+  // placeable board used it (only board.test.ts's own coverage), and
+  // finally the right fit: wokwi-pi-pico's own pin markers are literally
+  // "GP0".."GP28" (see pi-pico-element.ts, vendored from wokwi/wokwi-
+  // boards), unlike nano-rp2040-connect's Arduino-Nano-shaped D/A markers.
+  "pi-pico": rp2040Board,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'

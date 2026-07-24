@@ -7,3 +7,6 @@
 [submodule "simulators/wokwi-elements"]
 	path = simulators/wokwi-elements
 	url = https://github.com/vecnode/wokwi-elements.git
+[submodule "simulators/ArduinoCore-avr"]
+	path = simulators/ArduinoCore-avr
+	url = https://github.com/vecnode/ArduinoCore-avr.git

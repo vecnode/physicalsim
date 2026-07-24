@@ -26,6 +26,17 @@ set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime dir
 option(BUNDLE_QEMU_ARM "Bundle qemu-system-arm + its DLLs into the output" OFF)
 set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing qemu-system-arm.exe")
 
+# The AVR toolchain (avr-gcc/avr-g++/avr-objcopy) backing the in-app
+# Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike QEMU/WebView2
+# above, this isn't "copy an already-installed directory" - it's fetched
+# as Arduino's own prebuilt, redistributable toolchain archive (the exact
+# one arduino-cli itself downloads) via FetchContent below, the same
+# "download a URL tarball, don't build from source" shape already used for
+# Boost's official release tarball. Off by default: it's a ~150MB
+# download, only needed to actually compile sketches - src/avr_toolchain.cpp
+# falls back to PATH/an existing Arduino IDE install when unbundled.
+option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for the in-app sketch compiler" OFF)
+
 include(FetchContent)
 
 if(POLICY CMP0135)
@@ -106,13 +117,50 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
+# Prebuilt avr-gcc toolchain (see BUNDLE_AVR_TOOLCHAIN above). This archive
+# has no CMakeLists.txt of its own - FetchContent_MakeAvailable populates
+# (downloads + extracts) it and, finding nothing to add_subdirectory(),
+# stops there, which is exactly what's wanted for a plain prebuilt-binary
+# vendor. AVR_TOOLCHAIN_BIN_DIR is only meaningful when BUNDLE_AVR_TOOLCHAIN
+# is ON; src/avr_toolchain.cpp's own PATH/well-known-location fallback
+# covers the OFF case.
+set(AVR_TOOLCHAIN_BIN_DIR "")
+if(BUNDLE_AVR_TOOLCHAIN)
+    if(WIN32)
+        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-i686-w64-mingw32.zip")
+    elseif(APPLE)
+        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-x86_64-apple-darwin14.tar.bz2")
+    elseif(UNIX)
+        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-x86_64-pc-linux-gnu.tar.bz2")
+    endif()
+
+    if(_avr_toolchain_url)
+        FetchContent_Declare(avr_gcc_toolchain URL ${_avr_toolchain_url})
+        FetchContent_MakeAvailable(avr_gcc_toolchain)
+        # The archive's own layout is a single "avr/" directory containing
+        # bin/, include/, lib/, libexec/ - not those directories at the
+        # archive root.
+        set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}/avr")
+    else()
+        message(WARNING "[physicalsim] BUNDLE_AVR_TOOLCHAIN is ON but this platform has no known prebuilt avr-gcc URL - skipping")
+    endif()
+endif()
+
 cpp_embedlib_add(WebAssets
     FOLDER    ${CMAKE_CURRENT_SOURCE_DIR}/public
     NAMESPACE Web
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp)
+add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp src/avr_toolchain.cpp)
+
+# Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
+# straight from the source tree before the POST_BUILD copy below has ever
+# run (e.g. the very first debug build). Packaged builds always have the
+# POST_BUILD-copied avr-core/ next to the executable and never need this.
+target_compile_definitions(physicalsim PRIVATE
+    PHYSICALSIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
+)
 
 function(apply_hardening target_name)
     if(MSVC)
@@ -286,5 +334,54 @@ if(WIN32)
                 COMMENT "Bundling QEMU license (GPLv2)"
             )
         endif()
+    endif()
+endif()
+
+# ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
+# The vendored core (simulators/ArduinoCore-avr's trimmed cores/arduino +
+# variants/standard, LGPL 2.1) is small enough to always copy next to the
+# executable, dev or packaged build alike - src/avr_toolchain.cpp looks for
+# it there first, falling back to the source tree (PHYSICALSIM_SOURCE_DIR
+# above) only if this hasn't run yet.
+add_custom_command(TARGET physicalsim POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/cores/arduino
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/cores/arduino
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
+    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard)"
+)
+
+# The toolchain itself, only when BUNDLE_AVR_TOOLCHAIN actually fetched one
+# (see the FetchContent block above) - large (~150MB), opt-in, same
+# "off unless packaging a release" posture as BUNDLE_QEMU_ARM.
+if(BUNDLE_AVR_TOOLCHAIN AND AVR_TOOLCHAIN_BIN_DIR)
+    add_custom_command(TARGET physicalsim POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            "${AVR_TOOLCHAIN_BIN_DIR}"
+            $<TARGET_FILE_DIR:physicalsim>/avr-toolchain
+        COMMENT "Bundling avr-gcc toolchain"
+    )
+
+    # The archive ships its own license text (GPLv3 for gcc/binutils) under
+    # a version-specific name (e.g. "AVR Toolchain (GPL).txt") rather than
+    # a fixed "COPYING" - globbed rather than hardcoded so this doesn't
+    # silently stop bundling a license file on a toolchain version bump.
+    file(GLOB _avr_toolchain_license_files
+        "${AVR_TOOLCHAIN_BIN_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
+        "${AVR_TOOLCHAIN_BIN_DIR}/*COPYING*"
+    )
+    if(_avr_toolchain_license_files)
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                ${_avr_toolchain_license_files}
+                $<TARGET_FILE_DIR:physicalsim>/avr-toolchain/
+            COMMENT "Bundling avr-gcc toolchain license"
+        )
     endif()
 endif()

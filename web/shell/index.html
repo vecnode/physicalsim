@@ -17,6 +17,12 @@
     </header>
 
     <div class="body">
+      <!-- Layout scaffold only - no icons/functionality yet. Reserved for
+           navigating between workspaces (circuit canvas, and eventually a
+           code editor pane) the way an IDE's activity bar does; nothing
+           reads or writes this element today. -->
+      <nav class="icon-rail" aria-hidden="true"></nav>
+
       <aside class="sidebar">
         <output id="log" aria-live="polite"></output>
       </aside>
@@ -54,7 +60,27 @@
               </button>
               <input id="firmware-file-input" type="file" accept=".hex" hidden>
             </div>
+          </section>
 
+          <!--
+            Deliberately the smallest possible thing, not the polished
+            code-editor experience (syntax highlighting, multi-file
+            sketches, the icon-rail-driven panel) discussed as future work
+            - just enough to write/edit a real Arduino sketch and re-test
+            it without leaving the app. "Compile & Run" posts the source to
+            the native shell's /compile endpoint (src/avr_toolchain.cpp,
+            which shells out to a bundled/system avr-gcc), then feeds the
+            resulting .hex through the exact same parseIntelHex() ->
+            loadFirmware() path "Load .hex…" already uses (see main.ts).
+          -->
+          <section class="panel sketch-panel">
+            <label for="sketch-source">Sketch (Arduino Uno)</label>
+            <textarea id="sketch-source" rows="10" spellcheck="false"
+              placeholder="void setup() {&#10;&#10;}&#10;&#10;void loop() {&#10;&#10;}"></textarea>
+            <button id="compile-run-btn" type="button">Compile &amp; Run</button>
+          </section>
+
+          <section class="panel tab1-simulator-panel">
             <!--
               avr8/rp2040/cortex-m removed from the dropdown - not gone,
               just parked (see adapter-registry.ts, worker-rpc.ts, the

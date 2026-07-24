@@ -277,9 +277,76 @@ async function loadFirmwareFile(file: File): Promise<void> {
   try {
     await client.call("loadFirmware", bytes);
     terminal.clear();
-    logLine(`${file.name} loaded (${bytes.length} bytes)`);
+    // The Serial Monitor, not the sidebar log - firmware loading is
+    // about what's about to run on the board, the same place its output
+    // shows up, not a one-line status that gets overwritten by the next
+    // unrelated update.
+    terminal.writeLine(`${file.name} loaded (${bytes.length} bytes)`);
   } catch (err) {
     logLine(err instanceof Error ? err.message : "firmware load failed");
+  }
+}
+
+// -----------------------------------------------------------------------
+// Sketch compiling: a plain textarea + "Compile & Run" (index.html's
+// .sketch-panel) - deliberately the smallest possible thing, not the
+// polished code-editor experience discussed as future work. Posts to the
+// native shell's own POST /compile (src/avr_toolchain.cpp, which shells
+// out to a bundled/system avr-gcc + the vendored ArduinoCore-avr), then
+// feeds the resulting hex text through the exact same
+// parseIntelHex() -> loadFirmware() path loadFirmwareFile() above uses -
+// compiling only ever produces the same kind of bytes "Load .hex…"
+// already consumes.
+// -----------------------------------------------------------------------
+
+const sketchSource = document.getElementById("sketch-source") as HTMLTextAreaElement;
+const compileRunBtn = document.getElementById("compile-run-btn") as HTMLButtonElement;
+
+interface CompileResponse {
+  ok: boolean;
+  hexText?: string;
+  log: string;
+}
+
+compileRunBtn.addEventListener("click", () => void compileAndRun());
+
+async function compileAndRun(): Promise<void> {
+  const client = activeClient();
+  if (!client) {
+    logLine("place a board (Apply) before compiling");
+    return;
+  }
+  const source = sketchSource.value;
+  if (!source.trim()) {
+    logLine("sketch is empty");
+    return;
+  }
+
+  compileRunBtn.disabled = true;
+  try {
+    const res = await fetch("/compile", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source }),
+    });
+    const body = (await res.json()) as CompileResponse;
+
+    if (!body.ok) {
+      terminal.clear();
+      terminal.writeLine(`compile failed:\n${body.log || "(no compiler output)"}`);
+      return;
+    }
+
+    const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
+    const bytes = parsed.bytes.slice(0, parsed.usedBytes);
+    await client.call("loadFirmware", bytes);
+    terminal.clear();
+    terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes)`);
+  } catch (err) {
+    terminal.clear();
+    terminal.writeLine(err instanceof Error ? `compile error: ${err.message}` : "compile failed");
+  } finally {
+    compileRunBtn.disabled = false;
   }
 }
 

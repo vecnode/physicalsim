@@ -49,4 +49,14 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   "ks2e-m-dc5": { pinNames: ["COIL1"], role: "read" },
   "pir-motion-sensor": { pinNames: ["OUT"], role: "read" },
   "tilt-switch": { pinNames: ["OUT"], role: "read" },
+  // Same demo-only "read" caveat as pir-motion-sensor/tilt-switch above -
+  // these are real-world *inputs* to firmware, not outputs it drives, but
+  // none of the five have any click/interaction hook to be a true write-
+  // role input yet, so "read" (wire a board output pin to it and its new
+  // `value`-driven glow lights up) is the only wiring available today.
+  dht22: { pinNames: ["SDA"], role: "read" },
+  "hc-sr04": { pinNames: ["ECHO"], role: "read" },
+  "heart-beat-sensor": { pinNames: ["OUT"], role: "read" },
+  "ir-receiver": { pinNames: ["DAT"], role: "read" },
+  "ntc-temperature-sensor": { pinNames: ["OUT"], role: "read" },
 };

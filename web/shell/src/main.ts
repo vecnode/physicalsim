@@ -149,9 +149,10 @@ new ProtocolChain(canvas.scene, getAdapterClient);
 // Analog counterpart to SignalChain, for components that drive a
 // continuous ADC voltage rather than a digital bit (potentiometer,
 // slide-potentiometer, analog-joystick's VERT/HORZ) - see analog-
-// chain.ts. Only avr8 boards have an ADC wired up as of this addition;
-// wiring one of these to an rp2040/cortex-m board is inert (caught
-// inside AnalogChain.attach()), not an error.
+// chain.ts. avr8 and rp2040 boards both have an ADC wired up (see
+// writeAnalogPin? in adapter-types.ts); wiring one of these to a
+// cortex-m board is inert (caught inside AnalogChain.attach()), not an
+// error.
 new AnalogChain(canvas.scene, getAdapterClient);
 
 // If the board currently backing the active adapter gets deleted
@@ -522,7 +523,7 @@ void loop() {
     level: "beginner",
     board: "Arduino Nano RP2040 Connect",
     glyph: "💡",
-    // pico-sdk's own C API (gpio_init/gpio_put), not Arduino's
+    // pico-sdk's own C API (gpio_init/gpio_put/sleep_ms), not Arduino's
     // (digitalWrite/delay) - no Arduino-compatible core is vendored for
     // RP2040 yet (see ARCHITECTURE.md's "RP2040 firmware pipeline"
     // section for why, and what a future arduino-pico integration would
@@ -530,32 +531,16 @@ void loop() {
     // different toolchain from the AVR boards' avr-gcc (arm-none-eabi-gcc
     // + a vendored pico-sdk, driven through cmake), routed by board type
     // in main.cpp's /compile handler.
-    //
-    // A hand-rolled cycle-count delay, not sleep_ms() - confirmed by hand
-    // (see ARCHITECTURE.md) that sleep_ms() hangs forever here: it busy-
-    // waits on the RP2040's hardware timer, whose tick source rp2040js
-    // doesn't fully emulate (the same PLL/CLOCKS peripheral gaps that log
-    // "Unimplemented peripheral" warnings during pico-sdk's own runtime
-    // clock init). digitalDelay() sidesteps that dependency entirely -
-    // this is the one thing about this example that's not "just write a
-    // normal pico-sdk sketch" yet, documented here so it isn't a silent
-    // surprise.
     sketch: `void setup(void) {
   gpio_init(25);
   gpio_set_dir(25, GPIO_OUT);
 }
 
-static void digitalDelay(volatile unsigned int cycles) {
-  while (cycles--) {
-    __asm volatile("nop");
-  }
-}
-
 void loop(void) {
   gpio_put(25, 1);
-  digitalDelay(3000000);
+  sleep_ms(500);
   gpio_put(25, 0);
-  digitalDelay(3000000);
+  sleep_ms(500);
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("nano-rp2040-connect");
@@ -590,9 +575,7 @@ void loop(void) {
     // pushbutton write-role pin driving an LED read-role pin - but
     // through pico-sdk's own C API (gpio_get()/gpio_put()), not
     // Arduino's (digitalRead()/digitalWrite()), same reasoning as
-    // "rp2040-blink" above. Not sleep_ms()-affected (no delay at all
-    // here), so no busy-wait workaround needed - this one's a
-    // straightforward pico-sdk sketch.
+    // "rp2040-blink" above.
     sketch: `void setup(void) {
   gpio_init(15);
   gpio_set_dir(15, GPIO_IN);
@@ -616,6 +599,45 @@ void loop(void) {
       // RP2040 examples don't collide if ever placed side by side.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "pico-potentiometer": {
+    label: "Potentiometer Threshold (Pico)",
+    description: "A potentiometer's voltage read via adc_read() on the real Raspberry Pi Pico board.",
+    level: "beginner",
+    board: "Raspberry Pi Pico",
+    glyph: "🎚️",
+    // First analog-input RP2040 example (rp2040-blink/rp2040-button-
+    // control are both digital-only) - exercises hardware_adc through a
+    // real compiled sketch, wired through the same AnalogChain
+    // (analog-chain.ts) the avr8 examples use. GP26 is the Pico's ADC0
+    // pin (see boards/rp2040-board.ts's identity map); adc_read() returns
+    // a raw 12-bit value (0..4095) which this sketch just thresholds onto
+    // the onboard LED (GP25) - no pico-sdk Arduino-compatible core is
+    // vendored yet, so this is pico-sdk's own C API (adc_read()/
+    // gpio_put()), not analogRead()/digitalWrite().
+    sketch: `#include "hardware/adc.h"
+
+void setup(void) {
+  adc_init();
+  adc_gpio_init(26);
+  adc_select_input(0);
+  gpio_init(25);
+  gpio_set_dir(25, GPIO_OUT);
+}
+
+void loop(void) {
+  uint16_t value = adc_read();
+  gpio_put(25, value > 2048);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("pi-pico");
+      if (!board) return;
+      const pot = await canvas.scene.addComponentAt("potentiometer", board.x + 620, board.y + 40);
+      if (!pot) return;
+      // "GP26" is both the board's silkscreen label and the adapter pin id
+      // (rp2040-board.ts's identity map) - the Pico's ADC0 input.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "GP26" }, { entityId: pot.id, pin: "SIG" });
     },
   },
   "lcd-display": {
@@ -1010,7 +1032,7 @@ async function compileAndRun(): Promise<void> {
     }
 
     let bytes: Uint8Array;
-    if (board === "nano-rp2040-connect") {
+    if (board === "nano-rp2040-connect" || board === "pi-pico") {
       bytes = parseHexBytes(body.binHex ?? "");
     } else {
       const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);

@@ -16,5 +16,10 @@ project(physicalsim_rp2040_sketch C CXX ASM)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_CXX_STANDARD 17)
 pico_sdk_init()
+# hardware_adc/i2c/spi/pwm linked unconditionally alongside pico_stdlib -
+# --gc-sections (pico-sdk's own default link flags) drops whatever a
+# given sketch doesn't actually call, so linking them preemptively costs
+# nothing at runtime; it just means a sketch can #include "hardware/adc.h"
+# (etc.) and use it without this template needing to change per example.
 add_executable(sketch sketch.c)
-target_link_libraries(sketch pico_stdlib)
+target_link_libraries(sketch pico_stdlib hardware_adc hardware_i2c hardware_spi hardware_pwm)

@@ -554,7 +554,7 @@ int main(int argc, char **argv) {
     }
     const std::string board = body.value("board", std::string{"arduino-uno"});
 
-    if (board == "nano-rp2040-connect") {
+    if (board == "nano-rp2040-connect" || board == "pi-pico") {
       const auto result = rp2040toolchain::compile_sketch(source);
       json out = {{"ok", result.ok}, {"log", result.log}};
       if (result.ok) {

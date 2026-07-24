@@ -9,8 +9,8 @@ interface Attachment {
 }
 
 // Analog counterpart to signal-chain.ts's SignalChain: glues analog-
-// net.ts's resolved AnalogLinks to a board's writeAnalogPin? (avr8 only,
-// as of this addition - see adapter-types.ts). Structurally the same
+// net.ts's resolved AnalogLinks to a board's writeAnalogPin? (avr8 and
+// rp2040 - see adapter-types.ts). Structurally the same
 // shape as SignalChain/ProtocolChain (recompute on wire-set changes,
 // attach/dispose per link, board-agnostic via boardPinMaps/
 // resolveBoardPinName/CircuitPin.forBoardPin), keyed by wireId since one
@@ -80,9 +80,8 @@ export class AnalogChain {
     const apply = () => {
       const el = dom.boardEl as unknown as Record<string, unknown>;
       void pin.writeAnalog(spec.toVoltage(el)).catch(() => {
-        // Board's adapter has no ADC (e.g. rp2040/cortex-m today) -
-        // silently inert, same as an unresolvable board pin elsewhere in
-        // this file.
+        // Board's adapter has no ADC (e.g. cortex-m today) - silently
+        // inert, same as an unresolvable board pin elsewhere in this file.
       });
     };
     dom.boardEl.addEventListener("input", apply);

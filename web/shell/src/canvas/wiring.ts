@@ -77,7 +77,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 // the canvas, not something you'd want a per-wire mix of by default.
 // Exported so the palette panel (main.ts/index.html's #wire-color-panel)
 // can offer it as one of its swatches, alongside eight others.
-export const DEFAULT_WIRE_COLOR = "#ffd54a";
+export const DEFAULT_WIRE_COLOR = "#f5b400";
 
 export class WiringLayer {
   private readonly svg: SVGSVGElement;

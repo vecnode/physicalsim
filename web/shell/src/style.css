@@ -474,19 +474,17 @@ button:disabled {
   bottom: 8px;
   z-index: 10;
   width: 96px;
-  padding: 4px;
-  border: 1px solid var(--border);
-  background: var(--bg);
 }
 
 .wire-color-panel.hidden {
   display: none;
 }
 
+/* No gap - the 9 swatches sit flush against each other, forming one
+   solid 3x3 block rather than a padded grid inside a panel chrome. */
 .wire-color-swatches {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 4px;
 }
 
 /* One per WIRE_COLORS entry (main.ts) - the swatch's own background

@@ -123,6 +123,24 @@ if errorlevel 1 (
 	goto :error
 )
 
+REM Skip npm install/build entirely when nothing under web\ has changed
+REM since public\ was last produced (tools\check-web-stale.ps1) - a
+REM C++-only change otherwise still pays a full npm install + vite build
+REM on every run for no reason. --clean always rebuilds web\ too, in case
+REM the check itself is ever in doubt.
+set "BUILD_WEB=1"
+if not "%CLEAN_BUILD%"=="1" (
+	powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0tools\check-web-stale.ps1"
+	if not errorlevel 1 set "BUILD_WEB=0"
+)
+
+REM goto, not if/else, on purpose - a nested "if errorlevel 1 (...)" inside
+REM an if/else's own parenthesized block confuses cmd.exe's paren-counting
+REM (a real, reproduced bug: the else-branch body silently ran unconditionally
+REM regardless of which side BUILD_WEB took), so this avoids nesting a
+REM conditional inside a conditional block at all.
+if "%BUILD_WEB%"=="0" goto :web_build_skip
+
 echo [1/4] Building web\ (npm install + vite build -^> public\)
 pushd web
 call npm install
@@ -130,6 +148,12 @@ if errorlevel 1 (popd & goto :error)
 call npm run build
 if errorlevel 1 (popd & goto :error)
 popd
+goto :web_build_done
+
+:web_build_skip
+echo [1/4] web\ unchanged since last build - skipping npm install/build
+
+:web_build_done
 
 	REM --- Configure / Build / Run -----------------------------------------------
 REM BUNDLE_AVR_TOOLCHAIN mirrors package_release.bat's Release config - the

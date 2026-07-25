@@ -3,6 +3,7 @@
 // ============================================================================
 #include "esp32_toolchain.hpp"
 
+#include <chrono>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
@@ -222,6 +223,47 @@ std::filesystem::path work_dir() {
   return std::filesystem::temp_directory_path() / "physicalsim-esp32-sketch";
 }
 
+// g_configured below is an in-process cache only, false again on every
+// fresh physicalsim.exe launch - so a dev restarting the app between
+// "Compile & Run" clicks (the normal workflow after any C++ rebuild) paid
+// a full ~10s cmake reconfigure every time, even though work_dir()'s
+// build/ was already configured against the exact same toolchain/template
+// from a prior run and nothing relevant had changed. This stamp persists
+// what the configure was actually run against, so a fresh process can
+// tell "still valid, skip straight to the ~1s incremental ninja build"
+// from "something changed, must reconfigure" without redoing the
+// configure just to find out.
+std::filesystem::path configure_stamp_path(const std::filesystem::path &dir) {
+  return dir / "build" / "physicalsim-configure-stamp.txt";
+}
+
+std::string configure_key(const ToolchainPaths &toolchain, const std::filesystem::path &template_dir) {
+  std::ostringstream key;
+  key << toolchain.esp_idf_dir.string() << '\n'
+      << toolchain.xtensa_gcc_bin_dir.string() << '\n'
+      << toolchain.cmake_exe.string() << '\n'
+      << toolchain.ninja_bin_dir.string() << '\n'
+      << toolchain.python_exe.string() << '\n'
+      << toolchain.esp_rom_elf_dir.string() << '\n'
+      << template_dir.string();
+  return key.str();
+}
+
+bool configure_is_up_to_date(const std::filesystem::path &dir, const std::string &key) {
+  std::error_code ec;
+  if (!std::filesystem::exists(dir / "build" / "build.ninja", ec)) return false;
+  std::ifstream stamp(configure_stamp_path(dir));
+  if (!stamp) return false;
+  std::ostringstream existing;
+  existing << stamp.rdbuf();
+  return existing.str() == key;
+}
+
+void write_configure_stamp(const std::filesystem::path &dir, const std::string &key) {
+  std::ofstream stamp(configure_stamp_path(dir), std::ios::trunc);
+  stamp << key;
+}
+
 std::mutex g_compile_mutex;
 bool g_configured = false;
 
@@ -349,6 +391,15 @@ CompileResult compile_sketch(const std::string &source) {
   prepend_path(toolchain->ninja_bin_dir);
   prepend_path(toolchain->python_exe.parent_path());
 
+  const std::string configure_key_value = configure_key(*toolchain, *template_dir);
+  if (!g_configured && configure_is_up_to_date(dir, configure_key_value)) {
+    // A prior physicalsim.exe run (or an earlier compile already made in
+    // this one) already configured this exact build/ against this exact
+    // toolchain/template - see configure_is_up_to_date()'s own comment on
+    // why redoing it would be pure waste.
+    g_configured = true;
+  }
+
   if (!g_configured) {
     std::error_code copy_ec;
     std::filesystem::copy_file(*template_dir / "CMakeLists.txt", dir / "CMakeLists.txt",
@@ -377,12 +428,17 @@ CompileResult compile_sketch(const std::string &source) {
     // whole process tree on timeout - see that file's own fix - so the
     // *next* attempt fought orphaned processes from the *previous* one).
     std::cerr << "[esp32_toolchain] starting cmake configure" << std::endl;
+    const auto configure_start = std::chrono::steady_clock::now();
     const auto configure_run = procexec::run_and_wait(toolchain->cmake_exe, configure_args, dir, 300);
-    std::cerr << "[esp32_toolchain] cmake configure exit_code=" << configure_run.exit_code << std::endl;
+    const auto configure_seconds =
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - configure_start).count();
+    std::cerr << "[esp32_toolchain] cmake configure exit_code=" << configure_run.exit_code << " ("
+              << configure_seconds << "s)" << std::endl;
     if (configure_run.exit_code != 0) {
       result.log = "cmake configure failed:\n" + configure_run.output;
       return result;
     }
+    write_configure_stamp(dir, configure_key_value);
     g_configured = true;
   }
 
@@ -391,9 +447,30 @@ CompileResult compile_sketch(const std::string &source) {
   // main.c and relink, much faster, but the bound has to cover the slow
   // first case with real headroom for a slower machine than this was
   // developed on (see the configure step's own comment above).
-  std::cerr << "[esp32_toolchain] starting cmake --build" << std::endl;
-  const auto build_run = procexec::run_and_wait(toolchain->cmake_exe, {"--build", "build"}, dir, 300);
-  std::cerr << "[esp32_toolchain] cmake --build exit_code=" << build_run.exit_code << std::endl;
+  //
+  // Calls ninja directly rather than "cmake --build build" - measured
+  // ~9-10s for an already-up-to-date build through this app's own process
+  // spawn path (vs ~0.4s for the identical command run by hand), which
+  // didn't reproduce through a minimal standalone harness using this same
+  // spawn code - narrowed to contention between physicalsim's own WebView2
+  // process tree (constantly active, several Chromium subprocesses doing
+  // real disk/IPC I/O) and antivirus real-time scanning of each short-lived
+  // build subprocess. "cmake --build" adds an extra process hop (cmake
+  // re-invoking ninja as a child, plus its own regenerate-check pass over
+  // the whole component tree) on top of that; calling ninja directly cuts
+  // both away. This is a portability requirement, not just a dev-machine
+  // convenience - unlike a dev's own AV exclusions, end users installing a
+  // packaged build can't be expected to configure their antivirus, so the
+  // fewer stat/scan-triggering hops in this path, the better it holds up
+  // on a machine already under EDR/AV pressure.
+  std::cerr << "[esp32_toolchain] starting ninja build" << std::endl;
+  const auto build_start = std::chrono::steady_clock::now();
+  const auto ninja_exe = toolchain->ninja_bin_dir / "ninja.exe";
+  const auto build_run = procexec::run_and_wait(ninja_exe, {"-C", "build"}, dir, 300);
+  const auto build_seconds =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - build_start).count();
+  std::cerr << "[esp32_toolchain] ninja build exit_code=" << build_run.exit_code << " (" << build_seconds
+            << "s)" << std::endl;
   if (build_run.exit_code != 0) {
     result.log = "build failed:\n" + build_run.output;
     return result;
@@ -412,11 +489,15 @@ CompileResult compile_sketch(const std::string &source) {
   // locally instead, in esp32_qemu_adapter.cpp's load_firmware(), right
   // before writing the file QEMU's -drive actually reads.
   std::cerr << "[esp32_toolchain] starting esptool merge_bin" << std::endl;
+  const auto merge_start = std::chrono::steady_clock::now();
   const auto merge_run = procexec::run_and_wait(
       toolchain->python_exe, {"-m", "esptool", "--chip", "esp32", "merge_bin", "-o", "flash_image.bin",
                               "@flash_args"},
       dir / "build", 60);
-  std::cerr << "[esp32_toolchain] esptool merge_bin exit_code=" << merge_run.exit_code << std::endl;
+  const auto merge_seconds =
+      std::chrono::duration<double>(std::chrono::steady_clock::now() - merge_start).count();
+  std::cerr << "[esp32_toolchain] esptool merge_bin exit_code=" << merge_run.exit_code << " (" << merge_seconds
+            << "s)" << std::endl;
   if (merge_run.exit_code != 0) {
     result.log = "esptool merge_bin failed:\n" + merge_run.output;
     return result;

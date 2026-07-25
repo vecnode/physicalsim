@@ -146,6 +146,20 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
     currentMa: { idle: 30, running: 80 },
     sources: [{ name: "USB (Micro-B)", voltage: 5, maxCurrentMa: 500 }],
   },
+  // Same chip as esp32-devkit-v1, same approximate draw.
+  "esp32-devkit-c-v4": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 30, running: 80 },
+    sources: [{ name: "USB (Micro-B)", voltage: 5, maxCurrentMa: 500 }],
+  },
+  // Same chip; real hardware draws somewhat more when the camera/SD are
+  // active, but neither is emulated, so this reuses the plain-ESP32 figure
+  // rather than modeling current that would never actually be exercised.
+  "esp32-cam": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 30, running: 80 },
+    sources: [{ name: "5V header", voltage: 5, maxCurrentMa: 500 }],
+  },
 };
 
 // board.powered decides voltage on/off; `running` (the adapter's own

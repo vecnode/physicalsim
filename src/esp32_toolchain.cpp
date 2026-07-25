@@ -31,6 +31,40 @@ namespace {
 // (mirroring CMakeLists.txt's BUNDLE_ARM_TOOLCHAIN) is real follow-up work,
 // not done here - this exists so "Compile & Run" genuinely works today on
 // the machine it was developed on, without pretending it's portable yet.
+std::filesystem::path executable_dir() {
+#ifdef _WIN32
+  wchar_t path[MAX_PATH]{};
+  const auto len = GetModuleFileNameW(nullptr, path, MAX_PATH);
+  if (len == 0 || len >= MAX_PATH) return std::filesystem::current_path();
+  return std::filesystem::path(path).parent_path();
+#else
+  char path[4096]{};
+  const auto len = readlink("/proc/self/exe", path, sizeof(path) - 1);
+  if (len <= 0) return std::filesystem::current_path();
+  path[len] = '\0';
+  return std::filesystem::path(path).parent_path();
+#endif
+}
+
+// Bundled "esp32-toolchain/bin" next to the executable (CMakeLists.txt's
+// BUNDLE_XTENSA_TOOLCHAIN copies one there, mirroring
+// BUNDLE_ARM_TOOLCHAIN's "arm-toolchain/bin") - checked first, same
+// "bundled beats dev-machine" priority find_toolchain_bin_dir() already
+// has in rp2040_toolchain.cpp. Only the compiler itself is bundled this
+// way today - esp-idf/cmake/ninja/python still resolve from this dev
+// machine's fixed paths below (see esp32_toolchain.hpp's header comment
+// on why those three aren't bundled yet).
+std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
+  const auto bundled = executable_dir() / "esp32-toolchain" / "bin";
+  std::error_code ec;
+#ifdef _WIN32
+  if (std::filesystem::exists(bundled / "xtensa-esp32-elf-gcc.exe", ec)) return bundled;
+#else
+  if (std::filesystem::exists(bundled / "xtensa-esp32-elf-gcc", ec)) return bundled;
+#endif
+  return std::nullopt;
+}
+
 #ifdef _WIN32
 std::optional<std::filesystem::path> find_esp_idf_dir() {
   const std::filesystem::path candidate = "C:\\esp-idf";
@@ -99,7 +133,8 @@ std::optional<ToolchainPaths> find_toolchain() {
     return std::nullopt;
   }
 
-  paths.xtensa_gcc_bin_dir = *xtensa_versioned / "xtensa-esp-elf" / "bin";
+  paths.xtensa_gcc_bin_dir =
+      find_bundled_xtensa_gcc_bin_dir().value_or(*xtensa_versioned / "xtensa-esp-elf" / "bin");
   paths.cmake_exe = *cmake_versioned / "bin" / "cmake.exe";
   paths.ninja_bin_dir = *ninja_versioned;
   paths.python_exe = *python_env_versioned / "Scripts" / "python.exe";

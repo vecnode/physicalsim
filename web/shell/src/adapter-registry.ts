@@ -36,12 +36,14 @@ export type AdapterId =
 export interface SimClient {
   call(method: AdapterMethod, params?: unknown): Promise<unknown>;
   onStateChange(cb: (state: SimState) => void): () => void;
-  // Optional: not every client kind can push pin-change events yet (see
-  // NativeAdapterClient, which has no push channel from the native
-  // process and doesn't implement this).
+  // Optional: not every client kind implements this. NativeAdapterClient
+  // does (polling readPin - the native bridge has no real push channel
+  // from the C++ process, see that file), a Worker-backed AdapterClient
+  // does too (real postMessage push) - the only clients that don't are
+  // ones whose adapter has no working readPin at all yet (cortex-m).
   onPinChange?(cb: (pin: string, value: number) => void): () => void;
-  // Same story as onPinChange above - NativeAdapterClient doesn't
-  // implement this either.
+  // NativeAdapterClient doesn't implement this one - no native adapter
+  // has a Serial/UART peripheral wired up yet.
   onSerialData?(cb: (byte: number) => void): () => void;
 }
 

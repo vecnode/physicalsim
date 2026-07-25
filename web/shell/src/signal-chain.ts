@@ -103,7 +103,21 @@ export class SignalChain {
       (dom.boardEl as unknown as { value: boolean }).value = !!value;
     };
     void pin.read().then(apply);
-    const unsubscribe = pin.onChange(apply);
-    return { dispose: unsubscribe };
+    // pin.onChange() throws synchronously (not a rejection) for a client
+    // with no onPinChange - every native/QEMU-backed adapter today
+    // (cortex-m, esp32 - see circuit-pin.ts). Unlike the pin-resolution
+    // try/catch above, this was missing one: uncaught, it escaped all the
+    // way up through recompute() and out of wiring.connect() itself,
+    // aborting whatever synchronous caller was mid-wiring-sequence -
+    // found by an ESP32 example with two LEDs wiring only its first pin
+    // pair before silently stopping. Same "optional capability, log don't
+    // throw" contract this function's own doc comment already promises,
+    // now actually honored for this branch too.
+    try {
+      const unsubscribe = pin.onChange(apply);
+      return { dispose: unsubscribe };
+    } catch {
+      return { dispose: () => {} };
+    }
   }
 }

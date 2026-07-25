@@ -127,6 +127,14 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
     currentMa: { idle: 20, running: 35 },
     sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
   },
+  // Same RP2040 chip, same nominal figures as the plain Pico - the
+  // CYW43439 WiFi chip's own real draw (much higher when actually
+  // radio-active) isn't modeled since WiFi itself isn't emulated.
+  "pi-pico-w": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 20, running: 35 },
+    sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
+  },
 };
 
 // board.powered decides voltage on/off; `running` (the adapter's own

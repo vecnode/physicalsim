@@ -71,6 +71,7 @@ export const boardTagName: Record<string, string> = {
   // "Pico" element, is what makes rp2040 placeable at all.
   "nano-rp2040-connect": "wokwi-nano-rp2040-connect",
   "pi-pico": "wokwi-pi-pico",
+  "pi-pico-w": "wokwi-pi-pico-w",
 };
 
 // Board id -> human-readable label, for menus that list board types (the
@@ -85,6 +86,7 @@ export const boardDisplayName: Record<string, string> = {
   franzininho: "Franzininho",
   "nano-rp2040-connect": "Arduino Nano RP2040 Connect",
   "pi-pico": "Raspberry Pi Pico",
+  "pi-pico-w": "Raspberry Pi Pico W",
 };
 
 // Board id -> the SimulatorAdapter that powers it. This is what "plugging
@@ -107,6 +109,7 @@ export const boardAdapterId: Record<string, AdapterId> = {
   franzininho: "avr8-attiny85",
   "nano-rp2040-connect": "rp2040",
   "pi-pico": "rp2040",
+  "pi-pico-w": "rp2040",
 };
 
 // Board id -> how to reflect powered on/off on its placed element. Board-

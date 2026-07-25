@@ -1103,7 +1103,7 @@ async function compileAndRun(): Promise<void> {
     }
 
     let bytes: Uint8Array;
-    if (board === "nano-rp2040-connect" || board === "pi-pico") {
+    if (board === "nano-rp2040-connect" || board === "pi-pico" || board === "pi-pico-w") {
       bytes = parseHexBytes(body.binHex ?? "");
     } else {
       const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);

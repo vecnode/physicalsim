@@ -26,6 +26,13 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   // "GP0".."GP28" (see pi-pico-element.ts, vendored from wokwi/wokwi-
   // boards), unlike nano-rp2040-connect's Arduino-Nano-shaped D/A markers.
   "pi-pico": rp2040Board,
+  // Same RP2040 chip, same physical GP<n> header (confirmed identical
+  // against both boards' own board.json, not assumed) - the only real
+  // difference (CYW43439 WiFi/Bluetooth chip) isn't emulated, per an
+  // explicit user decision (2026-07-25) that this board should just
+  // work like the plain Pico for now. Shares the identical map, not a
+  // copy of it.
+  "pi-pico-w": rp2040Board,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'

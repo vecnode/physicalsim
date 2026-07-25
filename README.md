@@ -13,6 +13,7 @@ Emulators:
 
 - `vecnode/rp2040js`
   - Raspberry Pi Pico
+  - Raspberry Pi Pico W
   - Arduino Nano RP2040 Connect
 
 Find supported components here: [COMPONENTS.md](COMPONENTS.md)

@@ -18,8 +18,10 @@ Registered in `web/shell/src/circuit.ts`.
 | Arduino Nano | `wokwi-arduino-nano` | `avr8` |
 | Arduino Mega | `wokwi-arduino-mega` | `avr8-mega` |
 | Franzininho | `wokwi-franzininho` | `avr8-attiny85` |
+| Arduino Leonardo | `wokwi-arduino-leonardo` | `avr8-leonardo` |
 | Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040` |
 | Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040` |
+| Raspberry Pi Pico W | `wokwi-pi-pico-w` | `rp2040` |
 
 Nano and Uno share `avr8` (same ATmega328p chip, see `web/adapters/avr8/
 src/chip.ts`); Mega gets its own `avr8-mega` adapter id since it's a
@@ -28,17 +30,21 @@ genuinely different chip (ATmega2560). Franzininho gets its own
 genuinely different, much smaller chip (ATtiny85: one port, no USART/
 SPI/TWI hardware at all) compiled against its own core tree
 (`simulators/ATTinyCore`, not `ArduinoCore-avr` - see `src/
-avr_toolchain.cpp`'s `resolve_board_target()`). The two RP2040 boards
-share `rp2040` the same way Uno/Nano do. `wokwi-pi-pico` is vendored from
-`wokwi/wokwi-boards`' own official board art (Uri Shaked), not drawn from
-scratch - see [ARCHITECTURE.md](ARCHITECTURE.md)'s "RP2040 firmware
-pipeline" section for the sketch-compiling story these boards actually
-run.
+avr_toolchain.cpp`'s `resolve_board_target()`). Arduino Leonardo gets its
+own `avr8-leonardo` adapter id too (ATmega32u4 - reuses ArduinoCore-avr's
+own `leonardo` variant, unlike Franzininho). All three RP2040-family
+boards share the single `rp2040` adapter the same way Uno/Nano do -
+they're all the same chip. `wokwi-pi-pico`/`wokwi-pi-pico-w` are vendored
+from `wokwi/wokwi-boards`' own official board art (Uri Shaked / Ariella
+Eliassaf), not drawn from scratch - see [ARCHITECTURE.md](ARCHITECTURE.md)'s
+"RP2040 firmware pipeline" section for the sketch-compiling story these
+boards actually run. Pico W's WiFi/Bluetooth chip (CYW43439) isn't
+emulated - it places and compiles identically to the plain Pico, per an
+explicit user decision (2026-07-25).
 
-`@wokwi/elements` also ships `wokwi-esp32-devkit-v1` and
-`wokwi-franzininho` - not registered as boards yet, since neither has a
-matching `SimulatorAdapter`/pin map wired up (see "Adding a new board"
-below).
+`@wokwi/elements` also ships `wokwi-esp32-devkit-v1` - not registered as
+a board yet, since it has no matching `SimulatorAdapter`/pin map wired up
+(no emulator here supports Xtensa - see "Adding a new board" below).
 
 ## Sensors
 

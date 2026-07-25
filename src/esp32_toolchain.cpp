@@ -225,6 +225,42 @@ std::filesystem::path work_dir() {
 std::mutex g_compile_mutex;
 bool g_configured = false;
 
+#ifdef _WIN32
+// g_compile_mutex above only serializes compiles within *this* process -
+// work_dir() is a single fixed path under the OS temp directory, shared by
+// every physicalsim.exe instance on the machine, with nothing else
+// guarding it. Two instances compiling an ESP32 sketch at the same time
+// (e.g. a stale instance left over from a previous build_and_run.bat run,
+// still open, plus a freshly launched one) race on the same build/ tree -
+// concurrent ninja/cmake invocations against identical build files, which
+// can corrupt the ninja database or simply hang one side waiting on a file
+// handle the other holds - exactly the "compile just never finishes"
+// symptom this cross-process named mutex closes off. Acquired for the
+// whole compile_sketch() call (configure+build+merge_bin), released via
+// RAII even on an early return/exception.
+struct CrossProcessCompileLock {
+  HANDLE handle = nullptr;
+  bool acquired = false;
+
+  CrossProcessCompileLock() {
+    handle = CreateMutexW(nullptr, FALSE, L"Local\\PhysicalSimEsp32CompileLock");
+    if (!handle) return;
+    // Covers a full from-scratch configure+build (up to the 300s+300s
+    // timeouts esp32_toolchain.cpp's own compile steps allow) plus enough
+    // slack for a slower machine - matches those steps' own reasoning for
+    // generous bounds rather than picking a tighter one that would make
+    // this lock itself the next "why did this time out" report.
+    const DWORD wait_result = WaitForSingleObject(handle, 620000);
+    acquired = (wait_result == WAIT_OBJECT_0 || wait_result == WAIT_ABANDONED);
+  }
+
+  ~CrossProcessCompileLock() {
+    if (acquired) ReleaseMutex(handle);
+    if (handle) CloseHandle(handle);
+  }
+};
+#endif
+
 void set_env(const char *name, const std::string &value) {
 #ifdef _WIN32
   _putenv_s(name, value.c_str());
@@ -264,6 +300,17 @@ bool toolchain_available() {
 CompileResult compile_sketch(const std::string &source) {
   CompileResult result;
   std::lock_guard<std::mutex> lock(g_compile_mutex);
+
+#ifdef _WIN32
+  CrossProcessCompileLock cross_process_lock;
+  if (!cross_process_lock.acquired) {
+    result.log =
+        "ESP32 compile: another physicalsim instance is already compiling an ESP32 sketch "
+        "(they share one build directory under %TEMP%\\physicalsim-esp32-sketch) - wait for it "
+        "to finish, or close the other instance, then try again.";
+    return result;
+  }
+#endif
 
   const auto toolchain = find_toolchain();
   const auto template_dir = find_sketch_template_dir();

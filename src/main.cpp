@@ -644,7 +644,7 @@ int main(int argc, char **argv) {
     }
     const std::string board = body.value("board", std::string{"arduino-uno"});
 
-    if (board == "esp32-devkit-v1") {
+    if (board == "esp32-devkit-v1" || board == "esp32-devkit-c-v4" || board == "esp32-cam") {
       // Real ESP-IDF build via esp32_toolchain.cpp - a genuinely heavier
       // pipeline than avr-gcc's flat per-file compile or pico-sdk's
       // cmake-driven one (a full multi-component CMake project: sdkconfig,

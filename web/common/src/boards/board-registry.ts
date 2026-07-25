@@ -6,6 +6,8 @@ import { franzininho } from "./franzininho.js";
 import { nanoRp2040Connect } from "./nano-rp2040-connect.js";
 import { rp2040Board } from "./rp2040-board.js";
 import { esp32DevkitV1Board } from "./esp32-devkit-v1.js";
+import { esp32DevkitCV4Board } from "./esp32-devkit-c-v4.js";
+import { esp32CamBoard } from "./esp32-cam.js";
 import type { BoardPinMap } from "./board.js";
 
 // Board type (circuit.ts's CircuitBoard.type, shell-side) -> its
@@ -35,6 +37,12 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   // copy of it.
   "pi-pico-w": rp2040Board,
   "esp32-devkit-v1": esp32DevkitV1Board,
+  // Same ESP32-WROOM-32 chip as esp32-devkit-v1 (confirmed against both
+  // boards' own board.json), just a different header layout/pinout -
+  // hence its own, non-identical BoardPinMap rather than sharing the DevKit
+  // V1 one the way pi-pico-w shares rp2040Board wholesale.
+  "esp32-devkit-c-v4": esp32DevkitCV4Board,
+  "esp32-cam": esp32CamBoard,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'

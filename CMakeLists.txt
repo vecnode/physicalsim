@@ -17,6 +17,13 @@ option(STATIC_MSVC_RUNTIME_RELEASE "Use static MSVC runtime in non-Debug configs
 option(BUNDLE_WEBVIEW2_FIXED_RUNTIME "Bundle a fixed WebView2 runtime folder into the output" OFF)
 set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime directory")
 
+# Needed above the BUNDLE_QEMU_XTENSA block below, which calls
+# FetchContent_Declare() at option-parsing time when the flag is on - this
+# used to sit further down (after all the option() calls), which was only
+# ever safe because BUNDLE_QEMU_XTENSA defaulted OFF; flipping that default
+# to ON surfaced the ordering bug on the very next fresh configure.
+include(FetchContent)
+
 # qemu-system-arm (the "cortex-m" adapter's backend) is never built or
 # fetched by this project - like the WebView2 runtime above, this only
 # copies an *already-installed* copy into the packaged output so a
@@ -45,7 +52,7 @@ set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing q
 # full pc-bios/ ships) all as one archive - QEMU_XTENSA_DIR can still be
 # pointed at a local from-source build's own build/ directory instead, for
 # testing a change to the fork before it's released.
-option(BUNDLE_QEMU_XTENSA "Bundle qemu-system-xtensa + its DLLs, ROMs, and a demo flash image into the output" OFF)
+option(BUNDLE_QEMU_XTENSA "Bundle qemu-system-xtensa + its DLLs, ROMs, and a demo flash image into the output" ON)
 set(QEMU_XTENSA_DIR "" CACHE PATH "Path to a built qemu-esp32 directory containing qemu-system-xtensa.exe (defaults to fetching vecnode/qemu-esp32's published release if empty)")
 set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ directory (defaults to QEMU_XTENSA_DIR/pc-bios if empty)")
 # Vendored directly in-repo (assets/esp32-demo/flash_image.bin, ~4MB) -
@@ -53,6 +60,15 @@ set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ director
 # BUNDLE_QEMU_XTENSA needs no manual path for this piece at all.
 set(ESP32_DEMO_FLASH_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/assets/esp32-demo/flash_image.bin" CACHE FILEPATH "Path to a pre-built esp32 demo flash_image.bin")
 set(QEMU_XTENSA_RUNTIME_DIR "" CACHE PATH "Path to qemu-system-xtensa.exe's runtime DLLs (defaults to QEMU_XTENSA_DIR itself if empty - the published release bundles them alongside the exe)")
+
+# On by default (unlike BUNDLE_QEMU_ARM/BUNDLE_AVR_TOOLCHAIN/etc. above,
+# which have a dev-machine PATH or well-known-install fallback that makes
+# opt-in reasonable) - ESP32 is a first-class supported board like AVR/
+# RP2040, and src/esp32_qemu_adapter.cpp's find_qemu_system_xtensa() has no
+# equivalent "already installed on this dev machine" fallback beyond PATH,
+# so leaving this OFF meant most fresh clones could compile an ESP32
+# sketch (esp32_toolchain.cpp, separately gated) but never actually run it.
+# Explicitly pass -DBUNDLE_QEMU_XTENSA=OFF to skip the download instead.
 
 if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_DIR)
     FetchContent_Declare(qemu_esp32_prebuilt
@@ -95,8 +111,6 @@ option(BUNDLE_ARM_TOOLCHAIN "Fetch and bundle a prebuilt arm-none-eabi-gcc toolc
 # to simulators/esp-idf, the same way avr-core/pico-sdk fall back to their
 # own source trees before their own copy steps have run.
 option(BUNDLE_ESP_IDF "Bundle vendored esp-idf next to the executable for a packaged ESP32 Compile & Run" OFF)
-
-include(FetchContent)
 
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)

@@ -23,6 +23,8 @@ Registered in `web/shell/src/circuit.ts`.
 | Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040` |
 | Raspberry Pi Pico W | `wokwi-pi-pico-w` | `rp2040` |
 | ESP32 DevKit V1 | `wokwi-esp32-devkit-v1` | `esp32` |
+| ESP32 DevKit C V4 | `wokwi-esp32-devkit-c-v4` | `esp32` |
+| ESP32-CAM | `wokwi-esp32-cam` | `esp32` |
 
 Nano and Uno share `avr8` (same ATmega328p chip, see `web/adapters/avr8/
 src/chip.ts`); Mega gets its own `avr8-mega` adapter id since it's a
@@ -42,6 +44,14 @@ Eliassaf), not drawn from scratch - see [ARCHITECTURE.md](ARCHITECTURE.md)'s
 boards actually run. Pico W's WiFi/Bluetooth chip (CYW43439) isn't
 emulated - it places and compiles identically to the plain Pico, per an
 explicit user decision (2026-07-25).
+
+ESP32 DevKit C V4 and ESP32-CAM are the same ESP32-WROOM-32 chip as DevKit
+V1, just different board artwork/pinouts - vendored from `wokwi/wokwi-
+boards` (Marc Endtricht / Ariella Eliassaf) the same way `wokwi-pi-pico-w`
+is, not hand-drawn like `wokwi-esp32-devkit-v1`. Both share the `esp32`
+adapter and toolchain unchanged. ESP32-CAM's OV2640 camera and onboard
+microSD slot are physically present but not emulated - same "present, not
+modeled" posture as Pico W's WiFi chip; GPIO/LED pins work normally.
 
 ESP32 DevKit V1 is backed by its own `esp32` adapter id - not a JS/Worker
 adapter like the others, but a real `qemu-system-xtensa` process

@@ -18,6 +18,8 @@ Emulators:
 
 - `vecnode/qemu-esp32`
   - ESP32 DevKit V1
+  - ESP32 DevKit C V4
+  - ESP32-CAM
 
 Find supported components here: [COMPONENTS.md](COMPONENTS.md)
 
@@ -35,12 +37,8 @@ upstream:
 * [vecnode/ATTinyCore](https://github.com/vecnode/ATTinyCore)
 * [vecnode/pico-sdk](https://github.com/vecnode/pico-sdk)
 * [vecnode/LiquidCrystal](https://github.com/vecnode/LiquidCrystal)
-* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32) - not built by this
-  project; `BUNDLE_QEMU_XTENSA` fetches a prebuilt Windows release from
-  its own GitHub Releases
-* [vecnode/esp-idf](https://github.com/vecnode/esp-idf) (pinned to `v5.3.1`) -
-  the ESP32 Compile & Run pipeline's framework; `simulators/esp-idf`, only
-  fetched when its submodule is initialized
+* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32)
+* [vecnode/esp-idf](https://github.com/vecnode/esp-idf)
 
 ## Reproduce
 
@@ -48,13 +46,13 @@ upstream:
 # -----------------------------
 # One-time / after pulling
 # -----------------------------
+# Pulls every vendored dependency, including simulators/esp-idf - ESP32 is
+# a first-class supported board, not an opt-in extra, so this one command
+# is enough to build and run every board out of the box.
 git submodule update --init --recursive
 
-# simulators/esp-idf is set "update = none" in .gitmodules - the command
-# above skips it (it's ~590MB with its own nested submodules, not
-# something every clone should pay for just to build AVR/RP2040 boards).
-# Only needed for ESP32 Compile & Run development:
-git submodule update --init simulators/esp-idf
+# Optional: esp-idf's own nested submodules (mbedtls, bt, cmock, etc.) come
+# down at full history above - if you want them shallow instead:
 cd simulators/esp-idf && git submodule update --init --recursive --depth 1 && cd ../..
 
 # -----------------------------

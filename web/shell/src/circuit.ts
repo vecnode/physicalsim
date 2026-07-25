@@ -76,6 +76,15 @@ export const boardTagName: Record<string, string> = {
   // Vendored in wokwi-elements (upstream wokwi/wokwi-elements, not custom-
   // authored like the Pico boards) - see esp32-devkit-v1-element.ts.
   "esp32-devkit-v1": "wokwi-esp32-devkit-v1",
+  // Same ESP32-WROOM-32 chip as esp32-devkit-v1, real artwork vendored
+  // from wokwi/wokwi-boards the same way pi-pico-w's is (unlike
+  // esp32-devkit-v1's own hand-drawn element).
+  "esp32-devkit-c-v4": "wokwi-esp32-devkit-c-v4",
+  // OV2640 camera + microSD slot are physically present but not emulated
+  // (no camera/SD peripheral in this project's QEMU fork) - GPIO/LED pins
+  // work normally, same "present, not modeled" posture as pi-pico-w's
+  // WiFi chip.
+  "esp32-cam": "wokwi-esp32-cam",
 };
 
 // Board id -> human-readable label, for menus that list board types (the
@@ -92,6 +101,8 @@ export const boardDisplayName: Record<string, string> = {
   "pi-pico": "Raspberry Pi Pico",
   "pi-pico-w": "Raspberry Pi Pico W",
   "esp32-devkit-v1": "ESP32 DevKit V1",
+  "esp32-devkit-c-v4": "ESP32 DevKit C V4",
+  "esp32-cam": "ESP32-CAM",
 };
 
 // Board id -> the SimulatorAdapter that powers it. This is what "plugging
@@ -118,6 +129,9 @@ export const boardAdapterId: Record<string, AdapterId> = {
   // Backed by esp32_qemu_adapter.cpp (a real qemu-system-xtensa process,
   // not a JS Worker) - see NATIVE_ADAPTER_IDS in adapter-registry.ts.
   "esp32-devkit-v1": "esp32",
+  // Same chip, same adapter - no new adapter needed for either.
+  "esp32-devkit-c-v4": "esp32",
+  "esp32-cam": "esp32",
 };
 
 // Board id -> how to reflect powered on/off on its placed element. Board-

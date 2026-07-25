@@ -1150,13 +1150,13 @@ linkStyleBtn.addEventListener("click", () => {
 // toggle button just flips a class, no state beyond that to track.
 const WIRE_COLORS = [
   DEFAULT_WIRE_COLOR,
-  "#ff6b6b", // red
-  "#51cf66", // green
-  "#339af0", // blue
-  "#cc5de8", // purple
-  "#ff922b", // orange
-  "#20c997", // teal
-  "#f06595", // pink
+  "#e03131", // red
+  "#2f9e44", // green
+  "#1971c2", // blue
+  "#9c36b5", // purple
+  "#e8590c", // orange
+  "#0c8599", // teal
+  "#c2255c", // pink
   "#ffffff", // white
 ];
 

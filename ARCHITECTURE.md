@@ -1924,74 +1924,100 @@ firmware's GPIO18/19 at 1000ms - posted it through `/compile` ->
 rate. Proves the freshly compiled firmware is what's actually running,
 not the old bundled demo silently still booted underneath.
 
-**Distribution: dev-machine-only today, not yet portable.** This is the
-one place ESP32 support genuinely isn't at parity with `avr8`/`rp2040`/
-`cortex-m` yet, and it's worth being precise about *why*, not just that
-it's a gap:
+**Distribution: all three pieces now vendored/bundled, 2026-07-25.** ESP32
+needed **three** things beyond `avr8`/`rp2040`'s own single-toolchain
+shape, and all three now have a real path to a portable, packaged build:
 
-- `BUNDLE_AVR_TOOLCHAIN`/`BUNDLE_ARM_TOOLCHAIN` (`CMakeLists.txt`) both
-  `FetchContent`-fetch a small, self-contained prebuilt compiler archive
-  from a well-known URL (Arduino's own `avr-gcc` mirror; xPack's
-  `arm-none-eabi-gcc` releases) - a single toolchain, tens to low
-  hundreds of MB, no other moving parts. `BUNDLE_QEMU_ARM` similarly
-  copies one already-installed `qemu-system-arm.exe` + its DLLs from the
-  *build* machine at package time.
-- ESP32 needs **three** things, not one, and none of them fit that
-  "single small archive" shape yet:
-  1. **`xtensa-esp-elf` (the gcc toolchain)** - not xPack this time
-     (checked directly - `xpack-dev-tools` publishes no xtensa/esp32
-     toolchain at all); Espressif publishes it themselves, as prebuilt
-     releases on `espressif/crosstool-NG`'s GitHub releases (confirmed
-     via the exact URLs `install.ps1 esp32` itself downloads, in
-     `esp-idf/tools/tools.json`) - a well-known-URL shape just as
-     `BUNDLE_ARM_TOOLCHAIN` already assumes, just a different publisher.
-     `BUNDLE_XTENSA_TOOLCHAIN` (`CMakeLists.txt`) mirrors
-     `BUNDLE_ARM_TOOLCHAIN`'s `FetchContent` shape against these URLs.
-  2. **`espressif/esp-idf` itself** - not just a compiler, a whole
-     framework whose CMake files/components the sketch template
-     `include()`s directly (`tools/cmake/project.cmake`). Unlike
-     `pico-sdk` (~9MB, vendored untrimmed as `simulators/pico-sdk`
-     because it's genuinely small enough to always ship), a shallow
-     clone of `esp-idf` alone is ~590MB - there's no realistic per-file
-     trim the way `ArduinoCore-avr` got one, since ESP-IDF's own build
-     system reaches into most of its component tree unconditionally for
-     any project, small or large. Vendoring this means either a git
-     submodule the size of several `pico-sdk`s put together, or an
-     opt-in `FetchContent` clone that only happens when
-     `BUNDLE_QEMU_XTENSA`/packaging is actually requested - a real
-     decision about repo size and clone time that hasn't been made yet,
-     unlike the toolchain above, where the shape is already obvious.
-  3. **A `qemu-system-xtensa` binary** - unlike `qemu-system-arm.exe`
-     (a real official QEMU release with installers/packages on every
-     platform), `vecnode/qemu-esp32` has no upstream release artifact at
-     all yet - the one this project has actually run was built from
-     source (MSYS2/mingw64, see the `esp32-qemu-gpio-spike` memory note
-     for the exact build recipe and the Windows-specific issues hit along
-     the way - short-path requirements, a `COMSPEC`/`windres` interaction,
-     a static/import-lib `glib` conflict). `BUNDLE_QEMU_XTENSA`
-     (`CMakeLists.txt`, already wired up) can copy a *given* build into
-     the packaged output exactly the way `BUNDLE_QEMU_ARM` does - what's
-     still missing is a *repeatable, hosted* build to point it at (a
-     GitHub Release on `vecnode/qemu-esp32` with a built Windows binary +
-     its mingw64 runtime DLLs, fetched via `FetchContent` the same way
-     the AAVR/ARM toolchain archives are, rather than requiring a local
-     `QEMU_XTENSA_DIR`/`QEMU_XTENSA_RUNTIME_DIR` pointing at a hand-built
-     copy on the *build* machine).
+1. **`xtensa-esp-elf` (the gcc toolchain)** - not xPack (checked
+   directly - `xpack-dev-tools` publishes no xtensa/esp32 toolchain at
+   all); Espressif publishes it themselves, as prebuilt releases on
+   `espressif/crosstool-NG`'s GitHub releases (confirmed via the exact
+   URLs `install.ps1 esp32` itself downloads, in `esp-idf/tools/
+   tools.json`). `BUNDLE_XTENSA_TOOLCHAIN` (`CMakeLists.txt`) mirrors
+   `BUNDLE_ARM_TOOLCHAIN`'s `FetchContent` shape against these URLs.
+2. **`espressif/esp-idf` itself** - not just a compiler, a whole
+   framework whose CMake files/components the sketch template
+   `include()`s directly (`tools/cmake/project.cmake`), with no clean
+   per-file trim the way `ArduinoCore-avr` got one (ESP-IDF's own build
+   system reaches into most of its component tree unconditionally for
+   any project, small or large). Forked to `vecnode/esp-idf` (pinned to
+   `v5.3.1`, same "own the fork" posture as every other `simulators/`
+   submodule) and added as a real git submodule, `simulators/esp-idf` -
+   unlike a plain clone, a submodule reference costs `physicalsim`'s own
+   repo nothing but a 40-byte commit pointer; the actual ~590MB (plus its
+   own nested submodules - FreeRTOS-Kernel, mbedtls, and others) is only
+   fetched when someone runs `git submodule update --init --recursive`,
+   the same deal `pico-sdk` already made, just at a much bigger scale.
+   `esp32_toolchain.cpp`'s `find_vendored_esp_idf_dir()` resolves it via
+   `PHYSICALSIM_SOURCE_DIR` for a dev build, or a bundled `esp-idf/`
+   next to the executable (`CMakeLists.txt`'s `BUNDLE_ESP_IDF` - opt-in
+   given the size, unlike `pico-sdk`'s unconditional copy) for a packaged
+   one. A `C:\esp-idf` dev-machine fallback (`find_legacy_dev_esp_idf_dir()`)
+   is kept for a plain (non-submodule) checkout at that well-known path.
+3. **A `qemu-system-xtensa` binary** - unlike `qemu-system-arm.exe` (a
+   real official QEMU release with installers/packages on every
+   platform), `vecnode/qemu-esp32` had no upstream release artifact of
+   its own. Built from source (MSYS2/mingw64 - see the
+   `esp32-qemu-gpio-spike` memory note for the exact recipe and the
+   Windows-specific issues hit along the way: short-path requirements, a
+   `COMSPEC`/`windres` interaction, a static/import-lib `glib` conflict)
+   and published as a GitHub Release
+   (`vecnode/qemu-esp32`'s `qemu-esp32-win64-v1` tag) bundling the exe,
+   its mingw64 runtime DLLs (confirmed via `ldd`, not guessed), and a
+   trimmed `pc-bios/` (ESP32/C3/S3 ROM images only, not upstream QEMU's
+   full ~355MB-of-other-architectures `pc-bios/`). `BUNDLE_QEMU_XTENSA`
+   (`CMakeLists.txt`) now `FetchContent`-fetches this release by default
+   when `QEMU_XTENSA_DIR` is left empty - the same "well-known URL, no
+   manual local path needed" shape `BUNDLE_ARM_TOOLCHAIN` already has -
+   with `QEMU_XTENSA_DIR` still overridable to point at a local
+   from-source build for testing a fork change before it's released.
 
-None of this blocks `esp32` working *today*, on the machine it was
-developed on - `esp32_toolchain.cpp`'s `find_toolchain()` resolves
-everything from fixed paths (`C:\esp-idf`, `%USERPROFILE%\.espressif`)
-that `install.ps1 esp32` (esp-idf's own installer) puts there, and
-`toolchain_available()` is checked before every compile attempt so a
-machine without it gets a clear, immediate error rather than a confusing
-failure partway through. It does mean a packaged `physicalsim.exe` built
-on this machine and copied to a different Windows machine would have a
-working `esp32` *adapter* (once `BUNDLE_QEMU_XTENSA` bundles the QEMU
-binary/DLLs/ROMs/demo image, all of which are self-contained) but a
-**non-functional Compile & Run** on that other machine, since
-`esp32_toolchain.cpp` has nothing bundled to fall back to yet - the same
-"vendor tools separately from the emulator" line every other toolchain
-here drew, just not yet crossed for this one.
+The demo flash image (`assets/esp32-demo/flash_image.bin`, ~4MB) is
+small enough to commit directly into the repo, unlike the three pieces
+above - no fetch/bundle step needed for it at all.
+
+What's still genuinely dev-machine-only, and likely to stay that way for
+a while (a materially different kind of gap than "needs a `FetchContent`
+URL", covered in `esp32_toolchain.hpp`'s own header comment): `cmake`/
+`ninja` resolve from PATH (the same gap `rp2040_toolchain.cpp` already
+accepts for its own pipeline), and a Python environment with esp-idf's
+own build-time dependencies installed (`kconfiglib` and others - a bare
+system Python won't work) still resolves from `%USERPROFILE%\.espressif`,
+installed by esp-idf's own `install.ps1 esp32`. Bundling a working esp-idf
+Python environment is a bigger, separate undertaking than the three
+FetchContent/submodule pieces above.
+
+**A real "compiles forever" bug report, traced and fixed.** The very
+first compile against the freshly-vendored `simulators/esp-idf` submodule
+(a from-scratch checkout, no build cache, no compiler cache warm) looked
+indistinguishable from a hang - the terminal's "compiling… (Ns)" counter
+kept ticking past two minutes with no visible `cmake`/`ninja`/`cc1`
+process in Task Manager at the moments it was checked. Two real,
+independent bugs were found and fixed while chasing this down, even
+though neither turned out to be the actual root cause (a genuinely slow
+first-ever cold build of a brand-new file tree, most likely real-time
+antivirus scanning overhead against thousands of freshly-written object
+files - confirmed by re-running the identical compile immediately after,
+which reused the warm build cache and finished in 24s):
+
+- `process_exec.cpp`'s Windows spawn path never used a Job Object, unlike
+  `qemu_adapter.cpp`/`esp32_qemu_adapter.cpp`'s own pattern - a timed-out
+  `cmake --build` (which spawns `ninja`, which spawns many
+  `xtensa-esp32-elf-gcc`/`cc1.exe` instances) would `TerminateProcess()`
+  only the immediate child, leaving the rest of the tree orphaned,
+  potentially still writing into the same shared work directory the
+  *next* compile attempt would try to reuse. Fixed with the same
+  `KILL_ON_JOB_CLOSE` job object those two files already use.
+- The 180s timeouts on the configure/build steps were tighter than a
+  genuinely slower machine (or a cold-cache first build) can need -
+  raised to 300s with real headroom.
+
+Verified after both fixes: the exact same "GPIO Blink (ESP32)" example,
+clicked through the real UI (not curl) - Compile & Run completed, and
+`Start` produced two genuinely blinking LEDs, confirming the whole
+pipeline works end-to-end against the vendored `esp-idf`, not just the
+dev-machine `C:\esp-idf` checkout the Phase 1/2 work was originally
+verified against.
 
 ## Build pipeline
 

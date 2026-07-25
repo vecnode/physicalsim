@@ -5,6 +5,7 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <mutex>
 #include <optional>
 #include <sstream>
@@ -18,19 +19,30 @@
 #include <unistd.h>
 #endif
 
+#ifndef PHYSICALSIM_SOURCE_DIR
+#define PHYSICALSIM_SOURCE_DIR ""
+#endif
+
 namespace esp32toolchain {
 
 namespace {
 
 // ---- Toolchain discovery ---------------------------------------------------
-// Dev-machine-only today, deliberately: fixed paths under this machine's
-// esp-idf checkout (C:\esp-idf) and the tools `install.ps1 esp32` put under
-// C:\Users\<user>\.espressif - not a bundled-next-to-the-exe or
-// FetchContent-fetched copy the way avr-gcc/arm-none-eabi-gcc are (see
-// esp32_toolchain.hpp's header comment). A real BUNDLE_XTENSA_TOOLCHAIN
-// (mirroring CMakeLists.txt's BUNDLE_ARM_TOOLCHAIN) is real follow-up work,
-// not done here - this exists so "Compile & Run" genuinely works today on
-// the machine it was developed on, without pretending it's portable yet.
+// esp-idf itself is now vendored (simulators/esp-idf, a fork of
+// espressif/esp-idf, added as a git submodule pinned to v5.3.1 the same
+// "own the fork" way every other simulators/ dependency is) - a dev build
+// finds it there via PHYSICALSIM_SOURCE_DIR, the same fallback
+// avr_toolchain.cpp/rp2040_toolchain.cpp already use for their own vendored
+// trees, and a packaged build finds a bundled copy next to the executable
+// (CMakeLists.txt's BUNDLE_ESP_IDF, opt-in given the size - unlike
+// pico-sdk's ~9MB, esp-idf has no clean trim boundary and runs to hundreds
+// of MB). The xtensa-esp-elf-gcc toolchain itself is bundled via
+// BUNDLE_XTENSA_TOOLCHAIN (fetched from espressif/crosstool-NG's own
+// releases - see CMakeLists.txt). What's still genuinely dev-machine-only:
+// cmake/ninja (falls back to PATH, same gap rp2040_toolchain.cpp already
+// has and accepts) and a Python environment with esp-idf's own dependencies
+// installed (kconfiglib etc. - a bare system Python won't work) - see
+// esp32_toolchain.hpp's header comment.
 std::filesystem::path executable_dir() {
 #ifdef _WIN32
   wchar_t path[MAX_PATH]{};
@@ -65,8 +77,36 @@ std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
   return std::nullopt;
 }
 
+// Bundled "esp-idf/" next to the executable (CMakeLists.txt's
+// BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds -
+// opt-in given the size, unlike pico-sdk's unconditional copy), then
+// simulators/esp-idf straight from the source tree (PHYSICALSIM_SOURCE_DIR)
+// for a dev build run before that copy step has ever happened - the same
+// two-step fallback avr_toolchain.cpp's find_core_dir()/
+// rp2040_toolchain.cpp's find_pico_sdk_dir() already use for their own
+// vendored trees.
+std::optional<std::filesystem::path> find_vendored_esp_idf_dir() {
+  const auto bundled = executable_dir() / "esp-idf";
+  std::error_code ec;
+  if (std::filesystem::exists(bundled / "tools" / "cmake" / "project.cmake", ec)) {
+    return bundled;
+  }
+  const std::string source_dir = PHYSICALSIM_SOURCE_DIR;
+  if (!source_dir.empty()) {
+    const auto from_source = std::filesystem::path(source_dir) / "simulators" / "esp-idf";
+    if (std::filesystem::exists(from_source / "tools" / "cmake" / "project.cmake", ec)) {
+      return from_source;
+    }
+  }
+  return std::nullopt;
+}
+
 #ifdef _WIN32
-std::optional<std::filesystem::path> find_esp_idf_dir() {
+// Legacy dev-machine fallback, from before esp-idf was vendored - kept so
+// a machine that already has a plain (non-submodule) esp-idf checkout at
+// this well-known path still works without needing simulators/esp-idf
+// initialized too. find_vendored_esp_idf_dir() above is tried first.
+std::optional<std::filesystem::path> find_legacy_dev_esp_idf_dir() {
   const std::filesystem::path candidate = "C:\\esp-idf";
   std::error_code ec;
   if (std::filesystem::exists(candidate / "tools" / "cmake" / "project.cmake", ec)) {
@@ -116,7 +156,8 @@ struct ToolchainPaths {
 
 std::optional<ToolchainPaths> find_toolchain() {
 #ifdef _WIN32
-  const auto esp_idf_dir = find_esp_idf_dir();
+  auto esp_idf_dir = find_vendored_esp_idf_dir();
+  if (!esp_idf_dir) esp_idf_dir = find_legacy_dev_esp_idf_dir();
   const auto tools_dir = find_espressif_tools_dir();
   if (!esp_idf_dir || !tools_dir) return std::nullopt;
 
@@ -157,13 +198,14 @@ std::optional<ToolchainPaths> find_toolchain() {
 }
 
 std::optional<std::filesystem::path> find_sketch_template_dir() {
-#ifndef PHYSICALSIM_SOURCE_DIR
-#define PHYSICALSIM_SOURCE_DIR ""
-#endif
+  const auto bundled = executable_dir() / "esp32-sketch-template";
+  std::error_code ec;
+  if (std::filesystem::exists(bundled / "CMakeLists.txt", ec)) {
+    return bundled;
+  }
   const std::string source_dir = PHYSICALSIM_SOURCE_DIR;
   if (source_dir.empty()) return std::nullopt;
   const auto candidate = std::filesystem::path(source_dir) / "src" / "esp32_sketch_template";
-  std::error_code ec;
   if (std::filesystem::exists(candidate / "CMakeLists.txt", ec)) {
     return candidate;
   }
@@ -227,9 +269,12 @@ CompileResult compile_sketch(const std::string &source) {
   const auto template_dir = find_sketch_template_dir();
   if (!toolchain || !template_dir) {
     result.log =
-        "ESP32 toolchain not found. Expected an esp-idf checkout at C:\\esp-idf and tools "
-        "installed under %USERPROFILE%\\.espressif (see `install.ps1 esp32` in an esp-idf "
-        "checkout) - see esp32_toolchain.hpp for why this isn't bundled/portable yet.";
+        "ESP32 toolchain not found. esp-idf itself is vendored (simulators/esp-idf) or "
+        "bundled (BUNDLE_ESP_IDF); xtensa-esp-elf-gcc is bundled via BUNDLE_XTENSA_TOOLCHAIN. "
+        "Still needed on this machine: cmake/ninja on PATH, and a Python environment with "
+        "esp-idf's own dependencies installed under %USERPROFILE%\\.espressif (see "
+        "`install.ps1 esp32` in an esp-idf checkout) - see esp32_toolchain.hpp for exactly "
+        "what's bundled vs. still dev-machine-only.";
     return result;
   }
 
@@ -276,10 +321,17 @@ CompileResult compile_sketch(const std::string &source) {
         "-DPYTHON_DEPS_CHECKED=1",
         ".",
     };
-    // 180s: a from-scratch ESP-IDF component-tree configure (the whole
+    // 300s: a from-scratch ESP-IDF component-tree configure (the whole
     // component list, kconfig defaults, sdkconfig generation) is real work
-    // - slower than pico-sdk's own configure, bounded but generous.
-    const auto configure_run = procexec::run_and_wait(toolchain->cmake_exe, configure_args, dir, 180);
+    // - slower than pico-sdk's own configure, and slower machines than the
+    // one this was developed on can genuinely take longer than a tighter
+    // bound would allow (a real "compile hangs" report traced back to a
+    // timeout this tight combined with process_exec.cpp not killing the
+    // whole process tree on timeout - see that file's own fix - so the
+    // *next* attempt fought orphaned processes from the *previous* one).
+    std::cerr << "[esp32_toolchain] starting cmake configure" << std::endl;
+    const auto configure_run = procexec::run_and_wait(toolchain->cmake_exe, configure_args, dir, 300);
+    std::cerr << "[esp32_toolchain] cmake configure exit_code=" << configure_run.exit_code << std::endl;
     if (configure_run.exit_code != 0) {
       result.log = "cmake configure failed:\n" + configure_run.output;
       return result;
@@ -287,12 +339,14 @@ CompileResult compile_sketch(const std::string &source) {
     g_configured = true;
   }
 
-  // 180s: a first build compiles the whole ESP-IDF component tree
+  // 300s: a first build compiles the whole ESP-IDF component tree
   // (bootloader + every linked component) - later builds only recompile
   // main.c and relink, much faster, but the bound has to cover the slow
-  // first case (this was the actual observed order of magnitude during
-  // the Phase 0/1 spike's own from-scratch build).
-  const auto build_run = procexec::run_and_wait(toolchain->cmake_exe, {"--build", "build"}, dir, 180);
+  // first case with real headroom for a slower machine than this was
+  // developed on (see the configure step's own comment above).
+  std::cerr << "[esp32_toolchain] starting cmake --build" << std::endl;
+  const auto build_run = procexec::run_and_wait(toolchain->cmake_exe, {"--build", "build"}, dir, 300);
+  std::cerr << "[esp32_toolchain] cmake --build exit_code=" << build_run.exit_code << std::endl;
   if (build_run.exit_code != 0) {
     result.log = "build failed:\n" + build_run.output;
     return result;
@@ -310,10 +364,12 @@ CompileResult compile_sketch(const std::string &source) {
   // padded vs. unpadded merge_bin run), so the padding is reconstructed
   // locally instead, in esp32_qemu_adapter.cpp's load_firmware(), right
   // before writing the file QEMU's -drive actually reads.
+  std::cerr << "[esp32_toolchain] starting esptool merge_bin" << std::endl;
   const auto merge_run = procexec::run_and_wait(
       toolchain->python_exe, {"-m", "esptool", "--chip", "esp32", "merge_bin", "-o", "flash_image.bin",
                               "@flash_args"},
       dir / "build", 60);
+  std::cerr << "[esp32_toolchain] esptool merge_bin exit_code=" << merge_run.exit_code << std::endl;
   if (merge_run.exit_code != 0) {
     result.log = "esptool merge_bin failed:\n" + merge_run.output;
     return result;
@@ -327,6 +383,8 @@ CompileResult compile_sketch(const std::string &source) {
   std::ostringstream bin_ss;
   bin_ss << bin_file.rdbuf();
 
+  std::cerr << "[esp32_toolchain] compile_sketch returning success, " << bin_ss.str().size() << " bytes"
+            << std::endl;
   result.ok = true;
   result.binary = bin_ss.str();
   result.log = build_run.output;

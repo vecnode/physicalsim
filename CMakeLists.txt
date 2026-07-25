@@ -26,32 +26,47 @@ set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime dir
 option(BUNDLE_QEMU_ARM "Bundle qemu-system-arm + its DLLs into the output" OFF)
 set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing qemu-system-arm.exe")
 
-# Same "copy an already-built copy in, don't fetch/build it ourselves"
-# posture as BUNDLE_QEMU_ARM above, for the "esp32" adapter's backend
+# Same "copy an already-built copy in, don't build it ourselves" posture
+# as BUNDLE_QEMU_ARM above, for the "esp32" adapter's backend
 # (src/esp32_qemu_adapter.cpp) - qemu-system-xtensa from vecnode/qemu-esp32
 # (a fork of lcgamboa/qemu, itself a fork of espressif/qemu; see that
 # repo's README and the esp32-qemu-gpio-spike notes for why this specific
 # fork, not the official Espressif one). Unlike qemu-system-arm, there's no
-# OS package/installer for this - QEMU_XTENSA_DIR should point at a local
-# `ninja qemu-system-xtensa.exe` build's build/ directory (see
-# esp32_qemu_adapter.hpp's header comment for the exact build recipe).
-# QEMU_XTENSA_PCBIOS_DIR points at that same source checkout's pc-bios/
-# (the ROM images qemu-system-xtensa needs via -L, not built - vendored
-# in-tree). ESP32_DEMO_FLASH_IMAGE points at a pre-built, esptool-merged
-# flash image (bootloader+partition-table+app) - the fixed demo firmware
-# the adapter boots until a real sketch-compile pipeline exists for esp32.
+# OS package/installer for this, so by default (QEMU_XTENSA_DIR empty)
+# this FetchContent-fetches a prebuilt Windows x64 release published on
+# vecnode/qemu-esp32's own GitHub Releases (built from source via
+# MSYS2/mingw64 - see the esp32-qemu-gpio-spike memory note for the exact
+# recipe and the Windows-specific issues hit along the way). That release
+# already bundles qemu-system-xtensa.exe, its mingw64 runtime DLLs (a
+# from-source build links against DLLs that live in the toolchain's own
+# bin/, not next to the exe the way an official qemu-system-arm release
+# does - confirmed with `ldd`, not guessed), and pc-bios/ (ESP32/C3/S3 ROM
+# images only, not the ~355MB of other-architecture blobs upstream QEMU's
+# full pc-bios/ ships) all as one archive - QEMU_XTENSA_DIR can still be
+# pointed at a local from-source build's own build/ directory instead, for
+# testing a change to the fork before it's released.
 option(BUNDLE_QEMU_XTENSA "Bundle qemu-system-xtensa + its DLLs, ROMs, and a demo flash image into the output" OFF)
-set(QEMU_XTENSA_DIR "" CACHE PATH "Path to a built qemu-esp32 directory containing qemu-system-xtensa.exe")
-set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ directory (ROM images)")
-set(ESP32_DEMO_FLASH_IMAGE "" CACHE FILEPATH "Path to a pre-built esp32 demo flash_image.bin")
-# Unlike qemu-system-arm.exe (a self-contained official release with its
-# DLLs sitting right next to it), a from-source MSYS2/mingw64 build of
-# qemu-system-xtensa.exe links against runtime DLLs that live in the
-# toolchain's own bin/ (e.g. C:/msys64/mingw64/bin), not next to the exe -
-# confirmed with `ldd qemu-system-xtensa.exe` against the Phase 0 spike's
-# actual build, not guessed. Separate cache var so QEMU_XTENSA_DIR can stay
-# "just the build output directory".
-set(QEMU_XTENSA_RUNTIME_DIR "" CACHE PATH "Path to the mingw64 bin/ directory holding qemu-system-xtensa.exe's runtime DLLs")
+set(QEMU_XTENSA_DIR "" CACHE PATH "Path to a built qemu-esp32 directory containing qemu-system-xtensa.exe (defaults to fetching vecnode/qemu-esp32's published release if empty)")
+set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ directory (defaults to QEMU_XTENSA_DIR/pc-bios if empty)")
+# Vendored directly in-repo (assets/esp32-demo/flash_image.bin, ~4MB) -
+# small enough to commit outright, unlike qemu-esp32/esp-idf above, so
+# BUNDLE_QEMU_XTENSA needs no manual path for this piece at all.
+set(ESP32_DEMO_FLASH_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/assets/esp32-demo/flash_image.bin" CACHE FILEPATH "Path to a pre-built esp32 demo flash_image.bin")
+set(QEMU_XTENSA_RUNTIME_DIR "" CACHE PATH "Path to qemu-system-xtensa.exe's runtime DLLs (defaults to QEMU_XTENSA_DIR itself if empty - the published release bundles them alongside the exe)")
+
+if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_DIR)
+    FetchContent_Declare(qemu_esp32_prebuilt
+        URL https://github.com/vecnode/qemu-esp32/releases/download/qemu-esp32-win64-v1/qemu-esp32-win64.zip
+    )
+    FetchContent_MakeAvailable(qemu_esp32_prebuilt)
+    set(QEMU_XTENSA_DIR "${qemu_esp32_prebuilt_SOURCE_DIR}")
+endif()
+if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_RUNTIME_DIR)
+    set(QEMU_XTENSA_RUNTIME_DIR "${QEMU_XTENSA_DIR}")
+endif()
+if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_PCBIOS_DIR)
+    set(QEMU_XTENSA_PCBIOS_DIR "${QEMU_XTENSA_DIR}/pc-bios")
+endif()
 
 # The AVR toolchain (avr-gcc/avr-g++/avr-objcopy) backing the in-app
 # Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike QEMU/WebView2
@@ -69,6 +84,17 @@ option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for t
 # doesn't publish a prebuilt arm-none-eabi-gcc at the same well-known URL
 # pattern BUNDLE_AVR_TOOLCHAIN's avr-gcc lives at (confirmed by trying).
 option(BUNDLE_ARM_TOOLCHAIN "Fetch and bundle a prebuilt arm-none-eabi-gcc toolchain for the in-app RP2040 sketch compiler" OFF)
+
+# simulators/esp-idf (vendored, see below) is genuinely too big to always
+# ship the way pico-sdk's ~9MB unconditionally does - a real ESP-IDF
+# checkout with its own submodules runs to hundreds of MB, with no clean
+# per-file trim boundary (same reasoning BUNDLE_XTENSA_TOOLCHAIN's own
+# comment gives for why pico-sdk's own "just always ship it" precedent
+# doesn't apply here). Off by default; a dev build without this still
+# works via esp32_toolchain.cpp's PHYSICALSIM_SOURCE_DIR fallback straight
+# to simulators/esp-idf, the same way avr-core/pico-sdk fall back to their
+# own source trees before their own copy steps have run.
+option(BUNDLE_ESP_IDF "Bundle vendored esp-idf next to the executable for a packaged ESP32 Compile & Run" OFF)
 
 include(FetchContent)
 
@@ -695,6 +721,32 @@ add_custom_command(TARGET physicalsim POST_BUILD
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMENT "Copying vendored pico-sdk + RP2040 sketch template"
 )
+
+# ---- ESP32 sketch-compiler assets (cross-platform, not gated on WIN32) -----
+# src/esp32_sketch_template is tiny (two CMakeLists.txt files) - always
+# copied, same "small enough to always ship" posture as the RP2040 sketch
+# template above. simulators/esp-idf itself is the opposite case (see
+# BUNDLE_ESP_IDF's own comment above) - only copied when explicitly
+# requested.
+add_custom_command(TARGET physicalsim POST_BUILD
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/esp32_sketch_template
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-sketch-template
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+    COMMENT "Copying ESP32 sketch template"
+)
+
+if(BUNDLE_ESP_IDF)
+    add_custom_command(TARGET physicalsim POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/esp-idf
+            -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp-idf
+            -DSTAMP=.copied.stamp
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+        COMMENT "Bundling vendored esp-idf (this can take a while - hundreds of MB)"
+    )
+endif()
 
 # The toolchain itself, only when BUNDLE_ARM_TOOLCHAIN actually fetched one -
 # same "off unless packaging a release" posture as BUNDLE_AVR_TOOLCHAIN.

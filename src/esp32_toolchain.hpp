@@ -12,14 +12,20 @@
 // merged via esptool), not pico-sdk's flat add_executable() or avr-gcc's
 // per-file compile - see esp32_sketch_template/CMakeLists.txt.
 //
-// Toolchain discovery today is dev-machine-only (see esp32_toolchain.cpp's
-// find_esp_idf_dir()/find_xtensa_toolchain_dir() - fixed paths under this
-// machine's C:\esp-idf and C:\Users\<user>\.espressif, not a bundled or
-// FetchContent-fetched copy the way avr-gcc/arm-none-eabi-gcc are). A real
-// BUNDLE_XTENSA_TOOLCHAIN (mirroring BUNDLE_ARM_TOOLCHAIN) plus a vendored
-// or fetched esp-idf checkout is real follow-up work before this compiles
-// on any machine other than the one it was built on - documented here, not
-// silently assumed solved.
+// esp-idf itself is vendored (simulators/esp-idf, a fork of
+// espressif/esp-idf pinned to v5.3.1, added as a git submodule the same
+// way every other simulators/ dependency is) and can be bundled next to
+// the executable for a packaged build (CMakeLists.txt's BUNDLE_ESP_IDF -
+// opt-in given the size, unlike pico-sdk's unconditional copy).
+// xtensa-esp-elf-gcc is bundled via BUNDLE_XTENSA_TOOLCHAIN (fetched from
+// espressif's own crosstool-NG releases, mirroring BUNDLE_ARM_TOOLCHAIN's
+// shape). What's still genuinely dev-machine-only (see
+// esp32_toolchain.cpp's find_toolchain()): cmake/ninja resolve from PATH
+// (the same gap rp2040_toolchain.cpp already accepts), and a Python
+// environment with esp-idf's own build-time dependencies installed
+// (kconfiglib etc. - a bare system Python won't work) still resolves
+// from this machine's %USERPROFILE%\.espressif, installed by esp-idf's
+// own `install.ps1 esp32`.
 // ============================================================================
 #pragma once
 

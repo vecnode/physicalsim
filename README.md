@@ -35,7 +35,12 @@ upstream:
 * [vecnode/ATTinyCore](https://github.com/vecnode/ATTinyCore)
 * [vecnode/pico-sdk](https://github.com/vecnode/pico-sdk)
 * [vecnode/LiquidCrystal](https://github.com/vecnode/LiquidCrystal)
-* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32)
+* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32) - not built by this
+  project; `BUNDLE_QEMU_XTENSA` fetches a prebuilt Windows release from
+  its own GitHub Releases
+* [vecnode/esp-idf](https://github.com/vecnode/esp-idf) (pinned to `v5.3.1`) -
+  the ESP32 Compile & Run pipeline's framework; `simulators/esp-idf`, only
+  fetched when its submodule is initialized
 
 ## Reproduce
 
@@ -44,6 +49,13 @@ upstream:
 # One-time / after pulling
 # -----------------------------
 git submodule update --init --recursive
+
+# simulators/esp-idf is set "update = none" in .gitmodules - the command
+# above skips it (it's ~590MB with its own nested submodules, not
+# something every clone should pay for just to build AVR/RP2040 boards).
+# Only needed for ESP32 Compile & Run development:
+git submodule update --init simulators/esp-idf
+cd simulators/esp-idf && git submodule update --init --recursive --depth 1 && cd ../..
 
 # -----------------------------
 # Windows (manual dev flow)

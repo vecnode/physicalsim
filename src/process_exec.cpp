@@ -80,6 +80,29 @@ RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::
     return result;
   }
 
+  // A Job Object with KILL_ON_JOB_CLOSE, same pattern qemu_adapter.cpp/
+  // esp32_qemu_adapter.cpp already use - without this, TerminateProcess()
+  // below only kills the immediate child (e.g. cmake.exe), not the whole
+  // tree it spawns (ninja, and every xtensa-esp32-elf-gcc/cc1.exe
+  // instance it runs) - a real bug found while debugging a "compile
+  // hangs forever" report: a timed-out `cmake --build` (esp-idf's own
+  // component-tree build can genuinely take longer than expected on a
+  // slower machine) left orphaned compiler processes still writing into
+  // the same shared work directory, so every subsequent compile attempt
+  // fought zombies for file locks instead of running cleanly. Assigning
+  // the child to this job (best-effort - if it fails, behavior falls
+  // back to the old single-process kill) and closing the job handle
+  // unconditionally at the end (not just on the timeout path) kills any
+  // still-running descendant even after a normal exit, since some
+  // grandchildren can detach and outlive their immediate parent.
+  HANDLE job_handle = CreateJobObjectW(nullptr, nullptr);
+  if (job_handle) {
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+    limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    SetInformationJobObject(job_handle, JobObjectExtendedLimitInformation, &limits, sizeof(limits));
+    AssignProcessToJobObject(job_handle, process_info.hProcess);
+  }
+
   const DWORD wait_result =
       WaitForSingleObject(process_info.hProcess, static_cast<DWORD>(timeout_seconds) * 1000);
   if (wait_result == WAIT_TIMEOUT) {
@@ -90,6 +113,9 @@ RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::
   GetExitCodeProcess(process_info.hProcess, &exit_code);
   CloseHandle(process_info.hProcess);
   CloseHandle(process_info.hThread);
+  if (job_handle) {
+    CloseHandle(job_handle);
+  }
   result.exit_code = static_cast<int>(exit_code);
 #else
   std::vector<std::string> arg_storage;

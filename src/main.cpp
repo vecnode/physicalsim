@@ -318,11 +318,27 @@ bool is_qemu_backed_adapter(const std::string &adapter) {
   return adapter == "cortex-m" || adapter == "esp32";
 }
 
+// Guards both g_qemu_instances (the lookup/creation map) *and* every call
+// into an already-created instance's methods - not just creation. A
+// QemuInstance/Esp32QemuInstance owns long-lived TCP sockets (QMP/GDB) it
+// talks a stateful request/response protocol over; httplib serves
+// requests from a thread pool, so two concurrent HTTP requests against
+// the same adapter (e.g. the state poll and a subscribed pin's readPin
+// poll, both firing every 200ms - see native-adapter-client.ts) would
+// otherwise interleave writes/reads on the same socket from different
+// threads with nothing serializing them, corrupting the GDB RSP framing
+// and hanging a read forever - found by adding NativeAdapterClient's own
+// pin-change polling (esp32's readPin is the first native adapter method
+// actually worth polling at all), not a pre-existing reported bug.
+// handle_qemu_bridge_call() holds this lock for its *entire* body, not
+// just the lookup, which is why get_or_create_qemu_instance() itself no
+// longer takes it (std::mutex isn't recursive - a second lock from the
+// same thread would deadlock, not queue).
 std::mutex g_qemu_mutex;
 std::unordered_map<std::string, std::unique_ptr<QemuBackedAdapter>> g_qemu_instances;
 
+// Caller must hold g_qemu_mutex.
 QemuBackedAdapter &get_or_create_qemu_instance(const std::string &adapter) {
-  std::lock_guard<std::mutex> lock(g_qemu_mutex);
   auto it = g_qemu_instances.find(adapter);
   if (it == g_qemu_instances.end()) {
     std::unique_ptr<QemuBackedAdapter> instance;
@@ -372,6 +388,10 @@ std::string decode_hex_bytes(const std::string &hex) {
 
 json handle_qemu_bridge_call(const std::string &adapter, const std::string &method,
                               const json &params) {
+  // Held for the whole call, not just the instance lookup - see
+  // g_qemu_mutex's own comment above on why a per-request-only lock
+  // isn't enough once an instance already exists.
+  std::lock_guard<std::mutex> lock(g_qemu_mutex);
   try {
     auto &instance = get_or_create_qemu_instance(adapter);
 

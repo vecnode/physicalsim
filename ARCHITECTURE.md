@@ -1823,6 +1823,176 @@ clicking "Compile & Run", then "Start" - producing a live-running
 simulation (`CYCLES` advancing, `VOLTAGE`/`CURRENT` reflecting the RP2040
 power profile) with no console/compile errors.
 
+## ESP32 board and toolchain
+
+A third native-backed adapter kind (2026-07-25), alongside `cortex-m` -
+see "Two adapter kinds" above. `"esp32"` routes through the exact same
+`handle_qemu_bridge_call()`/`g_bridge_latest_state` path `cortex-m`
+already uses; the only C++-side change needed to add a second QEMU-backed
+adapter was extracting a small `QemuBackedAdapter` interface
+(`src/qemu_backed_adapter.hpp`) that both `qemu::QemuInstance` and the new
+`esp32qemu::Esp32QemuInstance` implement, so `main.cpp`'s dispatch grows
+one lookup-table entry per adapter kind, not a special case.
+
+**Not the official Espressif QEMU fork.** `cortex-m`'s `qemu-system-arm`
+is plain upstream QEMU; ESP32 needs a fork, since mainline QEMU's own
+`qemu-system-xtensa` has no `esp32` machine at all (confirmed by running
+`-M help` against it). `espressif/qemu` is the obvious first candidate,
+but its own peripheral-support docs explicitly mark "GPIO matrix / IOMUX"
+unimplemented on ESP32/S3/C3 - exactly the mechanism behind
+`gpio_set_level()`/`digitalWrite()` on arbitrary pins, so an LED wired to
+a GPIO would never toggle under it. `lcgamboa/qemu` (built for the
+PICSimLab simulator, itself a fork of `espressif/qemu`) adds that support
+- confirmed empirically, not from its README alone: a real ESP-IDF GPIO
+example was built and run under it, and `GPIO_OUT_REG` (read via GDB RSP
+memory read, see below) toggled in exact lockstep with the firmware's own
+`gpio_set_level()` calls. Forked to `vecnode/qemu-esp32` (same
+"own the fork, don't depend on someone else's repo" posture as every
+`simulators/` submodule).
+
+**Real bug found and fixed: GDB memory reads don't work while running.**
+`read_pin()` needs `GPIO_OUT_REG` (peripheral address `0x3ff44004`) via
+the GDB Remote Serial Protocol's `m` (read memory) command - the same
+protocol `cortex-m` uses for register reads, extended here to arbitrary
+physical memory. First attempt sent `m` while the vCPU was continuing
+(QMP `cont`) and it just hung forever - reproduced with a bare Python
+script outside physicalsim entirely (not a bug in the C++ client), and
+resolved once QMP `stop` halted the target first: this fork's gdbstub
+only services memory-read packets while halted. Fixed in
+`Esp32QemuInstance::read_pin()` by bracketing the read with a stop/resume
+if the target was running - the same "briefly pause to read, then
+continue" cost `cortex-m`'s own `step()` already accepts for register
+reads, not a new kind of compromise.
+
+**`write_pin()` is not implemented.** Unlike `GPIO_OUT_REG`, driving an
+external input (a simulated button) would need QEMU's internal
+`set_gpio()` IRQ-line handler (`hw/gpio/esp32_gpio.c`) invoked from
+outside the process - there's no memory-mapped or QMP-exposed path to it
+today. Throws a clear error rather than silently no-op'ing, same posture
+as `cortex-m`'s own pin-I/O stubs.
+
+**Compile & Run (`src/esp32_toolchain.cpp`).** A real ESP-IDF project -
+genuinely heavier than `avr_toolchain.cpp`'s flat per-file `avr-gcc`
+invocations or `rp2040_toolchain.cpp`'s single `add_executable()` against
+raw `pico-sdk`: ESP-IDF's own `tools/cmake/project.cmake` pulls in its
+entire component tree (bootloader, partition table, `nvs_flash`, `lwip`,
+dozens more - none of it trimmed, unlike `ArduinoCore-avr`'s cores/one-
+variant trim) for every project, however small. `compile_sketch()`
+mirrors `rp2040_toolchain.cpp`'s shape - a persistent work directory,
+configured once, rebuilt incrementally via `ninja` on every "Compile &
+Run" click - and the user's `app_main()` body becomes
+`src/esp32_sketch_template/main/main.c`, the same "just the function
+body, not a full translation unit" convention every other toolchain here
+uses.
+
+Invoked via **direct `cmake -G Ninja` + `cmake --build`, not the `idf.py`
+wrapper script** - confirmed both work, but `idf.py` re-derives its own
+environment and re-checks Python dependencies on every invocation (real,
+measured overhead per "Compile & Run" click), while a raw `cmake`
+invocation needs exactly `-DCMAKE_TOOLCHAIN_FILE=<esp-idf>/tools/cmake/
+toolchain-esp32.cmake -DIDF_TARGET=esp32 -DPYTHON=<venv python.exe>
+-DPYTHON_DEPS_CHECKED=1` plus `IDF_PATH`/`ESP_ROM_ELF_DIR` env vars and
+`PATH` entries for the `xtensa-esp32-elf` toolchain/`ninja`/the esp-idf
+Python venv (all found by inspecting a known-good `idf.py`-produced
+`CMakeCache.txt`, not guessed) - the same "skip the wrapper, call the
+real tools directly" choice `rp2040_toolchain.cpp` already made over a
+hypothetical `arduino-pico`-style CLI.
+
+**Real bug found and fixed: the flash-image padding blew past the HTTP
+bridge's request-size limit.** `esptool merge_bin --fill-flash-size 4MB`
+(the flag the Phase 0 spike's own manual testing used) pads the merged
+image out to the full declared flash size with `0xFF` filler - fine
+written straight to disk, but this image crosses `POST /compile`'s
+response and then `loadFirmware`'s request body as hex text first (the
+same `binHex` convention `rp2040_toolchain.cpp` established, decoded by
+`decode_hex_bytes()` in `main.cpp`), so 4MB of image became 8MB+ of hex
+and blew past `kMaxRequestBodyBytes` (64KB, a deliberate hardening
+default - see `main.cpp`). Fixed at the root, not by raising the limit to
+match: dropped `--fill-flash-size` from the `merge_bin` call (confirmed
+only ~244KB of the image is ever non-filler, by diffing a padded vs.
+unpadded run) and reconstruct the `0xFF` padding locally in
+`Esp32QemuInstance::load_firmware()`, right before writing the file
+QEMU's `-drive` actually reads - the padding itself never crosses the
+network. `kMaxRequestBodyBytes` was still raised, 64KB -> 2MB, to
+comfortably cover the ~500KB hex-encoded unpadded image with headroom -
+a real, still-hardened bound, not "raised until the error went away".
+
+Verified end-to-end, distinctly: compiled a sketch toggling GPIO21 at
+500ms intervals - deliberately different from the bundled demo
+firmware's GPIO18/19 at 1000ms - posted it through `/compile` ->
+`loadFirmware` -> `start`, and watched `readPin D21` track the *new*
+rate. Proves the freshly compiled firmware is what's actually running,
+not the old bundled demo silently still booted underneath.
+
+**Distribution: dev-machine-only today, not yet portable.** This is the
+one place ESP32 support genuinely isn't at parity with `avr8`/`rp2040`/
+`cortex-m` yet, and it's worth being precise about *why*, not just that
+it's a gap:
+
+- `BUNDLE_AVR_TOOLCHAIN`/`BUNDLE_ARM_TOOLCHAIN` (`CMakeLists.txt`) both
+  `FetchContent`-fetch a small, self-contained prebuilt compiler archive
+  from a well-known URL (Arduino's own `avr-gcc` mirror; xPack's
+  `arm-none-eabi-gcc` releases) - a single toolchain, tens to low
+  hundreds of MB, no other moving parts. `BUNDLE_QEMU_ARM` similarly
+  copies one already-installed `qemu-system-arm.exe` + its DLLs from the
+  *build* machine at package time.
+- ESP32 needs **three** things, not one, and none of them fit that
+  "single small archive" shape yet:
+  1. **`xtensa-esp-elf` (the gcc toolchain)** - not xPack this time
+     (checked directly - `xpack-dev-tools` publishes no xtensa/esp32
+     toolchain at all); Espressif publishes it themselves, as prebuilt
+     releases on `espressif/crosstool-NG`'s GitHub releases (confirmed
+     via the exact URLs `install.ps1 esp32` itself downloads, in
+     `esp-idf/tools/tools.json`) - a well-known-URL shape just as
+     `BUNDLE_ARM_TOOLCHAIN` already assumes, just a different publisher.
+     `BUNDLE_XTENSA_TOOLCHAIN` (`CMakeLists.txt`) mirrors
+     `BUNDLE_ARM_TOOLCHAIN`'s `FetchContent` shape against these URLs.
+  2. **`espressif/esp-idf` itself** - not just a compiler, a whole
+     framework whose CMake files/components the sketch template
+     `include()`s directly (`tools/cmake/project.cmake`). Unlike
+     `pico-sdk` (~9MB, vendored untrimmed as `simulators/pico-sdk`
+     because it's genuinely small enough to always ship), a shallow
+     clone of `esp-idf` alone is ~590MB - there's no realistic per-file
+     trim the way `ArduinoCore-avr` got one, since ESP-IDF's own build
+     system reaches into most of its component tree unconditionally for
+     any project, small or large. Vendoring this means either a git
+     submodule the size of several `pico-sdk`s put together, or an
+     opt-in `FetchContent` clone that only happens when
+     `BUNDLE_QEMU_XTENSA`/packaging is actually requested - a real
+     decision about repo size and clone time that hasn't been made yet,
+     unlike the toolchain above, where the shape is already obvious.
+  3. **A `qemu-system-xtensa` binary** - unlike `qemu-system-arm.exe`
+     (a real official QEMU release with installers/packages on every
+     platform), `vecnode/qemu-esp32` has no upstream release artifact at
+     all yet - the one this project has actually run was built from
+     source (MSYS2/mingw64, see the `esp32-qemu-gpio-spike` memory note
+     for the exact build recipe and the Windows-specific issues hit along
+     the way - short-path requirements, a `COMSPEC`/`windres` interaction,
+     a static/import-lib `glib` conflict). `BUNDLE_QEMU_XTENSA`
+     (`CMakeLists.txt`, already wired up) can copy a *given* build into
+     the packaged output exactly the way `BUNDLE_QEMU_ARM` does - what's
+     still missing is a *repeatable, hosted* build to point it at (a
+     GitHub Release on `vecnode/qemu-esp32` with a built Windows binary +
+     its mingw64 runtime DLLs, fetched via `FetchContent` the same way
+     the AAVR/ARM toolchain archives are, rather than requiring a local
+     `QEMU_XTENSA_DIR`/`QEMU_XTENSA_RUNTIME_DIR` pointing at a hand-built
+     copy on the *build* machine).
+
+None of this blocks `esp32` working *today*, on the machine it was
+developed on - `esp32_toolchain.cpp`'s `find_toolchain()` resolves
+everything from fixed paths (`C:\esp-idf`, `%USERPROFILE%\.espressif`)
+that `install.ps1 esp32` (esp-idf's own installer) puts there, and
+`toolchain_available()` is checked before every compile attempt so a
+machine without it gets a clear, immediate error rather than a confusing
+failure partway through. It does mean a packaged `physicalsim.exe` built
+on this machine and copied to a different Windows machine would have a
+working `esp32` *adapter* (once `BUNDLE_QEMU_XTENSA` bundles the QEMU
+binary/DLLs/ROMs/demo image, all of which are self-contained) but a
+**non-functional Compile & Run** on that other machine, since
+`esp32_toolchain.cpp` has nothing bundled to fall back to yet - the same
+"vendor tools separately from the emulator" line every other toolchain
+here drew, just not yet crossed for this one.
+
 ## Build pipeline
 
 `public/` is never authored by hand — it's Vite's build output

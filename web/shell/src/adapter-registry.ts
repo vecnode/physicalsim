@@ -16,8 +16,11 @@ import { notifyNative } from "./native-notify.js";
 // arduino-nano do this today, deliberately - see boardAdapterId in
 // circuit.ts), which is correct for two boards that are the *same* chip
 // but would silently corrupt a Mega's much larger port/flash state if an
-// Uno shared it too.
-export type AdapterId = "rp2040" | "avr8" | "avr8-mega" | "cortex-m";
+// Uno shared it too. "avr8-attiny85" (Franzininho, chip.ts's ATTINY85)
+// and "avr8-leonardo" (Arduino Leonardo, chip.ts's ATMEGA32U4) are the
+// same pattern a third and fourth time - genuinely different chips, not
+// a parameter on "avr8".
+export type AdapterId = "rp2040" | "avr8" | "avr8-mega" | "avr8-attiny85" | "avr8-leonardo" | "cortex-m";
 
 // Structural interface both AdapterClient (Worker-backed) and
 // NativeAdapterClient (native-process-backed, see that file) satisfy.
@@ -50,6 +53,18 @@ function createWorker(id: AdapterId): Worker {
   if (id === "avr8-mega") {
     return new Worker(
       new URL("../../adapters/avr8/src/worker-mega.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-attiny85") {
+    return new Worker(
+      new URL("../../adapters/avr8/src/worker-attiny85.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-leonardo") {
+    return new Worker(
+      new URL("../../adapters/avr8/src/worker-leonardo.ts", import.meta.url),
       { type: "module" },
     );
   }

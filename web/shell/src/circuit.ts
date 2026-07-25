@@ -3,8 +3,13 @@ import type {
   ArduinoUnoElement,
   ArduinoNanoElement,
   ArduinoMegaElement,
+  FranzininhoElement,
   NanoRP2040ConnectElement,
 } from "@wokwi/elements";
+// ArduinoLeonardoElement has no ledPower (or any other) @property - the
+// vendored Fritzing artwork has no obvious dedicated power-status LED
+// wired up yet, same posture as pi-pico's own missing boardPowerSetter
+// entry below (real hardware has one; not modeled here yet).
 import { componentRegistry } from "./component-registry.js";
 
 // Not the same thing as @physicalsim/common's Circuit class
@@ -59,6 +64,8 @@ export const boardTagName: Record<string, string> = {
   "arduino-uno": "wokwi-arduino-uno",
   "arduino-nano": "wokwi-arduino-nano",
   "arduino-mega": "wokwi-arduino-mega",
+  "arduino-leonardo": "wokwi-arduino-leonardo",
+  franzininho: "wokwi-franzininho",
   // The one RP2040-family element @wokwi/elements actually vendors - see
   // boards/nano-rp2040-connect.ts's own comment on why this, not a plain
   // "Pico" element, is what makes rp2040 placeable at all.
@@ -74,6 +81,8 @@ export const boardDisplayName: Record<string, string> = {
   "arduino-uno": "Arduino Uno",
   "arduino-nano": "Arduino Nano",
   "arduino-mega": "Arduino Mega",
+  "arduino-leonardo": "Arduino Leonardo",
+  franzininho: "Franzininho",
   "nano-rp2040-connect": "Arduino Nano RP2040 Connect",
   "pi-pico": "Raspberry Pi Pico",
 };
@@ -90,6 +99,12 @@ export const boardAdapterId: Record<string, AdapterId> = {
   // "avr8" here would mean an Uno and a Mega fight over one CPU instance
   // shaped for neither of them correctly.
   "arduino-mega": "avr8-mega",
+  // Its own adapter id too - genuinely a different chip (ATmega32u4),
+  // see chip.ts's ATMEGA32U4 config.
+  "arduino-leonardo": "avr8-leonardo",
+  // Its own adapter id too - genuinely a different chip (ATtiny85, not
+  // an ATmega at all), see chip.ts's ATTINY85 config.
+  franzininho: "avr8-attiny85",
   "nano-rp2040-connect": "rp2040",
   "pi-pico": "rp2040",
 };
@@ -109,6 +124,9 @@ export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => 
   },
   "arduino-mega": (el, on) => {
     (el as ArduinoMegaElement).ledPower = on;
+  },
+  franzininho: (el, on) => {
+    (el as FranzininhoElement).ledPower = on;
   },
   "nano-rp2040-connect": (el, on) => {
     (el as NanoRP2040ConnectElement).ledPower = on;

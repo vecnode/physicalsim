@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { Avr8Adapter } from "./adapter.js";
-import { ATMEGA2560 } from "./chip.js";
+import { ATMEGA2560, ATMEGA32U4, ATTINY85 } from "./chip.js";
 
 // AVRIOPort internals accessed directly to drive the CPU's write hooks the
 // same way real AVR instructions (e.g. SBI DDRB,5 / OUT PORTB,r) would -
@@ -358,6 +358,110 @@ describe("Avr8Adapter chip variants", () => {
     // ADC at all on this chip.
     adapter.writeAnalogPin("F0", 3);
     expect(() => adapter.writeAnalogPin("A0", 3)).toThrow(/ADC-capable/);
+  });
+
+  // Regression test for a real bug this config would otherwise hit
+  // silently: ATmega's timer1Config/timer2Config TIFR registers sit at
+  // 0x36/0x37 - the exact same addresses as ATtiny85's real PINB/DDRB
+  // (attinyPortBConfig, avr8js's gpio.ts) - so constructing those
+  // phantom timers (as chip.ts's hasAtmegaSharedPeripherals guards
+  // against) would silently corrupt digital I/O on this chip. This test
+  // doesn't need a compiled sketch to catch a regression here: plain
+  // writePin()/readPin() through the CPU's real memory hooks is enough
+  // to prove PB0's actual register addresses work.
+  it("ATTINY85 gives the adapter its one port (B) and 8KB of flash, with no address collision from phantom ATmega timers", async () => {
+    const adapter = new Avr8Adapter(ATTINY85);
+    await adapter.init(undefined);
+    const ports = (adapter as unknown as { ports: Map<string, unknown> }).ports;
+    expect([...ports.keys()]).toEqual(["B"]);
+    expect((adapter as unknown as { program: Uint16Array }).program.length).toBe(0x1000);
+
+    expect(adapter.readPin("B0")).toBe(0);
+    adapter.writePin("B0", 1);
+    expect(adapter.readPin("B0")).toBe(1);
+    adapter.writePin("B0", 0);
+    expect(adapter.readPin("B0")).toBe(0);
+
+    // ATtiny85 has no ADC wired up yet (chip.ts's ATTINY85.adcChannels
+    // is 0) - a documented gap, not a silent one.
+    expect(() => adapter.writeAnalogPin("B2", 3)).toThrow(/ADC-capable/);
+  });
+
+  // Regression test for a real, would-otherwise-hang-forever bug:
+  // ArduinoCore-avr's own USBCore.cpp busy-waits on PLLCSR's PLOCK bit
+  // during boot (USBDevice.attach(), called unconditionally by main.cpp
+  // for any USBCON board) - avr8js has no USB/PLL peripheral, so without
+  // chip.ts's hasUsbPll fix that bit would never set and every Leonardo
+  // sketch would hang before setup() ever ran. This test reproduces the
+  // exact busy-wait condition directly against CPU memory (no compiled
+  // sketch needed): write PLLCSR with PLOCK clear, confirm a plain read
+  // still reports it set.
+  it("ATMEGA32U4 gives the adapter ports B/C/D/E/F and patches PLLCSR's PLOCK bit so USBDevice.attach()'s boot-time busy-wait doesn't hang forever", async () => {
+    const adapter = new Avr8Adapter(ATMEGA32U4);
+    await adapter.init(undefined);
+    const ports = (adapter as unknown as { ports: Map<string, unknown> }).ports;
+    expect([...ports.keys()].sort()).toEqual(["B", "C", "D", "E", "F"]);
+    expect((adapter as unknown as { program: Uint16Array }).program.length).toBe(0x8000);
+
+    expect(adapter.readPin("B4")).toBe(0);
+    adapter.writePin("B4", 1);
+    expect(adapter.readPin("B4")).toBe(1);
+
+    const PLLCSR_ADDR = 0x49;
+    const PLOCK_BIT = 1 << 0;
+    const cpu = (adapter as unknown as { cpu: { writeData(addr: number, value: number): void; readHooks: ((addr: number) => number)[] } }).cpu;
+    cpu.writeData(PLLCSR_ADDR, 0); // PLOCK explicitly clear - what real boot code writes before waiting on it
+    expect(cpu.readHooks[PLLCSR_ADDR](PLLCSR_ADDR) & PLOCK_BIT).toBe(PLOCK_BIT);
+  });
+
+  // Regression test for a second, much harder-to-spot boot-hang bug:
+  // ATmega32u4's real compiled interrupt vector table has a completely
+  // different layout than ATmega328p/2560's (two USB vectors inserted
+  // at positions 10-11 shift every later peripheral's vector number) -
+  // timer0Config/timer1Config/spiConfig/twiConfig/adcConfig's own
+  // `*Interrupt` fields are hardcoded for the 328p/2560 layout, so
+  // without chip.ts's vectorOverride fields, ATmega32u4's Timer0
+  // overflow interrupt (needed for millis()/delay()) fires at the WRONG
+  // address - landing wherever THIS chip's real vector table happens to
+  // put a different, unrelated vector (confirmed by hand: it landed
+  // inside the compiled program's own USB_COM_vect handler, which then
+  // hung forever polling a USB status register no real host would ever
+  // set - a boot-time hang with no compiler error, and a completely
+  // unrelated-looking symptom). ATmega32u4 also has no Timer2 or USART0
+  // at all (hasTimer2/hasUsart0: false) - constructing them would be a
+  // second, independent way to misdirect interrupts the same way.
+  it("ATMEGA32U4 has no Timer2/USART0, and Timer0/1/SPI/TWI/ADC use this chip's own (not atmega328p's) interrupt vector addresses", async () => {
+    const adapter = new Avr8Adapter(ATMEGA32U4);
+    await adapter.init(undefined);
+    const internals = adapter as unknown as {
+      timer0?: { config: { ovfInterrupt: number; compAInterrupt: number; compBInterrupt: number } };
+      timer1?: { config: { captureInterrupt: number; compAInterrupt: number; compBInterrupt: number; ovfInterrupt: number } };
+      timer2?: unknown;
+      usart?: unknown;
+      spi?: { config: { spiInterrupt: number } };
+      twi?: { config: { twiInterrupt: number } };
+      adc?: { config: { adcInterrupt: number } };
+    };
+
+    expect(internals.timer2).toBeUndefined();
+    expect(internals.usart).toBeUndefined();
+
+    // Word addresses = real vector number * 2 (avr/iom32u4.h's own
+    // *_vect_num defines: TIMER0_COMPA=21, TIMER0_COMPB=22,
+    // TIMER0_OVF=23, TIMER1_CAPT=16, TIMER1_COMPA=17, TIMER1_COMPB=18,
+    // TIMER1_OVF=20, SPI_STC=24, TWI=36, ADC=29) - genuinely different
+    // from atmega328p/2560's own shared timer0Config/timer1Config/
+    // spiConfig/twiConfig/adcConfig values, not a coincidental match.
+    expect(internals.timer0?.config.compAInterrupt).toBe(0x2a);
+    expect(internals.timer0?.config.compBInterrupt).toBe(0x2c);
+    expect(internals.timer0?.config.ovfInterrupt).toBe(0x2e);
+    expect(internals.timer1?.config.captureInterrupt).toBe(0x20);
+    expect(internals.timer1?.config.compAInterrupt).toBe(0x22);
+    expect(internals.timer1?.config.compBInterrupt).toBe(0x24);
+    expect(internals.timer1?.config.ovfInterrupt).toBe(0x28);
+    expect(internals.spi?.config.spiInterrupt).toBe(0x30);
+    expect(internals.twi?.config.twiInterrupt).toBe(0x48);
+    expect(internals.adc?.config.adcInterrupt).toBe(0x3a);
   });
 });
 

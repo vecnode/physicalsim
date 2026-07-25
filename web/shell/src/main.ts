@@ -387,13 +387,22 @@ const EXAMPLES: Record<string, Example> = {
     },
   },
   "button-led": {
-    label: "Button Control",
-    description: "Control an LED with a pushbutton.",
+    label: "Button Control (Franzininho)",
+    description: "Control an LED with a pushbutton - on the ATtiny85-based Franzininho.",
     level: "beginner",
-    board: "Arduino Uno",
+    board: "Franzininho",
     glyph: "🔘",
-    sketch: `const int buttonPin = 2;
-const int ledPin = 13;
+    // ATTinyCore (simulators/ATTinyCore, avr_toolchain.cpp's franzininho
+    // target) is a genuine Arduino-API-compatible core, not pico-sdk's
+    // raw C API the way the RP2040 examples are - pinMode()/digitalRead()/
+    // digitalWrite() work exactly like on the Uno, just against a much
+    // smaller chip (ATtiny85: one port, no USART/SPI/TWI hardware - see
+    // chip.ts's ATTINY85 config). Pin numbers 0-5 are ATTinyCore's own
+    // Arduino-style numbering for PB0-PB5 (tinyx5's pins_arduino.h) -
+    // franzininho-element.ts's own pin markers use the real "PB<n>"
+    // silkscreen names instead, mapped through boards/franzininho.ts.
+    sketch: `const int buttonPin = 0;
+const int ledPin = 1;
 
 void setup() {
   pinMode(buttonPin, INPUT);
@@ -404,7 +413,7 @@ void loop() {
   digitalWrite(ledPin, digitalRead(buttonPin));
 }`,
     build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
+      const board = await canvas.scene.showBoard("franzininho");
       if (!board) return;
       const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
       if (!button) return;
@@ -412,9 +421,11 @@ void loop() {
       if (!led) return;
       // "1.l" is one of pushbutton's four (mechanically-shorted-in-pairs)
       // legs - component-signal-pin.ts's own comment: wiring to any one of
-      // them is equivalent. Pin "2" matches buttonPin in the sketch above.
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+      // them is equivalent. "PB0"/"PB1" match buttonPin/ledPin (Arduino
+      // pins 0/1) in the sketch above via boards/franzininho.ts's
+      // identity-shaped PB<n> -> B<n> map.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "PB0" }, { entityId: button.id, pin: "1.l" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "PB1" }, { entityId: led.id, pin: "A" });
     },
   },
   "traffic-light": {
@@ -515,6 +526,64 @@ void loop() {
       if (!led) return;
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+    },
+  },
+  "leonardo-relay-leds": {
+    label: "Relay-Switched LEDs (Leonardo)",
+    description: "Two relays alternately switch two LEDs on and off, on a real ATmega32u4.",
+    level: "beginner",
+    board: "Arduino Leonardo",
+    glyph: "🧲",
+    // Real hardware: a relay's coil pin (firmware-driven) and its
+    // switched contacts (which power a separate LED circuit) are
+    // electrically distinct - physicalsim has no per-component circuit
+    // solver (see ARCHITECTURE.md), so each LED here is driven directly
+    // by the same digitalWrite() call as its paired relay's coil, the
+    // same "firmware drives both, no solved circuit between them"
+    // honesty every other LED example already has. No Serial - the
+    // Leonardo's Serial is native USB CDC, not modeled yet (see
+    // chip.ts's ATMEGA32U4 comment) - this example only needs digital
+    // output, which is fully, correctly modeled.
+    sketch: `const int relay1Pin = 2;
+const int led1Pin = 3;
+const int relay2Pin = 4;
+const int led2Pin = 5;
+
+void setup() {
+  pinMode(relay1Pin, OUTPUT);
+  pinMode(led1Pin, OUTPUT);
+  pinMode(relay2Pin, OUTPUT);
+  pinMode(led2Pin, OUTPUT);
+}
+
+void loop() {
+  digitalWrite(relay1Pin, HIGH);
+  digitalWrite(led1Pin, HIGH);
+  digitalWrite(relay2Pin, LOW);
+  digitalWrite(led2Pin, LOW);
+  delay(1000);
+
+  digitalWrite(relay1Pin, LOW);
+  digitalWrite(led1Pin, LOW);
+  digitalWrite(relay2Pin, HIGH);
+  digitalWrite(led2Pin, HIGH);
+  delay(1000);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-leonardo");
+      if (!board) return;
+      const relay1 = await canvas.scene.addComponentAt("ks2e-m-dc5", board.x + 600, board.y - 20);
+      if (!relay1) return;
+      const led1 = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60, { color: "red" });
+      if (!led1) return;
+      const relay2 = await canvas.scene.addComponentAt("ks2e-m-dc5", board.x + 600, board.y + 140);
+      if (!relay2) return;
+      const led2 = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 220, { color: "green" });
+      if (!led2) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D2" }, { entityId: relay1.id, pin: "COIL1" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: led1.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D4" }, { entityId: relay2.id, pin: "COIL1" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D5" }, { entityId: led2.id, pin: "A" });
     },
   },
   "rp2040-blink": {

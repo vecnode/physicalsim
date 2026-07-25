@@ -17,3 +17,6 @@
 [submodule "simulators/pico-sdk"]
 	path = simulators/pico-sdk
 	url = https://github.com/vecnode/pico-sdk.git
+[submodule "simulators/ATTinyCore"]
+	path = simulators/ATTinyCore
+	url = https://github.com/vecnode/ATTinyCore.git

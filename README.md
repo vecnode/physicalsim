@@ -16,6 +16,9 @@ Emulators:
   - Raspberry Pi Pico W
   - Arduino Nano RP2040 Connect
 
+- `vecnode/qemu-esp32`
+  - ESP32 DevKit V1
+
 Find supported components here: [COMPONENTS.md](COMPONENTS.md)
 
 
@@ -32,6 +35,7 @@ upstream:
 * [vecnode/ATTinyCore](https://github.com/vecnode/ATTinyCore)
 * [vecnode/pico-sdk](https://github.com/vecnode/pico-sdk)
 * [vecnode/LiquidCrystal](https://github.com/vecnode/LiquidCrystal)
+* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32)
 
 ## Reproduce
 
@@ -135,14 +139,6 @@ Build/runtime prerequisites:
 - Linux runtime/build libs (webview GTK backend):
 	- GTK 3 development files
 	- WebKit2GTK development files
-- `qemu-system-arm` (for the `cortex-m` adapter) - not built by this
-  project. For local dev builds, install it yourself (e.g. from
-  [qemu.org](https://www.qemu.org/download/), or `scoop install qemu` /
-  `winget install SoftwareFreedomConservancy.QEMU` on Windows, your
-  distro's package manager on Linux). `avr8`/`rp2040` work fine without
-  it, only `cortex-m` needs it. Not required to build physicalsim, only
-  to run the `cortex-m` adapter.
-
 
 Downloaded automatically at configure/build time (`FetchContent`):
 

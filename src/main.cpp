@@ -38,8 +38,11 @@
 #include "WebAssets.h"
 #include "webview/webview.h"
 #include "qemu_adapter.hpp"
+#include "esp32_qemu_adapter.hpp"
+#include "qemu_backed_adapter.hpp"
 #include "avr_toolchain.hpp"
 #include "rp2040_toolchain.hpp"
+#include "esp32_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
 #include <boost/asio.hpp>
@@ -216,7 +219,15 @@ void schedule_heartbeat(boost::asio::steady_timer &timer,
   });
 }
 
-constexpr std::size_t kMaxRequestBodyBytes = 64 * 1024;
+// 64KB was enough for every request this bridge took until ESP32's
+// loadFirmware: its merged flash image (bootloader + partition table +
+// app, unpadded - see esp32_toolchain.cpp's own comment on why it isn't
+// padded to the full 4MB flash size) runs to roughly 244KB, ~500KB once
+// hex-encoded to cross the JSON bridge (see decode_hex_bytes() below) -
+// raised enough to comfortably cover that plus headroom for a somewhat
+// larger sketch, while staying a real bound, not "unlimited", for a
+// bridge that's still meant to be hardened against oversized requests.
+constexpr std::size_t kMaxRequestBodyBytes = 2 * 1024 * 1024;
 
 // --- Ctrl-C / SIGTERM handling for --headless mode -------------------------
 std::atomic<bool> g_shutdown_requested{false};
@@ -292,33 +303,83 @@ void install_bridge(webview::webview &w) {
   });
 }
 
-// --- QEMU-backed adapters (e.g. "cortex-m") ---------------------------------
+// --- QEMU-backed adapters (e.g. "cortex-m", "esp32") ------------------------
 // Unlike avr8/rp2040 (JS/TS running in a Worker, reached via eval()/bind()
 // above), a QEMU-backed adapter has no JS side at all — the C++ shell
-// spawns and controls qemu-system-arm directly (see qemu_adapter.hpp/.cpp).
-// It writes into the same g_bridge_latest_state map install_bridge()'s
+// spawns and controls a real qemu-system-* process directly (see
+// qemu_adapter.hpp/.cpp for "cortex-m"/qemu-system-arm,
+// esp32_qemu_adapter.hpp/.cpp for "esp32"/qemu-system-xtensa). Both
+// implement the same QemuBackedAdapter interface, so this dispatch table
+// doesn't grow a new special case per adapter kind - just a new entry here.
+// Writes into the same g_bridge_latest_state map install_bridge()'s
 // JS->C++ handler populates, so GET /bridge/:adapter/state needs no
-// separate code path for either adapter kind.
-const std::string kCortexMAdapterId = "cortex-m";
+// separate code path for any adapter kind.
+bool is_qemu_backed_adapter(const std::string &adapter) {
+  return adapter == "cortex-m" || adapter == "esp32";
+}
 
 std::mutex g_qemu_mutex;
-std::unordered_map<std::string, std::unique_ptr<qemu::QemuInstance>> g_qemu_instances;
+std::unordered_map<std::string, std::unique_ptr<QemuBackedAdapter>> g_qemu_instances;
 
-qemu::QemuInstance &get_or_create_qemu_instance(const std::string &adapter) {
+QemuBackedAdapter &get_or_create_qemu_instance(const std::string &adapter) {
   std::lock_guard<std::mutex> lock(g_qemu_mutex);
   auto it = g_qemu_instances.find(adapter);
   if (it == g_qemu_instances.end()) {
-    auto instance = std::make_unique<qemu::QemuInstance>();
+    std::unique_ptr<QemuBackedAdapter> instance;
+    if (adapter == "esp32") {
+      instance = std::make_unique<esp32qemu::Esp32QemuInstance>();
+    } else {
+      instance = std::make_unique<qemu::QemuInstance>();
+    }
     instance->start_process();
     it = g_qemu_instances.emplace(adapter, std::move(instance)).first;
   }
   return *it->second;
 }
 
+// Decodes a plain hex-pair-per-byte string (the same "binHex" convention
+// /compile already uses for RP2040's response) into raw bytes - the
+// counterpart encode loop lives in the /compile handler below. Needed
+// because loadFirmware crosses the native HTTP bridge as JSON
+// (native-adapter-client.ts's call()), not a Worker's postMessage
+// structured clone, so a raw Uint8Array can't cross directly the way it
+// does for avr8/rp2040's loadFirmware.
+std::string encode_hex_bytes(const std::string &binary) {
+  static const char *hex_digits = "0123456789abcdef";
+  std::string hex;
+  hex.reserve(binary.size() * 2);
+  for (unsigned char byte : binary) {
+    hex.push_back(hex_digits[byte >> 4]);
+    hex.push_back(hex_digits[byte & 0xf]);
+  }
+  return hex;
+}
+
+std::string decode_hex_bytes(const std::string &hex) {
+  std::string out;
+  out.reserve(hex.size() / 2);
+  auto nibble = [](char c) -> int {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    throw std::runtime_error("invalid hex character in loadFirmware payload");
+  };
+  for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
+    out.push_back(static_cast<char>((nibble(hex[i]) << 4) | nibble(hex[i + 1])));
+  }
+  return out;
+}
+
 json handle_qemu_bridge_call(const std::string &adapter, const std::string &method,
                               const json &params) {
   try {
     auto &instance = get_or_create_qemu_instance(adapter);
+
+    // Plain number, matching worker-host.ts's SimulatorAdapter.readPin()
+    // shape (adapter-types.ts) - native-adapter-client.ts's call() returns
+    // this "result" field straight through to circuit-pin.ts, which
+    // expects a bare number|undefined, not a wrapper object.
+    json read_pin_result = nullptr;
 
     if (method == "start") {
       instance.start();
@@ -335,7 +396,9 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       const std::string pin = params.is_object() && params.contains("pin")
                                    ? params.at("pin").get<std::string>()
                                    : "";
-      instance.read_pin(pin);  // always throws today, see qemu_adapter.hpp
+      // Throws for cortex-m (unimplemented, see qemu_adapter.hpp); for
+      // esp32 returns {"value": 0|1} (see esp32_qemu_adapter.hpp).
+      read_pin_result = instance.read_pin(pin).value("value", json(nullptr));
     } else if (method == "writePin") {
       const std::string pin = params.is_object() && params.contains("pin")
                                    ? params.at("pin").get<std::string>()
@@ -343,7 +406,14 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       const int value = params.is_object() && params.contains("value")
                              ? params.at("value").get<int>()
                              : 0;
-      instance.write_pin(pin, value);  // always throws today, see qemu_adapter.hpp
+      instance.write_pin(pin, value);  // always throws today, see the adapter headers
+    } else if (method == "loadFirmware") {
+      // main.ts's compileAndRun() sends a plain hex string here for
+      // native-backed adapters (see decode_hex_bytes() above) - a raw
+      // Uint8Array, the shape avr8/rp2040's Worker-side loadFirmware()
+      // takes, can't cross the JSON HTTP bridge directly.
+      const std::string hex = params.is_string() ? params.get<std::string>() : "";
+      instance.load_firmware(decode_hex_bytes(hex));  // throws for cortex-m, see qemu_adapter.hpp
     } else {
       return json{{"error", "Unknown method: " + method}};
     }
@@ -352,7 +422,7 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       std::lock_guard<std::mutex> lock(g_bridge_state_mutex);
       g_bridge_latest_state[adapter] = instance.state();
     }
-    return json{{"result", nullptr}};
+    return json{{"result", read_pin_result}};
   } catch (const std::exception &e) {
     return json{{"error", e.what()}};
   }
@@ -489,7 +559,7 @@ int main(int argc, char **argv) {
           }
         }
 
-        const json result = adapter == kCortexMAdapterId
+        const json result = is_qemu_backed_adapter(adapter)
                                 ? handle_qemu_bridge_call(adapter, method, params)
                                 : dispatch_bridge_call(w, adapter, method, params);
         res.set_header("Cache-Control", "no-store");
@@ -554,18 +624,40 @@ int main(int argc, char **argv) {
     }
     const std::string board = body.value("board", std::string{"arduino-uno"});
 
+    if (board == "esp32-devkit-v1") {
+      // Real ESP-IDF build via esp32_toolchain.cpp - a genuinely heavier
+      // pipeline than avr-gcc's flat per-file compile or pico-sdk's
+      // cmake-driven one (a full multi-component CMake project: sdkconfig,
+      // partition table, bootloader, esptool merge_bin), and its toolchain
+      // discovery is dev-machine-only today, not bundled/portable yet -
+      // see esp32_toolchain.hpp. toolchain_available() check first so a
+      // machine without it gets a clear, immediate error rather than a
+      // confusing failure partway through a real compile attempt.
+      if (!esp32toolchain::toolchain_available()) {
+        res.status = 501;
+        res.set_header("Cache-Control", "no-store");
+        res.set_content(
+            R"({"ok":false,"log":"ESP32 toolchain not found on this machine - see )"
+            R"(esp32_toolchain.hpp for the expected esp-idf/tooling layout."})",
+            "application/json");
+        return;
+      }
+      const auto result = esp32toolchain::compile_sketch(source);
+      json out = {{"ok", result.ok}, {"log", result.log}};
+      if (result.ok) {
+        out["binHex"] = encode_hex_bytes(result.binary);
+      }
+      res.set_header("Cache-Control", "no-store");
+      res.status = result.ok ? 200 : 422;
+      res.set_content(out.dump(), "application/json");
+      return;
+    }
+
     if (board == "nano-rp2040-connect" || board == "pi-pico" || board == "pi-pico-w") {
       const auto result = rp2040toolchain::compile_sketch(source);
       json out = {{"ok", result.ok}, {"log", result.log}};
       if (result.ok) {
-        static const char *hex_digits = "0123456789abcdef";
-        std::string hex;
-        hex.reserve(result.binary.size() * 2);
-        for (unsigned char byte : result.binary) {
-          hex.push_back(hex_digits[byte >> 4]);
-          hex.push_back(hex_digits[byte & 0xf]);
-        }
-        out["binHex"] = hex;
+        out["binHex"] = encode_hex_bytes(result.binary);
       }
       res.set_header("Cache-Control", "no-store");
       res.status = result.ok ? 200 : 422;

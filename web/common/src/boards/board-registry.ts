@@ -5,6 +5,7 @@ import { arduinoLeonardo } from "./arduino-leonardo.js";
 import { franzininho } from "./franzininho.js";
 import { nanoRp2040Connect } from "./nano-rp2040-connect.js";
 import { rp2040Board } from "./rp2040-board.js";
+import { esp32DevkitV1Board } from "./esp32-devkit-v1.js";
 import type { BoardPinMap } from "./board.js";
 
 // Board type (circuit.ts's CircuitBoard.type, shell-side) -> its
@@ -33,6 +34,7 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   // work like the plain Pico for now. Shares the identical map, not a
   // copy of it.
   "pi-pico-w": rp2040Board,
+  "esp32-devkit-v1": esp32DevkitV1Board,
 };
 
 // Normalizes a board's own on-canvas pin marker name (@wokwi/elements'

@@ -565,4 +565,10 @@ json QemuInstance::write_pin(const std::string &pin, int /*value*/) {
       "\"): QEMU GPIO access is unimplemented, see qemu_adapter.hpp");
 }
 
+json QemuInstance::load_firmware(const std::string & /*binary*/) {
+  throw std::runtime_error(
+      "cortex-m does not support loadFirmware yet: it boots a fixed built-in stub, "
+      "see qemu_adapter.hpp's minimal_vector_table_stub()");
+}
+
 }  // namespace qemu

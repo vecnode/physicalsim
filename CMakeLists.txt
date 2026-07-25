@@ -26,6 +26,33 @@ set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime dir
 option(BUNDLE_QEMU_ARM "Bundle qemu-system-arm + its DLLs into the output" OFF)
 set(QEMU_ARM_DIR "" CACHE PATH "Path to an installed QEMU directory containing qemu-system-arm.exe")
 
+# Same "copy an already-built copy in, don't fetch/build it ourselves"
+# posture as BUNDLE_QEMU_ARM above, for the "esp32" adapter's backend
+# (src/esp32_qemu_adapter.cpp) - qemu-system-xtensa from vecnode/qemu-esp32
+# (a fork of lcgamboa/qemu, itself a fork of espressif/qemu; see that
+# repo's README and the esp32-qemu-gpio-spike notes for why this specific
+# fork, not the official Espressif one). Unlike qemu-system-arm, there's no
+# OS package/installer for this - QEMU_XTENSA_DIR should point at a local
+# `ninja qemu-system-xtensa.exe` build's build/ directory (see
+# esp32_qemu_adapter.hpp's header comment for the exact build recipe).
+# QEMU_XTENSA_PCBIOS_DIR points at that same source checkout's pc-bios/
+# (the ROM images qemu-system-xtensa needs via -L, not built - vendored
+# in-tree). ESP32_DEMO_FLASH_IMAGE points at a pre-built, esptool-merged
+# flash image (bootloader+partition-table+app) - the fixed demo firmware
+# the adapter boots until a real sketch-compile pipeline exists for esp32.
+option(BUNDLE_QEMU_XTENSA "Bundle qemu-system-xtensa + its DLLs, ROMs, and a demo flash image into the output" OFF)
+set(QEMU_XTENSA_DIR "" CACHE PATH "Path to a built qemu-esp32 directory containing qemu-system-xtensa.exe")
+set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ directory (ROM images)")
+set(ESP32_DEMO_FLASH_IMAGE "" CACHE FILEPATH "Path to a pre-built esp32 demo flash_image.bin")
+# Unlike qemu-system-arm.exe (a self-contained official release with its
+# DLLs sitting right next to it), a from-source MSYS2/mingw64 build of
+# qemu-system-xtensa.exe links against runtime DLLs that live in the
+# toolchain's own bin/ (e.g. C:/msys64/mingw64/bin), not next to the exe -
+# confirmed with `ldd qemu-system-xtensa.exe` against the Phase 0 spike's
+# actual build, not guessed. Separate cache var so QEMU_XTENSA_DIR can stay
+# "just the build output directory".
+set(QEMU_XTENSA_RUNTIME_DIR "" CACHE PATH "Path to the mingw64 bin/ directory holding qemu-system-xtensa.exe's runtime DLLs")
+
 # The AVR toolchain (avr-gcc/avr-g++/avr-objcopy) backing the in-app
 # Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike QEMU/WebView2
 # above, this isn't "copy an already-installed directory" - it's fetched
@@ -211,8 +238,8 @@ cpp_embedlib_add(WebAssets
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp src/avr_toolchain.cpp
-    src/rp2040_toolchain.cpp src/process_exec.cpp)
+add_executable(physicalsim src/main.cpp src/qemu_adapter.cpp src/esp32_qemu_adapter.cpp
+    src/avr_toolchain.cpp src/rp2040_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
 
 # Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
 # straight from the source tree before the POST_BUILD copy below has ever
@@ -348,9 +375,11 @@ if(WIN32)
         target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=1)
 
         add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_directory
-                "${WEBVIEW2_FIXED_RUNTIME_DIR}"
-                $<TARGET_FILE_DIR:physicalsim>/WebView2Runtime
+            COMMAND ${CMAKE_COMMAND}
+                -DSRC=${WEBVIEW2_FIXED_RUNTIME_DIR}
+                -DDEST=$<TARGET_FILE_DIR:physicalsim>/WebView2Runtime
+                -DSTAMP=.copied.stamp
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
             COMMENT "Bundling fixed WebView2 runtime"
         )
     else()
@@ -395,6 +424,82 @@ if(WIN32)
             )
         endif()
     endif()
+
+    if(BUNDLE_QEMU_XTENSA)
+        set(_qemu_xtensa_exe "${QEMU_XTENSA_DIR}/qemu-system-xtensa.exe")
+        if(NOT EXISTS "${_qemu_xtensa_exe}")
+            message(FATAL_ERROR
+                "BUNDLE_QEMU_XTENSA is ON but qemu-system-xtensa.exe was not found under QEMU_XTENSA_DIR: ${QEMU_XTENSA_DIR}"
+            )
+        endif()
+        if(NOT EXISTS "${QEMU_XTENSA_PCBIOS_DIR}/esp32-v3-rom.bin")
+            message(FATAL_ERROR
+                "BUNDLE_QEMU_XTENSA is ON but QEMU_XTENSA_PCBIOS_DIR doesn't look like a pc-bios/ directory: ${QEMU_XTENSA_PCBIOS_DIR}"
+            )
+        endif()
+        if(NOT EXISTS "${ESP32_DEMO_FLASH_IMAGE}")
+            message(FATAL_ERROR
+                "BUNDLE_QEMU_XTENSA is ON but ESP32_DEMO_FLASH_IMAGE doesn't exist: ${ESP32_DEMO_FLASH_IMAGE}"
+            )
+        endif()
+
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                $<TARGET_FILE_DIR:physicalsim>/esp32-qemu
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${_qemu_xtensa_exe}"
+                $<TARGET_FILE_DIR:physicalsim>/esp32-qemu/qemu-system-xtensa.exe
+            COMMENT "Bundling qemu-system-xtensa"
+        )
+
+        # Runtime DLLs live in the mingw64 toolchain's own bin/, not next to
+        # the exe (see QEMU_XTENSA_RUNTIME_DIR's own comment above) - this
+        # exact list is what `ldd qemu-system-xtensa.exe` reported against
+        # the Phase 0 spike's actual build, not a guessed minimal subset.
+        if(QEMU_XTENSA_RUNTIME_DIR)
+            set(_qemu_xtensa_dll_names
+                libbrotlicommon.dll libbrotlidec.dll libbrotlienc.dll libbz2-1.dll
+                libcrypto-3-x64.dll libcurl-4.dll libffi-8.dll libgcc_s_seh-1.dll
+                libgcrypt-20.dll libgio-2.0-0.dll libglib-2.0-0.dll libgmodule-2.0-0.dll
+                libgmp-10.dll libgnutls-30.dll libgobject-2.0-0.dll libgpg-error-0.dll
+                libhogweed-6.dll libiconv-2.dll libidn2-0.dll libintl-8.dll libjpeg-8.dll
+                liblzo2-2.dll libncursesw6.dll libnettle-8.dll libnghttp2-14.dll
+                libnghttp3-9.dll libngtcp2_crypto_ossl-0.dll libngtcp2-16.dll
+                libp11-kit-0.dll libpcre2-8-0.dll libpixman-1-0.dll libpng16-16.dll
+                libpsl-5.dll libssh.dll libssh2-1.dll libssl-3-x64.dll libtasn1-6.dll
+                libunistring-5.dll libusb-1.0.dll libwinpthread-1.dll libzstd.dll
+                SDL2.dll zlib1.dll
+            )
+            set(_qemu_xtensa_dlls "")
+            foreach(_dll_name ${_qemu_xtensa_dll_names})
+                list(APPEND _qemu_xtensa_dlls "${QEMU_XTENSA_RUNTIME_DIR}/${_dll_name}")
+            endforeach()
+            add_custom_command(TARGET physicalsim POST_BUILD
+                COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                    ${_qemu_xtensa_dlls}
+                    $<TARGET_FILE_DIR:physicalsim>/esp32-qemu/
+                COMMENT "Bundling qemu-system-xtensa's mingw64 runtime DLLs"
+            )
+        endif()
+
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND}
+                -DSRC=${QEMU_XTENSA_PCBIOS_DIR}
+                -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-qemu/pc-bios
+                -DSTAMP=.copied.stamp
+                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+            COMMENT "Bundling qemu-esp32 ROM images (pc-bios/)"
+        )
+
+        add_custom_command(TARGET physicalsim POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E make_directory
+                $<TARGET_FILE_DIR:physicalsim>/esp32-demo
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "${ESP32_DEMO_FLASH_IMAGE}"
+                $<TARGET_FILE_DIR:physicalsim>/esp32-demo/flash_image.bin
+            COMMENT "Bundling esp32 demo flash image"
+        )
+    endif()
 endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
@@ -415,20 +520,28 @@ endif()
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/cores/arduino
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/cores/arduino
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/cores/arduino
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/cores/arduino
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/avr-core/variants
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/leonardo
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/leonardo
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/leonardo
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/leonardo
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega + variants/leonardo)"
 )
 
@@ -445,14 +558,18 @@ add_custom_command(TARGET physicalsim POST_BUILD
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/cores/tiny
-        $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores/tiny
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/cores/tiny
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/attiny-core/cores/tiny
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/attiny-core/variants
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/variants/tinyx5
-        $<TARGET_FILE_DIR:physicalsim>/attiny-core/variants/tinyx5
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/variants/tinyx5
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/attiny-core/variants/tinyx5
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMENT "Copying vendored ATTinyCore (cores/tiny + variants/tinyx5)"
 )
 
@@ -467,9 +584,11 @@ add_custom_command(TARGET physicalsim POST_BUILD
 set(AVR_LIBRARIES LiquidCrystal)
 foreach(_avr_lib ${AVR_LIBRARIES})
     add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_CURRENT_SOURCE_DIR}/simulators/${_avr_lib}/src
-            $<TARGET_FILE_DIR:physicalsim>/avr-libraries/${_avr_lib}/src
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/${_avr_lib}/src
+            -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-libraries/${_avr_lib}/src
+            -DSTAMP=.copied.stamp
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
         COMMENT "Copying vendored Arduino library: ${_avr_lib}"
     )
 endforeach()
@@ -479,9 +598,11 @@ endforeach()
 # "off unless packaging a release" posture as BUNDLE_QEMU_ARM.
 if(BUNDLE_AVR_TOOLCHAIN AND AVR_TOOLCHAIN_BIN_DIR)
     add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${AVR_TOOLCHAIN_BIN_DIR}"
-            $<TARGET_FILE_DIR:physicalsim>/avr-toolchain
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${AVR_TOOLCHAIN_BIN_DIR}
+            -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-toolchain
+            -DSTAMP=.copied.stamp
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
         COMMENT "Bundling avr-gcc toolchain"
     )
 
@@ -511,12 +632,16 @@ endif()
 # there was there (see ARCHITECTURE.md's "RP2040 firmware pipeline" section
 # for how this was confirmed, not assumed).
 add_custom_command(TARGET physicalsim POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/pico-sdk
-        $<TARGET_FILE_DIR:physicalsim>/pico-sdk
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-        ${CMAKE_CURRENT_SOURCE_DIR}/src/rp2040_sketch_template
-        $<TARGET_FILE_DIR:physicalsim>/rp2040-sketch-template
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/pico-sdk
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/pico-sdk
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/rp2040_sketch_template
+        -DDEST=$<TARGET_FILE_DIR:physicalsim>/rp2040-sketch-template
+        -DSTAMP=.copied.stamp
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMENT "Copying vendored pico-sdk + RP2040 sketch template"
 )
 
@@ -524,9 +649,11 @@ add_custom_command(TARGET physicalsim POST_BUILD
 # same "off unless packaging a release" posture as BUNDLE_AVR_TOOLCHAIN.
 if(BUNDLE_ARM_TOOLCHAIN AND ARM_TOOLCHAIN_BIN_DIR)
     add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_directory
-            "${ARM_TOOLCHAIN_BIN_DIR}"
-            $<TARGET_FILE_DIR:physicalsim>/arm-toolchain
+        COMMAND ${CMAKE_COMMAND}
+            -DSRC=${ARM_TOOLCHAIN_BIN_DIR}
+            -DDEST=$<TARGET_FILE_DIR:physicalsim>/arm-toolchain
+            -DSTAMP=.copied.stamp
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
         COMMENT "Bundling arm-none-eabi-gcc toolchain"
     )
 

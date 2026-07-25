@@ -135,6 +135,17 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
     currentMa: { idle: 20, running: 35 },
     sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
   },
+  // ESP32's own logic level is 3.3V, like RP2040 - real datasheet active-
+  // current figures for the dual-core Xtensa LX6 land noticeably higher
+  // than RP2040's Cortex-M0+ at idle/running, approximate like every
+  // other profile here (not measured from this simulation, and WiFi/BT
+  // radio current isn't modeled since neither is emulated - see
+  // esp32_qemu_adapter.hpp).
+  "esp32-devkit-v1": {
+    supplyVoltage: 3.3,
+    currentMa: { idle: 30, running: 80 },
+    sources: [{ name: "USB (Micro-B)", voltage: 5, maxCurrentMa: 500 }],
+  },
 };
 
 // board.powered decides voltage on/off; `running` (the adapter's own

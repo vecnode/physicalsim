@@ -22,6 +22,7 @@ Registered in `web/shell/src/circuit.ts`.
 | Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040` |
 | Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040` |
 | Raspberry Pi Pico W | `wokwi-pi-pico-w` | `rp2040` |
+| ESP32 DevKit V1 | `wokwi-esp32-devkit-v1` | `esp32` |
 
 Nano and Uno share `avr8` (same ATmega328p chip, see `web/adapters/avr8/
 src/chip.ts`); Mega gets its own `avr8-mega` adapter id since it's a
@@ -42,9 +43,24 @@ boards actually run. Pico W's WiFi/Bluetooth chip (CYW43439) isn't
 emulated - it places and compiles identically to the plain Pico, per an
 explicit user decision (2026-07-25).
 
-`@wokwi/elements` also ships `wokwi-esp32-devkit-v1` - not registered as
-a board yet, since it has no matching `SimulatorAdapter`/pin map wired up
-(no emulator here supports Xtensa - see "Adding a new board" below).
+ESP32 DevKit V1 is backed by its own `esp32` adapter id - not a JS/Worker
+adapter like the others, but a real `qemu-system-xtensa` process
+(`vecnode/qemu-esp32`, see `src/esp32_qemu_adapter.{hpp,cpp}` and the
+`esp32-phase1-adapter`/`esp32-qemu-gpio-spike` notes for why this specific
+QEMU fork, not the official `espressif/qemu`, was needed - it's the only
+one with working GPIO matrix/IOMUX emulation). `readPin` is real, live
+GPIO state read straight out of the emulator; `writePin` (e.g. a simulated
+button) isn't supported yet (needs a small patch to the fork exposing its
+internal `set_gpio()` externally). Compile & Run works too
+(`src/esp32_toolchain.cpp`) - a real ESP-IDF build (its own multi-component
+CMake project: bootloader, partition table, app, merged via esptool),
+genuinely heavier than avr-gcc's flat per-file compile or pico-sdk's
+cmake-driven one, invoked directly via cmake/ninja rather than the `idf.py`
+wrapper. **Toolchain discovery is dev-machine-only today** - fixed paths
+under `C:\esp-idf` and `%USERPROFILE%\.espressif` (see
+`esp32_toolchain.hpp`), not bundled/portable like avr-gcc/arm-none-eabi-gcc
+are - `toolchain_available()` is checked first so a machine without it
+gets a clear error, not a confusing failure partway through.
 
 ## Sensors
 

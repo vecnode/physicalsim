@@ -601,43 +601,45 @@ void loop(void) {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D13" }, { entityId: led.id, pin: "A" });
     },
   },
-  "pico-potentiometer": {
-    label: "Potentiometer Threshold (Pico)",
-    description: "A potentiometer's voltage read via adc_read() on the real Raspberry Pi Pico board.",
+  "pico-led-chase": {
+    label: "LED Chase (Pico)",
+    description: "Five LEDs lit one at a time in sequence, driven by real compiled RP2040 firmware.",
     level: "beginner",
     board: "Raspberry Pi Pico",
-    glyph: "🎚️",
-    // First analog-input RP2040 example (rp2040-blink/rp2040-button-
-    // control are both digital-only) - exercises hardware_adc through a
-    // real compiled sketch, wired through the same AnalogChain
-    // (analog-chain.ts) the avr8 examples use. GP26 is the Pico's ADC0
-    // pin (see boards/rp2040-board.ts's identity map); adc_read() returns
-    // a raw 12-bit value (0..4095) which this sketch just thresholds onto
-    // the onboard LED (GP25) - no pico-sdk Arduino-compatible core is
-    // vendored yet, so this is pico-sdk's own C API (adc_read()/
-    // gpio_put()), not analogRead()/digitalWrite().
-    sketch: `#include "hardware/adc.h"
+    glyph: "🚥",
+    // Digital-only, five-pin counterpart to "rp2040-blink"'s single GP25 -
+    // GP2-GP6 (the Pico's left-header GPIOs, see boards/rp2040-board.ts's
+    // identity map) each drive one LED in a simple Larson-scanner-style
+    // loop. No pico-sdk Arduino-compatible core is vendored yet, so this
+    // is pico-sdk's own C API (gpio_init()/gpio_put()), not
+    // pinMode()/digitalWrite() - same reasoning as every other RP2040
+    // example.
+    sketch: `const int ledPins[] = {2, 3, 4, 5, 6};
+const int ledCount = 5;
 
 void setup(void) {
-  adc_init();
-  adc_gpio_init(26);
-  adc_select_input(0);
-  gpio_init(25);
-  gpio_set_dir(25, GPIO_OUT);
+  for (int i = 0; i < ledCount; i++) {
+    gpio_init(ledPins[i]);
+    gpio_set_dir(ledPins[i], GPIO_OUT);
+  }
 }
 
 void loop(void) {
-  uint16_t value = adc_read();
-  gpio_put(25, value > 2048);
+  for (int i = 0; i < ledCount; i++) {
+    gpio_put(ledPins[i], 1);
+    sleep_ms(150);
+    gpio_put(ledPins[i], 0);
+  }
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("pi-pico");
       if (!board) return;
-      const pot = await canvas.scene.addComponentAt("potentiometer", board.x + 620, board.y + 40);
-      if (!pot) return;
-      // "GP26" is both the board's silkscreen label and the adapter pin id
-      // (rp2040-board.ts's identity map) - the Pico's ADC0 input.
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "GP26" }, { entityId: pot.id, pin: "SIG" });
+      const pins = ["GP2", "GP3", "GP4", "GP5", "GP6"];
+      for (let i = 0; i < pins.length; i++) {
+        const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 10 + i * 80);
+        if (!led) return;
+        canvas.scene.wiring.connect({ entityId: board.id, pin: pins[i] }, { entityId: led.id, pin: "A" });
+      }
     },
   },
   "lcd-display": {

@@ -149,20 +149,28 @@ std::optional<std::filesystem::path> find_toolchain_bin_dir() {
   return find_well_known_toolchain();
 }
 
-std::optional<std::filesystem::path> find_core_dir() {
-  // Bundled next to the executable (CMake copies simulators/ArduinoCore-avr's
-  // trimmed subset here unconditionally - it's small enough to always
-  // ship, unlike the toolchain itself). Falls back to the source tree for
-  // dev builds run straight from the build directory without that copy
-  // step having run yet.
-  const auto bundled = executable_dir() / "avr-core" / "cores" / "arduino";
+// "arduino" (ArduinoCore-avr's cores/arduino - every ATmega board) or
+// "tiny" (ATTinyCore's cores/tiny - ATtiny85/Franzininho, see
+// resolve_board_target() below) - a genuinely different core tree, not
+// just a different variant of the same one, since ATtiny85 has no
+// USART/SPI/TWI hardware and a much smaller register set.
+std::optional<std::filesystem::path> find_core_dir(const std::string &core_kind) {
+  const auto bundled_root = core_kind == "tiny" ? "attiny-core" : "avr-core";
+  const auto source_repo = core_kind == "tiny" ? "ATTinyCore" : "ArduinoCore-avr";
+  const auto core_subpath = core_kind == "tiny"
+                                 ? std::filesystem::path("avr") / "cores" / "tiny"
+                                 : std::filesystem::path("cores") / "arduino";
+  const auto bundled_subpath =
+      core_kind == "tiny" ? std::filesystem::path("cores") / "tiny" : std::filesystem::path("cores") / "arduino";
+
+  const auto bundled = executable_dir() / bundled_root / bundled_subpath;
   std::error_code ec;
   if (std::filesystem::exists(bundled / "Arduino.h", ec)) {
     return bundled;
   }
   if (std::string(PHYSICALSIM_SOURCE_DIR).size() > 0) {
-    const auto from_source = std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" /
-                              "ArduinoCore-avr" / "cores" / "arduino";
+    const auto from_source =
+        std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" / source_repo / core_subpath;
     if (std::filesystem::exists(from_source / "Arduino.h", ec)) {
       return from_source;
     }
@@ -170,39 +178,80 @@ std::optional<std::filesystem::path> find_core_dir() {
   return std::nullopt;
 }
 
-// Board -> {-mmcu= value, ArduinoCore-avr variants/ subdirectory, the
-// ARDUINO_AVR_* define real Arduino board.txt files set for it}. Every
-// entry here is atmega328p + "standard" except Mega, which is a genuinely
-// different chip (see chip.ts's own AvrChipConfig on the JS/TS side for
-// the CPU-emulation half of this same board/chip split) - not just a
-// different define. Keyed by circuit.ts's CircuitBoard.type string, so
-// it stays in lockstep with boardAdapterId there without either file
+// Board -> {-mmcu= value, which core tree, its own variants/ subdirectory,
+// the ARDUINO_AVR_* define real Arduino board.txt files set for it,
+// F_CPU}. Every entry here is atmega328p + "arduino" core + 16MHz except
+// Mega (a genuinely different chip - see chip.ts's own AvrChipConfig on
+// the JS/TS side for the CPU-emulation half of this same board/chip
+// split) and Franzininho (a genuinely different chip AND core tree - see
+// find_core_dir() above). Keyed by circuit.ts's CircuitBoard.type string,
+// so it stays in lockstep with boardAdapterId there without either file
 // importing the other (this is native C++, that's TS - there's no shared
 // module to put one canonical table in).
 struct BoardTarget {
-  std::string mcu;      // avr-gcc -mmcu=
-  std::string variant;  // ArduinoCore-avr/variants/<variant>
-  std::string define;   // -D<define>
+  std::string mcu;        // avr-gcc -mmcu=
+  std::string core_kind;  // find_core_dir()'s "arduino" or "tiny"
+  std::string variant;    // <core tree>/variants/<variant>
+  std::string define;     // -D<define>
+  std::string f_cpu;      // -DF_CPU=<f_cpu>
+  // USB vendor/product id, only non-empty for USBCON boards (Leonardo) -
+  // ArduinoCore-avr's own USBCore.cpp references USB_VID/USB_PID as bare
+  // preprocessor symbols with no fallback definition anywhere in the
+  // core/variant tree; the real Arduino IDE supplies them from boards.txt
+  // as compiler -D flags (leonardo.build.vid/build.pid there), which
+  // isn't something this project reads, so the real values are inlined
+  // here instead.
+  std::string usb_vid;
+  std::string usb_pid;
 };
 
 BoardTarget resolve_board_target(const std::string &board) {
-  if (board == "arduino-nano") return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_NANO"};
-  if (board == "arduino-mega") return BoardTarget{"atmega2560", "mega", "ARDUINO_AVR_MEGA2560"};
+  if (board == "arduino-nano") {
+    return BoardTarget{"atmega328p", "arduino", "standard", "ARDUINO_AVR_NANO", "16000000L", "", ""};
+  }
+  if (board == "arduino-mega") {
+    return BoardTarget{"atmega2560", "arduino", "mega", "ARDUINO_AVR_MEGA2560", "16000000L", "", ""};
+  }
+  // ATmega32u4 - still ArduinoCore-avr's own core (unlike Franzininho),
+  // just its "leonardo" variant instead of "standard"/"mega" - already
+  // vendored (simulators/ArduinoCore-avr/variants/leonardo), just not
+  // bundled by CMakeLists.txt's POST_BUILD copy step until now. Real
+  // Leonardo runs a 16MHz crystal, same as every other ATmega board here.
+  // usb_vid/usb_pid are ArduinoCore-avr's own boards.txt values
+  // (leonardo.build.vid/build.pid) - required for USBCore.cpp to even
+  // compile (see BoardTarget's own comment on usb_vid/usb_pid above).
+  if (board == "arduino-leonardo") {
+    return BoardTarget{"atmega32u4", "arduino", "leonardo", "ARDUINO_AVR_LEONARDO",
+                        "16000000L",  "0x2341", "0x8036"};
+  }
+  // ATTinyCore's own boards.txt: attinyx5.build.mcu=attiny85 (the "no
+  // bootloader" ATtiny85/45/25 target, its default clock menu entry -
+  // 8MHz internal oscillator, no crystal, matching real ATtiny85 chips'
+  // out-of-box fuse configuration and Franzininho's own bare-board
+  // design, which has no external crystal footprint).
+  if (board == "franzininho") {
+    return BoardTarget{"attiny85", "tiny", "tinyx5", "ARDUINO_AVR_ATTINYX5", "8000000UL", "", ""};
+  }
   // "arduino-uno", empty, or anything unrecognized - the original
   // single-board behavior this function generalizes, preserved as the
   // fallback rather than failing outright.
-  return BoardTarget{"atmega328p", "standard", "ARDUINO_AVR_UNO"};
+  return BoardTarget{"atmega328p", "arduino", "standard", "ARDUINO_AVR_UNO", "16000000L", "", ""};
 }
 
-std::optional<std::filesystem::path> find_variant_dir(const std::string &variant) {
-  const auto bundled = executable_dir() / "avr-core" / "variants" / variant;
+std::optional<std::filesystem::path> find_variant_dir(const std::string &core_kind, const std::string &variant) {
+  const auto bundled_root = core_kind == "tiny" ? "attiny-core" : "avr-core";
+  const auto source_repo = core_kind == "tiny" ? "ATTinyCore" : "ArduinoCore-avr";
+  const auto variant_subpath = core_kind == "tiny" ? std::filesystem::path("avr") / "variants" / variant
+                                                    : std::filesystem::path("variants") / variant;
+
+  const auto bundled = executable_dir() / bundled_root / "variants" / variant;
   std::error_code ec;
   if (std::filesystem::exists(bundled / "pins_arduino.h", ec)) {
     return bundled;
   }
   if (std::string(PHYSICALSIM_SOURCE_DIR).size() > 0) {
-    const auto from_source = std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" /
-                              "ArduinoCore-avr" / "variants" / variant;
+    const auto from_source =
+        std::filesystem::path(PHYSICALSIM_SOURCE_DIR) / "simulators" / source_repo / variant_subpath;
     if (std::filesystem::exists(from_source / "pins_arduino.h", ec)) {
       return from_source;
     }
@@ -257,16 +306,21 @@ std::atomic<int> g_step_counter{0};
 // arduino-cli build uses for the target board: -Os for flash-size-
 // conscious code, LTO + --gc-sections to drop unused core functions, and
 // the board's own ARDUINO_AVR_*/ARDUINO_ARCH_AVR defines since some core
-// code branches on them. F_CPU is 16MHz for every AVR board physicalsim
-// supports today (Uno/Nano/Mega all run their crystal at 16MHz) - not
-// yet parameterized per board because nothing here needs it to be.
+// code branches on them. F_CPU comes from target.f_cpu - 16MHz for every
+// ATmega board (Uno/Nano/Mega all run their crystal at 16MHz), 8MHz for
+// Franzininho (ATtiny85's internal oscillator, no external crystal).
 std::vector<std::string> common_flags(const ToolchainPaths &tc, const BoardTarget &target) {
   std::vector<std::string> flags = {
       "-w", "-Os", "-g", "-ffunction-sections", "-fdata-sections", "-flto",
-      "-mmcu=" + target.mcu, "-DF_CPU=16000000L", "-DARDUINO=10819",
+      "-mmcu=" + target.mcu, "-DF_CPU=" + target.f_cpu, "-DARDUINO=10819",
       "-D" + target.define, "-DARDUINO_ARCH_AVR",
       "-I" + tc.core_dir.string(), "-I" + tc.variant_dir.string(),
   };
+  // USBCON boards only (Leonardo) - USBCore.cpp references these as bare
+  // preprocessor symbols with no fallback definition anywhere in the
+  // core/variant tree (see BoardTarget's own comment).
+  if (!target.usb_vid.empty()) flags.push_back("-DUSB_VID=" + target.usb_vid);
+  if (!target.usb_pid.empty()) flags.push_back("-DUSB_PID=" + target.usb_pid);
   // Each vendored library's own src/ dir, so "#include <LiquidCrystal.h>"
   // resolves the same way it would against a real Arduino IDE install -
   // one -I per library, not a single shared include root, since each
@@ -279,9 +333,10 @@ std::vector<std::string> common_flags(const ToolchainPaths &tc, const BoardTarge
 }  // namespace
 
 std::optional<ToolchainPaths> find_toolchain(const std::string &board) {
+  const auto target = resolve_board_target(board);
   auto bin_dir = find_toolchain_bin_dir();
-  auto core_dir = find_core_dir();
-  auto variant_dir = find_variant_dir(resolve_board_target(board).variant);
+  auto core_dir = find_core_dir(target.core_kind);
+  auto variant_dir = find_variant_dir(target.core_kind, target.variant);
   if (!bin_dir || !core_dir || !variant_dir) {
     return std::nullopt;
   }
@@ -294,12 +349,14 @@ CompileResult compile_sketch(const std::string &source, const std::string &board
   const auto target = resolve_board_target(board);
   const auto toolchain = find_toolchain(board);
   if (!toolchain) {
+    const std::string core_root = target.core_kind == "tiny" ? "attiny-core/" : "avr-core/";
+    const std::string core_repo = target.core_kind == "tiny" ? "ATTinyCore" : "ArduinoCore-avr";
     result.log =
         "AVR toolchain not found for board \"" + board + "\" (resolved variant \"" + target.variant +
         "\"). Expected either a bundled copy next to physicalsim's executable "
         "(avr-toolchain/bin/), avr-g++ on PATH, or an Arduino IDE install; and "
-        "the vendored core + variant (avr-core/ next to the executable, or "
-        "simulators/ArduinoCore-avr in a dev build).";
+        "the vendored core + variant (" + core_root + " next to the executable, or "
+        "simulators/" + core_repo + " in a dev build).";
     return result;
   }
 

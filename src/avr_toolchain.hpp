@@ -3,15 +3,18 @@
 //
 // Compiles a real Arduino sketch (setup()/loop(), digitalRead/Write,
 // Serial, etc.) into an Intel HEX image for whichever AVR board is
-// placed (Arduino Uno/Nano - ATmega328p; Arduino Mega - ATmega2560 - see
-// resolve_board_target() in the .cpp), using a bundled/system avr-gcc,
-// the vendored ArduinoCore-avr subset (simulators/ArduinoCore-avr -
-// cores/arduino + variants/standard + variants/mega), and whatever
-// vendored Arduino libraries a sketch #includes (e.g. LiquidCrystal -
-// simulators/LiquidCrystal, CMakeLists.txt's AVR_LIBRARIES list). No
-// compiler ships inside physicalsim's own binary; this shells out to
-// avr-gcc/avr-g++/avr-objcopy the same way qemu_adapter.cpp shells out
-// to qemu-system-arm - see that file for the process-spawn pattern this
+// placed (Arduino Uno/Nano - ATmega328p; Arduino Mega - ATmega2560;
+// Franzininho - ATtiny85, its own core tree - see resolve_board_target()
+// in the .cpp), using a bundled/system avr-gcc, the vendored
+// ArduinoCore-avr subset (simulators/ArduinoCore-avr - cores/arduino +
+// variants/standard + variants/mega) or, for Franzininho, the vendored
+// ATTinyCore subset (simulators/ATTinyCore - avr/cores/tiny +
+// avr/variants/tinyx5), and whatever vendored Arduino libraries a sketch
+// #includes (e.g. LiquidCrystal - simulators/LiquidCrystal,
+// CMakeLists.txt's AVR_LIBRARIES list). No compiler ships inside
+// physicalsim's own binary; this shells out to avr-gcc/avr-g++/
+// avr-objcopy the same way qemu_adapter.cpp shells out to
+// qemu-system-arm - see that file for the process-spawn pattern this
 // mirrors.
 //
 // The resulting hex text is meant to be fed through the exact same path
@@ -67,9 +70,9 @@ struct CompileResult {
 // Compiles one sketch's source text (an .ino's body - setup()/loop(), no
 // #include <Arduino.h> needed, this prepends it) for the given board
 // (circuit.ts's CircuitBoard.type - "arduino-uno"/"arduino-nano"/
-// "arduino-mega" as of this addition; unrecognized or empty falls back
-// to Arduino Uno, matching this function's original single-board
-// behavior). Runs entirely synchronously - several avr-gcc/avr-g++
+// "arduino-mega"/"franzininho" as of this addition; unrecognized or
+// empty falls back to Arduino Uno, matching this function's original
+// single-board behavior). Runs entirely synchronously - several avr-gcc/avr-g++
 // invocations plus one avr-objcopy, a handful of seconds total. Callers
 // on the HTTP server's request thread should expect to block for that
 // long, the same as this project's other synchronous handlers.

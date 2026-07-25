@@ -49,18 +49,22 @@ export class Avr8Adapter implements SimulatorAdapter {
 
   private program: Uint16Array;
   private cpu: CPU;
-  private timer0!: AVRTimer;
-  private timer1!: AVRTimer;
-  private timer2!: AVRTimer;
+  // Undefined on chips without chip.hasAtmegaSharedPeripherals (ATtiny85
+  // - see chip.ts) - genuinely not constructed there, not just unused,
+  // since their fixed ATmega-shaped addresses would otherwise collide
+  // with ATtiny85's real GPIO registers (see chip.ts's own comment).
+  private timer0: AVRTimer | undefined;
+  private timer1: AVRTimer | undefined;
+  private timer2: AVRTimer | undefined;
   // Port letter -> constructed AVRIOPort, built from chip.ports in
   // attachPeripherals() - not fixed B/C/D fields, since a second chip
   // variant (ATMEGA2560, see chip.ts) has 11 of these, not 3.
   private ports = new Map<string, AVRIOPort>();
   private adcPort!: AVRIOPort;
-  private usart!: AVRUSART;
+  private usart: AVRUSART | undefined;
   private adc!: AVRADC;
-  private spi!: AVRSPI;
-  private twi!: AVRTWI;
+  private spi: AVRSPI | undefined;
+  private twi: AVRTWI | undefined;
   private eeprom!: AVREEPROM;
   // Constructed once, not in attachPeripherals() - EEPROM is battery-
   // backed on real hardware, meaning its contents survive a power cycle
@@ -252,9 +256,34 @@ export class Avr8Adapter implements SimulatorAdapter {
   }
 
   private attachPeripherals(): void {
-    this.timer0 = new AVRTimer(this.cpu, timer0Config);
-    this.timer1 = new AVRTimer(this.cpu, timer1Config);
-    this.timer2 = new AVRTimer(this.cpu, timer2Config);
+    // Timer0/1/2, USART0, SPI, TWI - only for chips whose real hardware
+    // has them at these fixed ATmega-family addresses (see chip.ts's
+    // hasAtmegaSharedPeripherals doc comment for why constructing them
+    // for ATtiny85 would actively corrupt its GPIO registers, not just
+    // be inert). Timer0/1's own configs are spread with the chip's own
+    // vectorOverride (undefined on every chip except ATmega32u4 - see
+    // chip.ts's own doc comment on timer0VectorOverride for why this
+    // exists at all: a chip whose real vector table differs from the
+    // shared atmega328p/2560 layout these fixed configs assume would
+    // otherwise fire interrupts at the WRONG address).
+    if (this.chip.hasAtmegaSharedPeripherals) {
+      this.timer0 = new AVRTimer(
+        this.cpu,
+        this.chip.timer0VectorOverride ? { ...timer0Config, ...this.chip.timer0VectorOverride } : timer0Config,
+      );
+      this.timer1 = new AVRTimer(
+        this.cpu,
+        this.chip.timer1VectorOverride ? { ...timer1Config, ...this.chip.timer1VectorOverride } : timer1Config,
+      );
+      // hasTimer2 defaults to true (every chip here has one except
+      // ATmega32u4, see chip.ts) - undefined must mean "yes", not
+      // "falsy therefore no".
+      this.timer2 = this.chip.hasTimer2 !== false ? new AVRTimer(this.cpu, timer2Config) : undefined;
+    } else {
+      this.timer0 = undefined;
+      this.timer1 = undefined;
+      this.timer2 = undefined;
+    }
     this.ports = new Map(
       Object.entries(this.chip.ports).map(([letter, config]) => [letter, new AVRIOPort(this.cpu, config)]),
     );
@@ -263,41 +292,84 @@ export class Avr8Adapter implements SimulatorAdapter {
       throw new Error(`Chip config's adcPortLetter "${this.chip.adcPortLetter}" isn't one of its own ports`);
     }
     this.adcPort = adcPort;
-    this.usart = new AVRUSART(this.cpu, usart0Config, CLOCK_HZ);
     // adcConfig already ships atmega328Channels as its muxChannels - ADC
     // channels 0-7 map straight onto ADMUX's mux-select bits, exactly how
     // real hardware ties A0-A7 to PORTC's ADC-capable pins, so no per-
-    // board remapping is needed here.
-    this.adc = new AVRADC(this.cpu, adcConfig);
-    // Constructing these (even with no device-specific eventHandler/
-    // onByte set beyond DS1307Device below) is what stops any sketch
-    // that touches SPI.transfer()/Wire.endTransmission() from hanging
-    // forever - before this, writes to SPDR/TWCR had no writeHooks at
-    // all, so SPSR's SPIF flag (or TWCR's TWINT flag) never set and a
-    // sketch's own `while (!(SPSR & SPIF));`-style wait spun forever.
-    // AVRSPI's default onByte (returns 0 on every byte, "nothing's
-    // there") and AVRTWI's default NoopTWIEventHandler (NACKs every
-    // address, "nothing's listening") now make that correct, even for
-    // devices with no decoder of their own yet (ILI9341, SD, SSD1306,
-    // MPU6050, I2C-mode LCD) - a real improvement independent of DS1307Device
-    // below, which is the one device with actual protocol-level behavior
-    // so far.
-    this.spi = new AVRSPI(this.cpu, spiConfig, CLOCK_HZ);
-    this.twi = new AVRTWI(this.cpu, twiConfig, CLOCK_HZ);
-    this.twi.eventHandler = new DS1307Device(this.twi);
+    // board remapping is needed here. Constructed unconditionally (even
+    // for ATtiny85, whose chip.adcChannels is 0) - its own register
+    // addresses (0x78+) don't collide with anything, and writeAnalogPin()
+    // below already rejects any bit >= chip.adcChannels before ever
+    // touching this.adc, so an ATtiny85 sketch simply never reaches code
+    // that would need this to be chip-accurate. adcVectorOverride is the
+    // same "this chip's real vector table differs" story as Timer0/1
+    // above (ATmega32u4 only).
+    this.adc = new AVRADC(
+      this.cpu,
+      this.chip.adcVectorOverride ? { ...adcConfig, adcInterrupt: this.chip.adcVectorOverride } : adcConfig,
+    );
+    if (this.chip.hasAtmegaSharedPeripherals) {
+      // Constructing these (even with no device-specific eventHandler/
+      // onByte set beyond DS1307Device below) is what stops any sketch
+      // that touches SPI.transfer()/Wire.endTransmission() from hanging
+      // forever - before this, writes to SPDR/TWCR had no writeHooks at
+      // all, so SPSR's SPIF flag (or TWCR's TWINT flag) never set and a
+      // sketch's own `while (!(SPSR & SPIF));`-style wait spun forever.
+      // AVRSPI's default onByte (returns 0 on every byte, "nothing's
+      // there") and AVRTWI's default NoopTWIEventHandler (NACKs every
+      // address, "nothing's listening") now make that correct, even for
+      // devices with no decoder of their own yet (ILI9341, SD, SSD1306,
+      // MPU6050, I2C-mode LCD) - a real improvement independent of DS1307Device
+      // below, which is the one device with actual protocol-level behavior
+      // so far. spi/twiVectorOverride, same ATmega32u4-only story as above.
+      // hasUsart0 defaults to true the same way hasTimer2 does.
+      this.usart =
+        this.chip.hasUsart0 !== false ? new AVRUSART(this.cpu, usart0Config, CLOCK_HZ) : undefined;
+      this.spi = new AVRSPI(
+        this.cpu,
+        this.chip.spiVectorOverride ? { ...spiConfig, spiInterrupt: this.chip.spiVectorOverride } : spiConfig,
+        CLOCK_HZ,
+      );
+      this.twi = new AVRTWI(
+        this.cpu,
+        this.chip.twiVectorOverride ? { ...twiConfig, twiInterrupt: this.chip.twiVectorOverride } : twiConfig,
+        CLOCK_HZ,
+      );
+      this.twi.eventHandler = new DS1307Device(this.twi);
+      // reset() replaces this.cpu and re-runs attachPeripherals(), which
+      // constructs a brand-new AVRUSART with its own (null) onByteTransmit -
+      // re-wiring it here, not just once at construction, is what keeps
+      // Serial output flowing to the same subscribers across a reset instead
+      // of silently going dark after the first Stop.
+      if (this.usart) {
+        this.usart.onByteTransmit = (value) => {
+          for (const cb of this.serialListeners) cb(value);
+        };
+      }
+    } else {
+      this.usart = undefined;
+      this.spi = undefined;
+      this.twi = undefined;
+    }
     // this.eepromBackend itself is constructed once (see the constructor)
     // and reused here on every reset - only the AVREEPROM peripheral
     // object (which just wraps cpu+backend to service EECR/EEDR register
     // writes) needs recreating alongside the fresh CPU.
     this.eeprom = new AVREEPROM(this.cpu, this.eepromBackend, eepromConfig);
-    // reset() replaces this.cpu and re-runs attachPeripherals(), which
-    // constructs a brand-new AVRUSART with its own (null) onByteTransmit -
-    // re-wiring it here, not just once at construction, is what keeps
-    // Serial output flowing to the same subscribers across a reset instead
-    // of silently going dark after the first Stop.
-    this.usart.onByteTransmit = (value) => {
-      for (const cb of this.serialListeners) cb(value);
-    };
+
+    // See chip.ts's ATMEGA32U4.hasUsbPll comment for the full story:
+    // ArduinoCore-avr's own USBCore.cpp busy-waits on PLLCSR's PLOCK bit
+    // (I/O 0x29, memory 0x49 - confirmed against the bundled avr-libc's
+    // own <avr/iom32u4.h>) during boot, which avr8js has no peripheral
+    // for. Reporting it always locked - preserving whatever else a
+    // sketch writes to this register, just forcing bit 0 on - is what
+    // lets any Leonardo sketch reach setup() at all. Set fresh on every
+    // reset()/attachPeripherals() call, same as every other hook here
+    // (this.cpu is a brand-new instance each time).
+    if (this.chip.hasUsbPll) {
+      const PLLCSR_ADDR = 0x49;
+      const PLOCK_BIT = 1 << 0;
+      this.cpu.readHooks[PLLCSR_ADDR] = () => this.cpu.data[PLLCSR_ADDR] | PLOCK_BIT;
+    }
 
     this.lastPinValues.clear();
     for (const [letter, port] of this.ports) {

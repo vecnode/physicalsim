@@ -17,13 +17,19 @@ Registered in `web/shell/src/circuit.ts`.
 | Arduino Uno | `wokwi-arduino-uno` | `avr8` |
 | Arduino Nano | `wokwi-arduino-nano` | `avr8` |
 | Arduino Mega | `wokwi-arduino-mega` | `avr8-mega` |
+| Franzininho | `wokwi-franzininho` | `avr8-attiny85` |
 | Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040` |
 | Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040` |
 
 Nano and Uno share `avr8` (same ATmega328p chip, see `web/adapters/avr8/
 src/chip.ts`); Mega gets its own `avr8-mega` adapter id since it's a
-genuinely different chip (ATmega2560). The two RP2040 boards share
-`rp2040` the same way Uno/Nano do. `wokwi-pi-pico` is vendored from
+genuinely different chip (ATmega2560). Franzininho gets its own
+`avr8-attiny85` adapter id for the same reason, a step further - a
+genuinely different, much smaller chip (ATtiny85: one port, no USART/
+SPI/TWI hardware at all) compiled against its own core tree
+(`simulators/ATTinyCore`, not `ArduinoCore-avr` - see `src/
+avr_toolchain.cpp`'s `resolve_board_target()`). The two RP2040 boards
+share `rp2040` the same way Uno/Nano do. `wokwi-pi-pico` is vendored from
 `wokwi/wokwi-boards`' own official board art (Uri Shaked), not drawn from
 scratch - see [ARCHITECTURE.md](ARCHITECTURE.md)'s "RP2040 firmware
 pipeline" section for the sketch-compiling story these boards actually

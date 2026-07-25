@@ -88,6 +88,29 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
       { name: "Vin header", voltage: 9 },
     ],
   },
+  // atmega32u4 - a smaller die than the 328p but with native USB, real
+  // datasheet active-current figures land a bit above the 328p's;
+  // approximate, like every other profile here (not measured from this
+  // simulation).
+  "arduino-leonardo": {
+    supplyVoltage: 5,
+    currentMa: { idle: 50, running: 70 },
+    sources: [
+      { name: "USB", voltage: 5, maxCurrentMa: 500 },
+      { name: "DC barrel jack (wall adapter)", voltage: 9 },
+      { name: "Vin header", voltage: 9 },
+    ],
+  },
+  // ATtiny85, not an ATmega - a much smaller die, real datasheet active-
+  // current figures land well below the 328p/2560's, approximate like
+  // every other profile here (not measured from this simulation). No
+  // barrel jack/separate Vin regulator on the real board - it's a bare
+  // USB-stick, powered over USB only.
+  franzininho: {
+    supplyVoltage: 5,
+    currentMa: { idle: 10, running: 15 },
+    sources: [{ name: "USB", voltage: 5, maxCurrentMa: 500 }],
+  },
   // RP2040's own logic level is 3.3V, not 5V - genuinely different from
   // every other board here, not a copy/paste of the AVR boards' profile.
   "nano-rp2040-connect": {

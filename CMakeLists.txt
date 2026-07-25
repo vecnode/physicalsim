@@ -399,17 +399,19 @@ endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
 # The vendored core (simulators/ArduinoCore-avr's trimmed cores/arduino +
-# variants/standard + variants/mega, LGPL 2.1) is small enough to always
-# copy next to the executable, dev or packaged build alike -
-# src/avr_toolchain.cpp looks for it there first, falling back to the
-# source tree (PHYSICALSIM_SOURCE_DIR above) only if this hasn't run yet.
-# Both variants are copied unconditionally (not just "standard") because
-# avr_toolchain.cpp's resolve_board_target() picks between them per board
-# at compile time, not at CMake configure time - Arduino Mega needs
-# variants/mega's own pins_arduino.h (different port/pin mapping than the
-# atmega328p boards' "standard" variant - see arduino-mega.ts on the JS
-# side for the same D0-D53/A0-A15 mapping this variant's own tables
-# encode).
+# variants/standard + variants/mega + variants/leonardo, LGPL 2.1) is
+# small enough to always copy next to the executable, dev or packaged
+# build alike - src/avr_toolchain.cpp looks for it there first, falling
+# back to the source tree (PHYSICALSIM_SOURCE_DIR above) only if this
+# hasn't run yet. Every variant is copied unconditionally (not just
+# "standard") because avr_toolchain.cpp's resolve_board_target() picks
+# between them per board at compile time, not at CMake configure time -
+# Arduino Mega needs variants/mega's own pins_arduino.h (different port/
+# pin mapping than the atmega328p boards' "standard" variant - see
+# arduino-mega.ts on the JS side for the same D0-D53/A0-A15 mapping this
+# variant's own tables encode), and Arduino Leonardo needs variants/
+# leonardo's own (a genuinely different chip, atmega32u4 - see
+# arduino-leonardo.ts).
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
@@ -424,7 +426,34 @@ add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
         $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
-    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega)"
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/leonardo
+        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants/leonardo
+    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega + variants/leonardo)"
+)
+
+# ATtiny85 (Franzininho, boards/franzininho.ts) needs a genuinely
+# different core tree, not just a different variant of ArduinoCore-avr's
+# own cores/arduino - ATtiny85 has no USART/SPI/TWI hardware and a much
+# smaller register set, so its Arduino.h/wiring.c are written completely
+# differently (SpenceKonde/ATTinyCore, LGPL 2.1, forked to
+# vecnode/ATTinyCore). Bundled the same small-enough-to-always-ship way
+# as ArduinoCore-avr above, under its own attiny-core/ folder rather than
+# mixing into avr-core/ - avr_toolchain.cpp's resolve_board_target()
+# picks which core tree to use per board, same as it already picks
+# between variants/standard and variants/mega.
+add_custom_command(TARGET physicalsim POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/cores/tiny
+        $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores/tiny
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        $<TARGET_FILE_DIR:physicalsim>/attiny-core/variants
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        ${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/variants/tinyx5
+        $<TARGET_FILE_DIR:physicalsim>/attiny-core/variants/tinyx5
+    COMMENT "Copying vendored ATTinyCore (cores/tiny + variants/tinyx5)"
 )
 
 # Vendored Arduino libraries a sketch can #include - same "small enough to

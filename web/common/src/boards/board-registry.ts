@@ -1,6 +1,8 @@
 import { arduinoUno } from "./arduino-uno.js";
 import { arduinoNano } from "./arduino-nano.js";
 import { arduinoMega } from "./arduino-mega.js";
+import { arduinoLeonardo } from "./arduino-leonardo.js";
+import { franzininho } from "./franzininho.js";
 import { nanoRp2040Connect } from "./nano-rp2040-connect.js";
 import { rp2040Board } from "./rp2040-board.js";
 import type { BoardPinMap } from "./board.js";
@@ -15,6 +17,8 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   "arduino-uno": arduinoUno,
   "arduino-nano": arduinoNano,
   "arduino-mega": arduinoMega,
+  "arduino-leonardo": arduinoLeonardo,
+  franzininho,
   "nano-rp2040-connect": nanoRp2040Connect,
   // rp2040-board.ts's own generic GP<n> identity map - written before any
   // placeable board used it (only board.test.ts's own coverage), and

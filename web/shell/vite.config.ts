@@ -54,7 +54,33 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: resolve("../../public"),
+    // Builds into a disposable staging directory, not ../../public
+    // directly - see scripts/sync-dist.mjs (chained after `vite build` in
+    // package.json's own "build" script), which is what actually updates
+    // public/, copying over only files whose content changed and leaving
+    // everything else's mtime untouched. That step is what makes stable
+    // filenames below actually pay off: CMakeLists.txt's cpp_embedlib_add()
+    // embeds public/ as C++ (its own add_custom_command DEPENDS on each
+    // file's mtime), and this project's own history already showed that
+    // Vite's default content-hashed names shift on *unrelated* changes
+    // elsewhere in the module graph (confirmed by diffing two consecutive
+    // builds - files with untouched content still got new hashes) - with
+    // emptyOutDir rewriting every file's mtime on every build regardless,
+    // that meant the entire ~90-file embedded WebAssets library recompiled
+    // on every single web/ change, not just the changed file(s).
+    outDir: resolve("../../.vite-staging"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        // No [hash] - see the outDir comment above for why. Collisions
+        // would need distinguishing (Rollup already keys each chunk's base
+        // name off its own module id, so the existing set of names here -
+        // one per Monaco language/worker - are already unique without the
+        // hash suffix).
+        entryFileNames: "assets/[name].js",
+        chunkFileNames: "assets/[name].js",
+        assetFileNames: "assets/[name][extname]",
+      },
+    },
   },
 });

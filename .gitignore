@@ -73,6 +73,14 @@ Testing/
 # directory for static assets (e.g. board images), not build output, and
 # needs to stay tracked.
 /public/
+# Vite's own disposable build output (see vite.config.ts) - scripts/
+# sync-dist.mjs copies from here into /public/ above, touching only files
+# that actually changed.
+/.vite-staging/
+# Written by scripts/sync-dist.mjs on every build; read by
+# tools/check-web-stale.ps1 to decide whether build_and_run.bat can skip
+# npm install/build entirely.
+/.web-build-stamp
 
 # Node
 node_modules/

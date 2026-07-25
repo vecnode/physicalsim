@@ -1111,13 +1111,17 @@ terminalToggleBtn.addEventListener("click", () => {
   terminal.setVisible(!terminalHidden);
 });
 
-// Rotates whichever board/component is currently selected 90 degrees
-// clockwise (canvas/scene.ts's rotateSelected()) - works for sensors and
+// Arms/disarms the rotate handle (canvas/scene.ts's
+// toggleRotateHandleMode()) - a free-angle drag handle on whatever's
+// selected, rather than a fixed 90-degree turn. Works for sensors and
 // connections the same way it does for boards, since rotation lives on
 // the shared CircuitBoard/PlacedComponent shape, not anything board-
-// specific.
+// specific. The button's own "active" class just mirrors the mode so
+// it reads as pressed/toggled while armed.
 const rotateBtn = document.getElementById("rotate-btn") as HTMLButtonElement;
-rotateBtn.addEventListener("click", () => canvas.scene.rotateSelected());
+rotateBtn.addEventListener("click", () => {
+  rotateBtn.classList.toggle("active", canvas.scene.toggleRotateHandleMode());
+});
 
 // Cycles how every wire is drawn (straight/elbow/bezier - see
 // canvas/wiring.ts's LinkStyle) - a global setting, applying to every

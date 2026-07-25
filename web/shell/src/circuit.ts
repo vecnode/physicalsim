@@ -25,7 +25,7 @@ export interface CircuitBoard {
   x: number;
   y: number;
   powered: boolean;
-  rotation: number; // degrees, clockwise, one of 0/90/180/270 - see canvas/scene.ts's rotateSelected()
+  rotation: number; // degrees clockwise, any angle - see canvas/scene.ts's startRotateDrag()
 }
 
 // A placed sensor/connection part (component-registry.ts) - deliberately
@@ -41,7 +41,7 @@ export interface PlacedComponent {
   type: string; // key into component-registry.ts's componentRegistry
   x: number;
   y: number;
-  rotation: number; // degrees, clockwise, one of 0/90/180/270 - see canvas/scene.ts's rotateSelected()
+  rotation: number; // degrees clockwise, any angle - see canvas/scene.ts's startRotateDrag()
 }
 
 export interface Circuit {

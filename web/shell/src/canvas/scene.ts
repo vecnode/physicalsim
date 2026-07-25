@@ -46,6 +46,15 @@ export class Scene {
   private deleteListeners: Array<(entity: PlacedEntity) => void> = [];
   private boardPlacedListeners: Array<(board: CircuitBoard) => void> = [];
 
+  // Whether the rotate handle (the rotate-btn's whole job now - see
+  // toggleRotateHandleMode()) is currently armed. Persists across
+  // selection changes: turning it on shows the handle on whatever's
+  // selected right now (if anything), and it keeps following selection
+  // changes until turned off again.
+  private rotateHandleMode = false;
+  private rotateHandleEl: HTMLElement | null = null;
+  private rotateTrajectoryEl: HTMLElement | null = null;
+
   constructor(
     container: HTMLElement,
     private readonly content: HTMLElement,
@@ -162,6 +171,7 @@ export class Scene {
     this.selectedWrapper?.classList.remove("selected");
     this.selectedWrapper = wrapper;
     this.selectedWrapper?.classList.add("selected");
+    this.updateRotateHandle();
   }
 
   // A second, independent selection from selectItem() above - selecting
@@ -186,26 +196,133 @@ export class Scene {
     return true;
   }
 
-  // Rotates whichever board/component is currently selected 90 degrees
-  // clockwise (the rotate button's whole job) - a no-op if nothing is
-  // selected. Purely a CSS transform on the wrapper (rotation is stored
-  // on the entity so it survives re-renders, but nothing about layout -
-  // offsetLeft/Top/Width/Height, drag math, centering - changes; CSS
-  // transforms are visual-only). The wire layer needs an explicit
-  // render() afterward since a rotated pin's world position moves even
-  // though the entity's own x/y didn't (see wiring.ts's endpoint()).
-  rotateSelected(): boolean {
-    if (!this.selectedWrapper) return false;
+  // The rotate button's whole job now: arm/disarm the rotate handle (a
+  // small draggable circle parked just outside the selection outline's
+  // top-right corner - see updateRotateHandle()/startRotateDrag()
+  // below), rather than performing a fixed 90-degree turn itself.
+  // Returns the new mode, so the caller (main.ts) can reflect it in the
+  // button's own pressed state.
+  toggleRotateHandleMode(): boolean {
+    this.rotateHandleMode = !this.rotateHandleMode;
+    this.updateRotateHandle();
+    return this.rotateHandleMode;
+  }
+
+  // Creates/repositions/removes the rotate handle to match current
+  // state (mode on/off, what's selected). Called after every selection
+  // change and after every drag-move of the selected entity (its center
+  // - and so the handle's own position - moves with it), not just once.
+  private updateRotateHandle(): void {
+    if (!this.rotateHandleMode || !this.selectedWrapper) {
+      this.rotateHandleEl?.remove();
+      this.rotateHandleEl = null;
+      return;
+    }
     const entry = [...this.dom.entries()].find(([, dom]) => dom.wrapper === this.selectedWrapper);
-    if (!entry) return false;
+    if (!entry) return;
     const [id] = entry;
     const entity = this.allEntities().find((e) => e.id === id);
-    if (!entity) return false;
-    entity.rotation = (entity.rotation + 90) % 360;
-    this.selectedWrapper.style.transform = `rotate(${entity.rotation}deg)`;
-    this.wiring.render();
-    this.notifyChange();
-    return true;
+    const wrapper = this.selectedWrapper;
+    if (!entity) return;
+
+    if (!this.rotateHandleEl) {
+      const handle = document.createElement("div");
+      handle.className = "rotate-handle";
+      handle.title = "Drag to rotate";
+      handle.addEventListener("mousedown", (ev) => this.startRotateDrag(ev, id));
+      this.content.appendChild(handle);
+      this.rotateHandleEl = handle;
+    }
+    this.positionRotateHandle(wrapper, entity);
+  }
+
+  // Where the handle sits, in the same unscaled "world" unit space
+  // entity.x/y and wrapper.style.left/top already live in (content's
+  // own CSS zoom transform handles the rest, same as every other
+  // canvas coordinate here). Fixed 14px outside the wrapper's own
+  // bounding box, diagonally - baseAngle is that direction's angle
+  // *before* any rotation is applied; radius is its distance from
+  // center, which stays constant as the entity spins (only the angle
+  // changes) - together they're what makes the handle orbit the
+  // entity's center along one consistent circle instead of jumping
+  // around as the bounding box's own corner would.
+  private static readonly ROTATE_HANDLE_MARGIN = 14;
+
+  private handleGeometry(wrapper: HTMLElement): {
+    centerX: number;
+    centerY: number;
+    radius: number;
+    baseAngle: number;
+  } {
+    const w = wrapper.offsetWidth;
+    const h = wrapper.offsetHeight;
+    const left = parseFloat(wrapper.style.left) || 0;
+    const top = parseFloat(wrapper.style.top) || 0;
+    const centerX = left + w / 2;
+    const centerY = top + h / 2;
+    const dx = w / 2 + Scene.ROTATE_HANDLE_MARGIN;
+    const dy = -(h / 2 + Scene.ROTATE_HANDLE_MARGIN);
+    return { centerX, centerY, radius: Math.hypot(dx, dy), baseAngle: Math.atan2(dy, dx) };
+  }
+
+  private positionRotateHandle(wrapper: HTMLElement, entity: PlacedEntity): void {
+    if (!this.rotateHandleEl) return;
+    const { centerX, centerY, radius, baseAngle } = this.handleGeometry(wrapper);
+    const angle = baseAngle + (entity.rotation * Math.PI) / 180;
+    this.rotateHandleEl.style.left = `${centerX + radius * Math.cos(angle)}px`;
+    this.rotateHandleEl.style.top = `${centerY + radius * Math.sin(angle)}px`;
+  }
+
+  // Drag-to-rotate: the entity's rotation continuously tracks the
+  // cursor's *angle* around the entity's center (screenToWorld() undoes
+  // pan/zoom the same way makeDraggable() does for plain dragging) -
+  // deliberately ignoring the cursor's *distance* from center, so the
+  // handle always stays exactly under the pointer regardless of how far
+  // out the mouse drifts, the same posture Figma's own rotate handles
+  // take. `baseAngle` is subtracted back out so entity.rotation is 0
+  // exactly when the handle sits at its rest position (top-right,
+  // unrotated).
+  private startRotateDrag(ev: MouseEvent, entityId: string): void {
+    ev.stopPropagation();
+    ev.preventDefault();
+    const dom = this.dom.get(entityId);
+    const entity = this.allEntities().find((e) => e.id === entityId);
+    if (!dom || !entity) return;
+    const wrapper = dom.wrapper;
+    const { centerX, centerY, radius, baseAngle } = this.handleGeometry(wrapper);
+
+    // Trajectory guide - a dashed circle at the handle's own fixed
+    // radius, illustrating the path it (and so the rotation) is
+    // following. Only exists for the duration of this drag.
+    const trajectory = document.createElement("div");
+    trajectory.className = "rotate-trajectory";
+    trajectory.style.left = `${centerX}px`;
+    trajectory.style.top = `${centerY}px`;
+    trajectory.style.width = `${radius * 2}px`;
+    trajectory.style.height = `${radius * 2}px`;
+    this.content.appendChild(trajectory);
+    this.rotateTrajectoryEl = trajectory;
+
+    const onMouseMove = (moveEv: MouseEvent): void => {
+      const { x, y } = this.viewport.screenToWorld(moveEv.clientX, moveEv.clientY);
+      const mouseAngle = Math.atan2(y - centerY, x - centerX);
+      const rotationDeg = (((mouseAngle - baseAngle) * 180) / Math.PI + 360) % 360;
+      entity.rotation = rotationDeg;
+      wrapper.style.transform = `rotate(${rotationDeg}deg)`;
+      this.positionRotateHandle(wrapper, entity);
+      this.wiring.render();
+      this.notifyChange();
+    };
+
+    const onMouseUp = (): void => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+      this.rotateTrajectoryEl?.remove();
+      this.rotateTrajectoryEl = null;
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
   }
 
   private deleteEntity(id: string): void {
@@ -223,7 +340,10 @@ export class Scene {
     this.circuit.boards = this.circuit.boards.filter((b) => b.id !== id);
     this.circuit.components = this.circuit.components.filter((c) => c.id !== id);
 
-    if (this.selectedWrapper === dom.wrapper) this.selectedWrapper = null;
+    if (this.selectedWrapper === dom.wrapper) {
+      this.selectedWrapper = null;
+      this.updateRotateHandle();
+    }
     this.notifyChange();
   }
 
@@ -297,8 +417,11 @@ export class Scene {
       wrapper.style.top = `${entity.y}px`;
       // Dragging can extend the world bounds the minimap draws, and any
       // wire attached to this entity needs its endpoint recomputed live,
-      // not just once the drag ends.
+      // not just once the drag ends. The rotate handle's own position is
+      // center-relative too, so it needs the same live update - a no-op
+      // if this isn't the entity the handle is currently attached to.
       this.wiring.render();
+      this.updateRotateHandle();
       this.notifyChange();
     };
 

@@ -473,7 +473,7 @@ button:disabled {
   left: 8px;
   bottom: 8px;
   z-index: 10;
-  width: 96px;
+  width: 48px;
 }
 
 .wire-color-panel.hidden {
@@ -630,11 +630,54 @@ button:disabled {
    room to breathe instead of hugging the SVG's own edge; border-radius
    rounds the outline's corners to match (Chromium - which WebView2 and
    this dev preview both are - follows the element's own border-radius
-   when rounding an outline). */
+   when rounding an outline).
+   Note: Chromium's outline-rounding is effectively border-radius +
+   outline-offset, not border-radius alone - with the previous 2px/4px
+   pair the outline's actual visual corner radius was ~6px, much
+   rounder than "2px" suggests. Both dropped here for a genuinely
+   crisp, small corner. */
 .board-item.selected {
   outline: 2px solid #e6e6e6;
-  outline-offset: 4px;
-  border-radius: 2px;
+  outline-offset: 2px;
+  border-radius: 1px;
+}
+
+/* Rotate handle (canvas/scene.ts's updateRotateHandle()/positionRotateHandle())
+   - a small circular drag target parked just outside the selection
+   outline's top-right corner, orbiting the entity's center as its
+   rotation changes (see startRotateDrag()'s angle math). Appended
+   directly to .content, a sibling of the board wrapper it belongs to,
+   not a child of it - it must NOT inherit the wrapper's own CSS
+   rotate() transform, since its position is already computed
+   post-rotation. */
+.rotate-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  background: #e6e6e6;
+  border: 1px solid var(--canvas-bg, #1a1a1a);
+  cursor: grab;
+  z-index: 5;
+}
+
+.rotate-handle:hover,
+.rotate-handle:active {
+  background: #ffd54a;
+}
+
+/* The rotation trajectory guide (startRotateDrag()) - a dashed circle
+   at the handle's own fixed radius, shown only while a rotate-drag is
+   actually in progress (created on mousedown, removed on mouseup) -
+   not a permanent piece of UI chrome. */
+.rotate-trajectory {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  border-radius: 50%;
+  border: 1px dashed #e6e6e6;
+  pointer-events: none;
+  z-index: 4;
 }
 
 /* One per pin (see canvas/scene.ts's overlayPinMarkers()), positioned in
@@ -887,6 +930,13 @@ button:disabled {
   border: none;
   border-left: 1px solid var(--border);
   padding: 5px 14px;
+}
+
+/* Pressed/toggled state - currently just #rotate-btn (main.ts's
+   toggleRotateHandleMode()), a plain background highlight matching this
+   bar's flat, no-radius look rather than an icon color change. */
+.bottombar button.active {
+  background: var(--border);
 }
 
 /* Icon-only buttons (no text after the icon) don't need the trailing

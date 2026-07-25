@@ -5,6 +5,7 @@ import type {
   ArduinoMegaElement,
   FranzininhoElement,
   NanoRP2040ConnectElement,
+  ESP32DevkitV1Element,
 } from "@wokwi/elements";
 // ArduinoLeonardoElement has no ledPower (or any other) @property - the
 // vendored Fritzing artwork has no obvious dedicated power-status LED
@@ -72,6 +73,9 @@ export const boardTagName: Record<string, string> = {
   "nano-rp2040-connect": "wokwi-nano-rp2040-connect",
   "pi-pico": "wokwi-pi-pico",
   "pi-pico-w": "wokwi-pi-pico-w",
+  // Vendored in wokwi-elements (upstream wokwi/wokwi-elements, not custom-
+  // authored like the Pico boards) - see esp32-devkit-v1-element.ts.
+  "esp32-devkit-v1": "wokwi-esp32-devkit-v1",
 };
 
 // Board id -> human-readable label, for menus that list board types (the
@@ -87,6 +91,7 @@ export const boardDisplayName: Record<string, string> = {
   "nano-rp2040-connect": "Arduino Nano RP2040 Connect",
   "pi-pico": "Raspberry Pi Pico",
   "pi-pico-w": "Raspberry Pi Pico W",
+  "esp32-devkit-v1": "ESP32 DevKit V1",
 };
 
 // Board id -> the SimulatorAdapter that powers it. This is what "plugging
@@ -110,6 +115,9 @@ export const boardAdapterId: Record<string, AdapterId> = {
   "nano-rp2040-connect": "rp2040",
   "pi-pico": "rp2040",
   "pi-pico-w": "rp2040",
+  // Backed by esp32_qemu_adapter.cpp (a real qemu-system-xtensa process,
+  // not a JS Worker) - see NATIVE_ADAPTER_IDS in adapter-registry.ts.
+  "esp32-devkit-v1": "esp32",
 };
 
 // Board id -> how to reflect powered on/off on its placed element. Board-
@@ -133,6 +141,9 @@ export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => 
   },
   "nano-rp2040-connect": (el, on) => {
     (el as NanoRP2040ConnectElement).ledPower = on;
+  },
+  "esp32-devkit-v1": (el, on) => {
+    (el as ESP32DevkitV1Element).ledPower = on;
   },
 };
 

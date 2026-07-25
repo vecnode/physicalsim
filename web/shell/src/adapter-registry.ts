@@ -20,7 +20,14 @@ import { notifyNative } from "./native-notify.js";
 // and "avr8-leonardo" (Arduino Leonardo, chip.ts's ATMEGA32U4) are the
 // same pattern a third and fourth time - genuinely different chips, not
 // a parameter on "avr8".
-export type AdapterId = "rp2040" | "avr8" | "avr8-mega" | "avr8-attiny85" | "avr8-leonardo" | "cortex-m";
+export type AdapterId =
+  | "rp2040"
+  | "avr8"
+  | "avr8-mega"
+  | "avr8-attiny85"
+  | "avr8-leonardo"
+  | "cortex-m"
+  | "esp32";
 
 // Structural interface both AdapterClient (Worker-backed) and
 // NativeAdapterClient (native-process-backed, see that file) satisfy.
@@ -41,7 +48,7 @@ export interface SimClient {
 // Adapters with no JS/Worker side at all - the C++ shell spawns and
 // controls these directly (see src/qemu_adapter.hpp). Reached only
 // through the HTTP bridge, never postMessage.
-const NATIVE_ADAPTER_IDS = new Set<AdapterId>(["cortex-m"]);
+const NATIVE_ADAPTER_IDS = new Set<AdapterId>(["cortex-m", "esp32"]);
 
 function createWorker(id: AdapterId): Worker {
   if (id === "rp2040") {

@@ -17,6 +17,8 @@
 
 #include <nlohmann/json.hpp>
 
+#include "qemu_backed_adapter.hpp"
+
 namespace qemu {
 
 using json = nlohmann::json;
@@ -35,10 +37,10 @@ std::optional<std::filesystem::path> find_qemu_system_arm();
 // adapter: process lifecycle, the QMP control connection, and the GDB RSP
 // connection used for single-stepping. Not copyable - one instance owns
 // one OS process and two sockets.
-class QemuInstance {
+class QemuInstance : public QemuBackedAdapter {
 public:
   QemuInstance();
-  ~QemuInstance();
+  ~QemuInstance() override;
 
   QemuInstance(const QemuInstance &) = delete;
   QemuInstance &operator=(const QemuInstance &) = delete;
@@ -46,22 +48,22 @@ public:
   // Spawns qemu-system-arm (-M netduinoplus2, halted via -S) and connects
   // the QMP and GDB RSP sockets. Throws std::runtime_error on failure
   // (binary not found, spawn failure, or the sockets never come up).
-  void start_process();
+  void start_process() override;
 
   // Adapter-shaped operations, mirroring SimulatorAdapter
   // (web/common/src/adapter-types.ts) so the two adapter kinds present an
   // identical surface over the HTTP bridge.
-  json start();
-  json stop();
-  json step(int n);
-  json reset();
+  json start() override;
+  json stop() override;
+  json step(int n) override;
+  json reset() override;
 
   // Current state snapshot: {running, cycles, pc}. cycles is not
   // available from QEMU the way avr8js/rp2040js expose it (no cycle
   // counter over QMP/GDB for this target) - reported as the number of
   // step()/run calls issued instead, not real CPU cycles. Documented,
   // not silently faked.
-  json state() const;
+  json state() const override;
 
   // Pin I/O: unimplemented pending a spike into whether QEMU's netduinoplus2
   // GPIO model supports external stimulus at all (see ARCHITECTURE.md /
@@ -70,9 +72,17 @@ public:
   // shell never needs a cortex-m special case - without pretending pin
   // access actually works. Replace with a real implementation (likely QMP
   // or GDB memory reads/writes against the STM32 GPIO IDR/ODR registers)
-  // once that spike resolves.
-  json read_pin(const std::string &pin) const;
-  json write_pin(const std::string &pin, int value);
+  // once that spike resolves. (esp32_qemu_adapter.hpp's adapter, added
+  // later, shows this same QEMU-backed shape can support real pin I/O once
+  // the target's GPIO model actually allows it.)
+  json read_pin(const std::string &pin) const override;
+  json write_pin(const std::string &pin, int value) override;
+
+  // Unimplemented - cortex-m boots a fixed built-in stub (see
+  // minimal_vector_table_stub() below), not user firmware, and there's no
+  // sketch-compile pipeline targeting it either. Throws rather than
+  // silently no-op'ing, same posture as read_pin/write_pin above.
+  json load_firmware(const std::string &binary) override;
 
   bool running() const { return running_; }
 

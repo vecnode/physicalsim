@@ -711,6 +711,99 @@ void loop(void) {
       }
     },
   },
+  "pico-w-blink": {
+    label: "Blink LED (Pico W)",
+    description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware - on the Raspberry Pi Pico W.",
+    level: "beginner",
+    board: "Raspberry Pi Pico W",
+    glyph: "📶",
+    // Same pico-sdk C API and identity GP<n> pin map as "pico-led-chase"
+    // (see boards/board-registry.ts's "pi-pico-w" entry - it shares the
+    // plain Pico's map byte-for-byte). The Pico W's CYW43439 WiFi/
+    // Bluetooth chip isn't emulated (an explicit 2026-07-25 decision, see
+    // board-registry.ts), and on real Pico W hardware the onboard LED is
+    // wired through that WiFi chip, not a plain GPIO - so this blinks an
+    // external LED instead, same as "rp2040-blink" does for the Nano
+    // RP2040 Connect. GP10 is otherwise unused by any other example, so
+    // it can sit next to "pico-led-chase" (GP2-GP6) without pin overlap.
+    sketch: `void setup(void) {
+  gpio_init(10);
+  gpio_set_dir(10, GPIO_OUT);
+}
+
+void loop(void) {
+  gpio_put(10, 1);
+  sleep_ms(500);
+  gpio_put(10, 0);
+  sleep_ms(500);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("pi-pico-w");
+      if (!board) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 40);
+      if (!led) return;
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 120);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "GP10" }, { entityId: led.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+    },
+  },
+  "esp32-gpio-blink": {
+    label: "GPIO Blink (ESP32)",
+    description:
+      "Two LEDs + resistors, blinked by a real ESP-IDF firmware image compiled and run under " +
+      "qemu-system-xtensa - Compile & Run genuinely builds this sketch (esp32_toolchain.cpp) and " +
+      "readPin reads the actual GPIO_OUT_REG register live. The ESP32 toolchain is currently " +
+      "dev-machine-only, not bundled/portable yet (see esp32_toolchain.hpp) - if it's not installed, " +
+      "Compile & Run reports that clearly rather than failing silently.",
+    level: "beginner",
+    board: "ESP32 DevKit V1",
+    glyph: "🔷",
+    // Adapted from espressif/esp-idf's own examples/peripherals/gpio/
+    // generic_gpio - the same firmware the Phase 0/1 spike used to
+    // validate the QEMU fork's GPIO support in the first place.
+    sketch: `#include "driver/gpio.h"
+
+#define GPIO_OUTPUT_IO_0 18
+#define GPIO_OUTPUT_IO_1 19
+
+void app_main(void) {
+  gpio_config_t io_conf = {};
+  io_conf.mode = GPIO_MODE_OUTPUT;
+  io_conf.pin_bit_mask = (1ULL << GPIO_OUTPUT_IO_0) | (1ULL << GPIO_OUTPUT_IO_1);
+  gpio_config(&io_conf);
+
+  int cnt = 0;
+  while (1) {
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
+    gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
+    cnt++;
+  }
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("esp32-devkit-v1");
+      if (!board) return;
+      // D18/D19 - the two GPIOs the bundled demo firmware actually
+      // toggles (see esp32_qemu_adapter.hpp's header comment), both in
+      // lockstep with each other once a second.
+      const led1 = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 40);
+      if (!led1) return;
+      const resistor1 = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 120);
+      if (!resistor1) return;
+      const led2 = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 220);
+      if (!led2) return;
+      const resistor2 = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 300);
+      if (!resistor2) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D18" }, { entityId: led1.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: led1.id, pin: "C" }, { entityId: resistor1.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor1.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D19" }, { entityId: led2.id, pin: "A" });
+      canvas.scene.wiring.connect({ entityId: led2.id, pin: "C" }, { entityId: resistor2.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor2.id, pin: "2" }, { entityId: board.id, pin: "GND.2" });
+    },
+  },
   "lcd-display": {
     label: "LCD Display",
     description: "16x2 LCD driven by real LiquidCrystal firmware over its RS/E/D4-D7 bus.",
@@ -1103,13 +1196,22 @@ async function compileAndRun(): Promise<void> {
     }
 
     let bytes: Uint8Array;
-    if (board === "nano-rp2040-connect" || board === "pi-pico" || board === "pi-pico-w") {
+    if (board === "nano-rp2040-connect" || board === "pi-pico" || board === "pi-pico-w" || board === "esp32-devkit-v1") {
       bytes = parseHexBytes(body.binHex ?? "");
     } else {
       const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
       bytes = parsed.bytes.slice(0, parsed.usedBytes);
     }
-    await client.call("loadFirmware", bytes);
+    if (activeAdapterId === "esp32") {
+      // NativeAdapterClient posts params as JSON (native-adapter-client.ts) -
+      // a raw Uint8Array would serialize as a numeric-keyed object, not
+      // bytes, so the native/HTTP bridge takes the same hex string
+      // /compile already returned rather than round-tripping through
+      // parseHexBytes() only to re-encode it.
+      await client.call("loadFirmware", body.binHex ?? "");
+    } else {
+      await client.call("loadFirmware", bytes);
+    }
     terminal.clear();
     terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);
   } catch (err) {

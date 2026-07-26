@@ -9,6 +9,7 @@ import {
   type PlacedComponent,
 } from "../circuit.js";
 import { componentRegistry } from "../component-registry.js";
+import { componentElectricalParams, getElectricalValue } from "@physicalsim/common";
 import type { Viewport } from "./viewport.js";
 import { WiringLayer, type Wire } from "./wiring.js";
 
@@ -448,12 +449,37 @@ export class Scene {
       wrapper.classList.remove("dragging");
     };
 
+    // Edits a component's real electrical value (a resistor's ohms, a
+    // capacitor's farads - componentElectricalParams, @physicalsim/
+    // common) via a plain prompt() - the same "no property panel exists
+    // yet" posture psim-file.ts's Save-As name prompt already takes. A
+    // no-op for anything else on the canvas (componentElectricalParams
+    // has no entry for board types or non-electrical components, so
+    // `spec` is undefined and this returns before touching anything).
+    const onDoubleClick = (ev: MouseEvent): void => {
+      const spec = componentElectricalParams[entity.type];
+      if (!spec) return;
+      ev.stopPropagation();
+      const el = wrapper.firstElementChild as (HTMLElement & Record<string, unknown>) | null;
+      if (!el) return;
+      const component = entity as PlacedComponent;
+      const current = getElectricalValue(entity.type, component.attrs);
+      const input = window.prompt(`${spec.displayName} (${spec.unit}):`, String(current));
+      if (input === null) return; // cancelled
+      const parsed = Number(input);
+      if (!Number.isFinite(parsed) || parsed <= 0) return; // silently ignored, same as an unparseable saved value
+      component.attrs = { ...component.attrs, [spec.attrKey]: String(parsed) };
+      el[spec.attrKey] = String(parsed);
+    };
+
     wrapper.addEventListener("mousedown", onMouseDown);
+    wrapper.addEventListener("dblclick", onDoubleClick);
     window.addEventListener("mousemove", onMouseMove);
     window.addEventListener("mouseup", onMouseUp);
 
     return () => {
       wrapper.removeEventListener("mousedown", onMouseDown);
+      wrapper.removeEventListener("dblclick", onDoubleClick);
       window.removeEventListener("mousemove", onMouseMove);
       window.removeEventListener("mouseup", onMouseUp);
     };

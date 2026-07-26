@@ -98,6 +98,7 @@ export const componentRegistry: Record<string, ComponentDef> = {
     category: "connections",
   },
   resistor: { tagName: "wokwi-resistor", displayName: "Resistor", category: "connections" },
+  capacitor: { tagName: "wokwi-capacitor", displayName: "Capacitor", category: "connections" },
   potentiometer: {
     tagName: "wokwi-potentiometer",
     displayName: "Potentiometer",

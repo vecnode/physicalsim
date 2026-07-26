@@ -120,6 +120,7 @@ umbrella category, not a `@wokwi/elements` concept.
 | Stepper Motor | `wokwi-stepper-motor` |
 | Biaxial Stepper | `wokwi-biaxial-stepper` |
 | Resistor | `wokwi-resistor` |
+| Capacitor | `wokwi-capacitor` |
 | Potentiometer | `wokwi-potentiometer` |
 | Slide Potentiometer | `wokwi-slide-potentiometer` |
 | Pushbutton | `wokwi-pushbutton` |
@@ -134,6 +135,16 @@ umbrella category, not a `@wokwi/elements` concept.
 | Analog Joystick | `wokwi-analog-joystick` |
 | Rotary Encoder (KY-040) | `wokwi-ky-040` |
 | IR Remote | `wokwi-ir-remote` |
+
+Capacitor is the one entry above not vendored from upstream `wokwi/wokwi-
+elements` at all - neither that project nor this fork ships one (confirmed
+by checking the fork's own file list), so `simulators/wokwi-elements/src/
+capacitor-element.ts` is a small, original element authored directly in
+the fork, following the "Adding a new sensor or connection" workflow
+below. Its `value` property (a plain number or SI-suffixed string like
+"100n"/"10u") is read by `componentElectricalParams` (`web/common/src/
+circuit/component-electrical-params.ts`) for the analog netlist/solver -
+see ARCHITECTURE.md's "Signal chain" notes.
 
 ## Adding a new sensor or connection
 

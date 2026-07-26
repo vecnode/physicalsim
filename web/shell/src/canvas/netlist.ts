@@ -1,4 +1,4 @@
-import { getElectricalValue } from "@physicalsim/common";
+import { getElectricalTerminals, getElectricalValue } from "@physicalsim/common";
 import type { Wire } from "./wiring.js";
 import type { PinPowerInfo } from "./wire-validator.js";
 
@@ -56,12 +56,12 @@ export interface NetlistNode {
   fixedVoltage?: number;
 }
 
-export type NetlistElementKind = "resistor" | "capacitor";
+export type NetlistElementKind = "resistor" | "capacitor" | "led";
 
 export interface NetlistElement {
   componentId: string;
   kind: NetlistElementKind;
-  value: number; // ohms for a resistor, farads for a capacitor
+  value: number; // ohms for a resistor, farads for a capacitor, forward-voltage volts for an LED
   nodeA: string;
   nodeB: string;
 }
@@ -107,12 +107,13 @@ class UnionFind {
 }
 
 // Every component componentElectricalParams (@physicalsim/common) knows
-// about - ResistorElement/CapacitorElement - has exactly two electrical
-// terminals, always named "1"/"2" (see each element's own pinInfo). Not
-// a general "any of N pins" lookup (unlike componentSignalPins' role-
-// based matching) since neither part has a third terminal.
-const ELEMENT_PIN_A = "1";
-const ELEMENT_PIN_B = "2";
+// about has exactly two electrical terminals - "1"/"2" for
+// ResistorElement/CapacitorElement, "A"/"C" for an LED's real anode/
+// cathode names - resolved per component type via getElectricalTerminals()
+// rather than assumed, since they're not all named the same way. Not a
+// general "any of N pins" lookup (unlike componentSignalPins' role-based
+// matching) since no part here has a third terminal.
+const DEFAULT_TERMINALS: readonly [string, string] = ["1", "2"];
 
 export function buildNetlist(
   wires: readonly Wire[],
@@ -137,12 +138,13 @@ export function buildNetlist(
     uf.union(pinKey(wire.a.entityId, wire.a.pin), pinKey(wire.b.entityId, wire.b.pin));
   }
 
-  const electricalComponents: Array<{ entityId: string; kind: NetlistElementKind; value: number }> = [];
+  const electricalComponents: Array<{ entityId: string; kind: NetlistElementKind; value: number; terminals: readonly [string, string] }> = [];
   for (const [entityId, info] of entities) {
     if (info.kind !== "component") continue;
     const value = getElectricalValue(info.type, info.attrs);
     if (value === undefined) continue; // not an electrical component (most of the catalog)
-    electricalComponents.push({ entityId, kind: info.type as NetlistElementKind, value });
+    const terminals = getElectricalTerminals(info.type) ?? DEFAULT_TERMINALS;
+    electricalComponents.push({ entityId, kind: info.type as NetlistElementKind, value, terminals });
   }
 
   // Every pin that needs a node: every wire endpoint, plus every
@@ -154,8 +156,8 @@ export function buildNetlist(
     allPins.push({ entityId: wire.b.entityId, pin: wire.b.pin });
   }
   for (const c of electricalComponents) {
-    allPins.push({ entityId: c.entityId, pin: ELEMENT_PIN_A });
-    allPins.push({ entityId: c.entityId, pin: ELEMENT_PIN_B });
+    allPins.push({ entityId: c.entityId, pin: c.terminals[0] });
+    allPins.push({ entityId: c.entityId, pin: c.terminals[1] });
   }
 
   const groups = new Map<string, NetlistPinRef[]>();
@@ -197,8 +199,8 @@ export function buildNetlist(
     componentId: c.entityId,
     kind: c.kind,
     value: c.value,
-    nodeA: rootToId.get(uf.find(pinKey(c.entityId, ELEMENT_PIN_A)))!,
-    nodeB: rootToId.get(uf.find(pinKey(c.entityId, ELEMENT_PIN_B)))!,
+    nodeA: rootToId.get(uf.find(pinKey(c.entityId, c.terminals[0])))!,
+    nodeB: rootToId.get(uf.find(pinKey(c.entityId, c.terminals[1])))!,
   }));
 
   return { nodes, elements };

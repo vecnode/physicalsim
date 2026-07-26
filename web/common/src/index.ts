@@ -7,6 +7,7 @@ export * from "./circuit/components/led.js";
 export * from "./circuit/components/button.js";
 export * from "./circuit/component-signal-pin.js";
 export * from "./circuit/component-analog-pin.js";
+export * from "./circuit/component-electrical-params.js";
 export * from "./circuit/component-protocol-pin.js";
 export * from "./circuit/protocols/hd44780-decoder.js";
 export * from "./circuit/i2c-sub-device.js";

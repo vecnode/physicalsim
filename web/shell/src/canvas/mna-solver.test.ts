@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { solveDc } from "./mna-solver.js";
+import { solveDc, solveTransientStep } from "./mna-solver.js";
 import type { Netlist } from "./netlist.js";
 
 describe("solveDc", () => {
@@ -157,5 +157,104 @@ describe("solveDc", () => {
     };
     const { nodeVoltages } = solveDc(netlist);
     expect(nodeVoltages.get("mid")).toBeCloseTo(3, 2);
+  });
+});
+
+describe("solveTransientStep", () => {
+  it("an RC charging circuit tracks the closed-form exponential curve (V = Vs * (1 - e^-t/tau))", () => {
+    const R = 1000;
+    const C = 1e-6; // 1 microfarad
+    const tau = R * C; // 1ms
+    const Vsource = 5;
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "src", pins: [], isGround: false, fixedVoltage: Vsource },
+        { id: "cap", pins: [], isGround: false },
+      ],
+      elements: [
+        { componentId: "r1", kind: "resistor", value: R, nodeA: "src", nodeB: "cap" },
+        { componentId: "c1", kind: "capacitor", value: C, nodeA: "cap", nodeB: "gnd" },
+      ],
+    };
+
+    const dt = tau / 100; // small relative to tau - backward-Euler's O(dt) error stays tight
+    let voltages: ReadonlyMap<string, number | undefined> = new Map([["cap", 0]]); // starts uncharged
+    const steps = Math.round((tau * 5) / dt);
+    for (let i = 0; i < steps; i++) {
+      voltages = solveTransientStep(netlist, dt, voltages).nodeVoltages;
+    }
+
+    const expected = Vsource * (1 - Math.exp(-5)); // t = 5*tau
+    expect(voltages.get("cap")!).toBeCloseTo(expected, 1);
+  });
+
+  it("an RC discharging circuit (no source, just a charged capacitor and a resistor to ground) decays as V = V0 * e^-t/tau", () => {
+    const R = 1000;
+    const C = 1e-6;
+    const tau = R * C;
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "cap", pins: [], isGround: false },
+      ],
+      elements: [
+        { componentId: "r1", kind: "resistor", value: R, nodeA: "cap", nodeB: "gnd" },
+        { componentId: "c1", kind: "capacitor", value: C, nodeA: "cap", nodeB: "gnd" },
+      ],
+    };
+
+    const dt = tau / 100;
+    let voltages: ReadonlyMap<string, number | undefined> = new Map([["cap", 5]]); // starts charged to 5V
+    const steps = Math.round((tau * 3) / dt);
+    for (let i = 0; i < steps; i++) {
+      voltages = solveTransientStep(netlist, dt, voltages).nodeVoltages;
+    }
+
+    const expected = 5 * Math.exp(-3); // t = 3*tau
+    expect(voltages.get("cap")!).toBeCloseTo(expected, 1);
+  });
+
+  it("a capacitor with no discharge path holds its previous voltage exactly (ideal memory)", () => {
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "cap", pins: [], isGround: false },
+      ],
+      elements: [{ componentId: "c1", kind: "capacitor", value: 1e-6, nodeA: "cap", nodeB: "gnd" }],
+    };
+    const voltages = solveTransientStep(netlist, 1e-5, new Map([["cap", 3.3]])).nodeVoltages;
+    expect(voltages.get("cap")).toBeCloseTo(3.3);
+  });
+
+  it("treats a missing previous-voltage entry as an uncharged (0V) capacitor", () => {
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "cap", pins: [], isGround: false },
+      ],
+      elements: [{ componentId: "c1", kind: "capacitor", value: 1e-6, nodeA: "cap", nodeB: "gnd" }],
+    };
+    const voltages = solveTransientStep(netlist, 1e-5, new Map()).nodeVoltages;
+    expect(voltages.get("cap")).toBeCloseTo(0);
+  });
+
+  it("a capacitor (unlike solveDc) does create a conducting path - it's not treated as an open circuit here", () => {
+    // Same shape as solveDc's own "treats a capacitor as an open
+    // circuit" test - the opposite assertion, confirming the two
+    // functions genuinely differ in this one specific way.
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "src", pins: [], isGround: false, fixedVoltage: 5 },
+        { id: "reachedOnlyViaCapacitor", pins: [], isGround: false },
+      ],
+      elements: [
+        { componentId: "r1", kind: "resistor", value: 1000, nodeA: "src", nodeB: "gnd" },
+        { componentId: "c1", kind: "capacitor", value: 1e-7, nodeA: "src", nodeB: "reachedOnlyViaCapacitor" },
+      ],
+    };
+    const voltages = solveTransientStep(netlist, 1e-6, new Map()).nodeVoltages;
+    expect(voltages.get("reachedOnlyViaCapacitor")).not.toBeUndefined();
   });
 });

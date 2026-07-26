@@ -133,6 +133,17 @@ export class WiringLayer {
   // "VCC-vs-VCC voltage mismatch" are mutually exclusive per wire).
   private wireIssues = new Map<string, WireIssue>();
 
+  // Set by analog-net-chain.ts - the solved DC voltage at this wire's own
+  // node (a wire's two endpoints are always the same electrical node, by
+  // definition - see netlist.ts's own doc comment), shown as a hover
+  // tooltip. A separate map from wireIssues, not merged into it: this is
+  // informational, not a problem to flag, the same "two things that
+  // don't need to share a struct stay two things" split this project
+  // already uses elsewhere (circuit.ts/energy.ts, etc.). A wire with no
+  // entry (most of them, until the analog netlist actually resolves a
+  // voltage there) shows no voltage tooltip at all, not "0V".
+  private wireVoltages = new Map<string, number>();
+
   constructor(
     private readonly content: HTMLElement,
     private readonly getEntityFrame: (entityId: string) => EntityFrame | undefined,
@@ -223,6 +234,14 @@ export class WiringLayer {
   // than patching a stale one.
   setWireIssues(issues: readonly WireIssue[]): void {
     this.wireIssues = new Map(issues.map((issue) => [issue.wireId, issue]));
+    this.render();
+  }
+
+  // Replaces the whole voltage set and re-renders - same "always a fresh
+  // judgment, never patched incrementally" posture setWireIssues() takes,
+  // called by analog-net-chain.ts after every solve.
+  setWireVoltages(voltages: ReadonlyMap<string, number>): void {
+    this.wireVoltages = new Map(voltages);
     this.render();
   }
 
@@ -390,6 +409,7 @@ export class WiringLayer {
       if (!a || !b) continue;
       const selected = wire.id === this.selectedWireId;
       const issue = this.wireIssues.get(wire.id);
+      const voltage = this.wireVoltages.get(wire.id);
       const d = this.pathFor(a, b, wire);
 
       // A wide, invisible path for hit-testing (a 2px visible stroke is
@@ -433,12 +453,19 @@ export class WiringLayer {
       // happens to be set to.
       visible.style.stroke = selected ? "#ffffff" : issue ? WIRE_ISSUE_COLOR[issue.severity] : this.color;
 
-      if (issue) {
-        // A native SVG tooltip - hovering the wire shows exactly what's
-        // wrong, the same message a validation-summary UI would show,
-        // without needing one yet.
+      if (issue || voltage !== undefined) {
+        // A native SVG tooltip - hovering the wire shows the validation
+        // issue (if any) and/or the solved DC voltage at this wire's own
+        // node (analog-net-chain.ts), the same message a dedicated
+        // validation/voltage-summary UI would show, without needing one
+        // yet. Both can be present at once (a shorted wire still has
+        // *some* solved voltage, usually 0V) - shown as two lines, issue
+        // first since it's the more urgent of the two.
         const title = document.createElementNS(SVG_NS, "title");
-        title.textContent = issue.message;
+        const lines: string[] = [];
+        if (issue) lines.push(issue.message);
+        if (voltage !== undefined) lines.push(`${voltage.toFixed(2)} V`);
+        title.textContent = lines.join("\n");
         visible.appendChild(title);
       }
 

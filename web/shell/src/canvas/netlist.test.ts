@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNetlist, type NetlistEntityInfo } from "./netlist.js";
+import { buildNetlist, findNodeForPin, type NetlistEntityInfo } from "./netlist.js";
 import type { Wire } from "./wiring.js";
 import type { PinPowerInfo } from "./wire-validator.js";
 
@@ -190,5 +190,55 @@ describe("buildNetlist", () => {
       power({}),
     );
     expect(netlist.elements[0].value).toBe(1000);
+  });
+
+  it("a runtime voltage (a firmware-driven GPIO output) sets fixedVoltage on that node", () => {
+    const wires = [wire("w1", "uno", "13", "r1", "1")];
+    const netlist = buildNetlist(
+      wires,
+      entities({
+        uno: { kind: "board", type: "arduino-uno" },
+        r1: { kind: "component", type: "resistor", attrs: { value: "1000" } },
+      }),
+      power({}),
+      (entityId, pin) => (entityId === "uno" && pin === "13" ? 5 : undefined),
+    );
+    expect(nodeOf(netlist, "uno", "13")!.fixedVoltage).toBe(5);
+  });
+
+  it("a runtime voltage takes priority over a static VCC classification on the same node", () => {
+    const wires = [wire("w1", "uno", "5V", "r1", "1")];
+    const netlist = buildNetlist(
+      wires,
+      entities({
+        uno: { kind: "board", type: "arduino-uno" },
+        r1: { kind: "component", type: "resistor", attrs: { value: "1000" } },
+      }),
+      power({ "uno:5V": { kind: "vcc", voltage: 5 } }),
+      (entityId, pin) => (entityId === "uno" && pin === "5V" ? 3.7 : undefined),
+    );
+    expect(nodeOf(netlist, "uno", "5V")!.fixedVoltage).toBe(3.7);
+  });
+});
+
+describe("findNodeForPin", () => {
+  it("finds the node a given pin ended up grouped into", () => {
+    const wires = [wire("w1", "r1", "1", "uno", "13")];
+    const netlist = buildNetlist(
+      wires,
+      entities({
+        uno: { kind: "board", type: "arduino-uno" },
+        r1: { kind: "component", type: "resistor", attrs: { value: "1000" } },
+      }),
+      power({}),
+    );
+    const node = findNodeForPin(netlist, "uno", "13");
+    expect(node).toBeDefined();
+    expect(node!.pins.some((p) => p.entityId === "r1" && p.pin === "1")).toBe(true);
+  });
+
+  it("returns undefined for a pin that isn't part of the netlist at all", () => {
+    const netlist = buildNetlist([], entities({}), power({}));
+    expect(findNodeForPin(netlist, "nonexistent", "1")).toBeUndefined();
   });
 });

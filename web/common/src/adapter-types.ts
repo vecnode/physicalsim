@@ -1,5 +1,7 @@
 // Shared contract between the shell UI and every simulator adapter worker.
 
+export type PinDirection = "input" | "output";
+
 export interface SimState {
   running: boolean;
   cycles: number;
@@ -20,6 +22,18 @@ export interface SimulatorAdapter {
   readPin?(pin: string): number | undefined;
   writePin?(pin: string, value: number): void;
   onPinChange?(pin: string, cb: (value: number) => void): () => void;
+  // Whether a pin is currently configured as a firmware-driven output or
+  // a (possibly externally-driven) input - readPin?/writePin? alone
+  // don't distinguish these, and the analog netlist/solver (web/shell's
+  // canvas/netlist.ts + mna-solver.ts) needs to know: an output pin
+  // driving HIGH/LOW is a real, if small, voltage source for the
+  // circuit it's wired into; an input pin is high-impedance, just
+  // another node. Optional and adapter-specific in how it's determined
+  // (avr8: the port's real DDR register bit; rp2040: GPIOPin's own
+  // outputEnable) - not every adapter kind can answer this (cortex-m's
+  // QEMU bridge has no working pin I/O at all yet, see readPin's own
+  // "Why cortex-m has no real pin I/O" note in ARCHITECTURE.md).
+  readPinDirection?(pin: string): PinDirection | undefined;
   // Analog input - separate from readPin?/writePin? (which are always
   // digital 0/1) because an ADC channel is fed a continuous voltage, not
   // a bit. "pin" is the same adapter-level pin id writePin? uses (e.g.
@@ -69,6 +83,7 @@ export type AdapterMethod =
   | "step"
   | "reset"
   | "readPin"
+  | "readPinDirection"
   | "writePin"
   | "writeAnalogPin"
   | "subscribePin"

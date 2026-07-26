@@ -71,6 +71,20 @@ describe("Rp2040Adapter pin I/O", () => {
     expect(cb).toHaveBeenLastCalledWith(0);
   });
 
+  it("readPinDirection reports input by default (real hardware reset state) and output once firmware enables it via SIO", () => {
+    expect(adapter.readPinDirection("GP25")).toBe("input");
+
+    const mcu = mcuOf(adapter);
+    const bit = 1 << 25;
+    mcu.gpio[25].ctrl = FUNCTION_SIO;
+    mcu.sio.gpioOutputEnable |= bit;
+    mcu.gpio[25].checkForUpdates();
+
+    expect(adapter.readPinDirection("GP25")).toBe("output");
+    // A different, untouched pin stays input - direction is per-pin.
+    expect(adapter.readPinDirection("GP2")).toBe("input");
+  });
+
   it("resolvePin rejects malformed or out-of-range pin ids", () => {
     expect(() => adapter.readPin("B5")).toThrow();
     expect(() => adapter.readPin("GP99")).toThrow();

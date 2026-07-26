@@ -118,6 +118,19 @@ export function buildNetlist(
   wires: readonly Wire[],
   entities: ReadonlyMap<string, NetlistEntityInfo>,
   getPinPower: (entityId: string, pin: string) => PinPowerInfo | undefined,
+  // Optional (M5 of the analog signal-chain roadmap): a firmware-driven
+  // GPIO output pin is a real, if runtime-determined, voltage source -
+  // something pinPowerInfo's static @wokwi/elements metadata alone can
+  // never know (a plain GPIO pin's signals array is empty; direction and
+  // level only exist at runtime, inside a running adapter). Callers that
+  // can resolve this (analog-net-chain.ts polls the adapter for it) pass
+  // it here so it merges into node.fixedVoltage the same way a static
+  // VCC pin already does; callers that can't (or a purely static
+  // analysis, like every M1-M4 test) simply omit it. Takes priority over
+  // a static VCC classification on the same node if both are somehow
+  // present, since a live-firmware-driven value is more current than
+  // whatever the element's own pinInfo declares.
+  getRuntimeVoltage?: (entityId: string, pin: string) => number | undefined,
 ): Netlist {
   const uf = new UnionFind();
   for (const wire of wires) {
@@ -164,9 +177,12 @@ export function buildNetlist(
     let fixedVoltage: number | undefined;
     for (const p of pins) {
       const power = getPinPower(p.entityId, p.pin);
-      if (!power) continue;
-      if (power.kind === "gnd") isGround = true;
-      if (power.kind === "vcc" && power.voltage !== undefined) fixedVoltage = power.voltage;
+      if (power) {
+        if (power.kind === "gnd") isGround = true;
+        if (power.kind === "vcc" && power.voltage !== undefined) fixedVoltage = power.voltage;
+      }
+      const runtimeVoltage = getRuntimeVoltage?.(p.entityId, p.pin);
+      if (runtimeVoltage !== undefined) fixedVoltage = runtimeVoltage;
     }
     // Ids are always sequential, never a shared "gnd" string - two
     // electrically separate grounded subgraphs are two different nodes
@@ -186,4 +202,14 @@ export function buildNetlist(
   }));
 
   return { nodes, elements };
+}
+
+// Finds which node a given pin ended up in - the counterpart callers need
+// to map a Wire's own two endpoints (which, by definition, are always the
+// same node - that's what a wire *is*) back to a solved voltage. A linear
+// scan, not a lookup table returned from buildNetlist() itself: node/pin
+// counts here are always small (this app's whole canvas, not an
+// arbitrary graph), so a second table just for this would be premature.
+export function findNodeForPin(netlist: Netlist, entityId: string, pin: string): NetlistNode | undefined {
+  return netlist.nodes.find((n) => n.pins.some((p) => p.entityId === entityId && p.pin === pin));
 }

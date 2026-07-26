@@ -6,6 +6,7 @@ import { SignalChain } from "./signal-chain.js";
 import { ProtocolChain } from "./protocol-chain.js";
 import { AnalogChain } from "./analog-chain.js";
 import { WireValidation } from "./wire-validation.js";
+import { AnalogNetChain } from "./analog-net-chain.js";
 import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
@@ -196,6 +197,17 @@ new AnalogChain(canvas.scene, getAdapterClient);
 // made. Constructed once, the same "subscribes to onWiresChanged() and
 // needs nothing further from this file" shape - see wire-validation.ts.
 new WireValidation(canvas.scene);
+
+// The analog netlist/solver (canvas/netlist.ts + canvas/mna-solver.ts) -
+// M5 of the signal-chain roadmap: resolves a real DC netlist from
+// whatever's placed/wired, including firmware-driven GPIO output pins as
+// real voltage sources, and shows the solved voltage as a hover tooltip
+// on each wire. Recomputes on wire changes and on its own polling timer
+// (not just onWiresChanged, unlike the other chains above - a GPIO
+// pin's level can change continuously while a board runs). See
+// analog-net-chain.ts's own doc comment for what's still DC-only (no
+// live transient/capacitor animation yet).
+new AnalogNetChain(canvas.scene, getAdapterClient);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop

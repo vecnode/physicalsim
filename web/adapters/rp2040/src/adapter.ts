@@ -143,6 +143,15 @@ export class Rp2040Adapter implements SimulatorAdapter {
     return this.effectiveValue(gpio) ? 1 : 0;
   }
 
+  // GPIOPin's own outputEnable getter (gpio-pin.ts) - real RP0/RP1 pad
+  // output-enable state, true once firmware calls gpio_set_dir(pin,
+  // GPIO_OUT) (or gpio_init() defaults it - real hardware resets to
+  // input), false otherwise. No separate tracking needed, same reasoning
+  // as avr8's own readPinDirection() reading DDR directly.
+  readPinDirection(pin: string): "input" | "output" {
+    return this.resolvePin(pin).outputEnable ? "output" : "input";
+  }
+
   writePin(pin: string, value: number): void {
     const gpio = this.resolvePin(pin);
     // Real firmware enables a pad's input path explicitly (gpio_init())

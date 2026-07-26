@@ -159,6 +159,19 @@ export class Avr8Adapter implements SimulatorAdapter {
     return (this.cpu.data[port.portConfig.PIN] >> bit) & 1;
   }
 
+  // The real DDR (Data Direction Register) bit for this pin - 1 means
+  // the CPU has configured it as an output (pinMode(pin, OUTPUT)), 0
+  // means input (the DDR's own real, hardware reset-default state,
+  // matching every AVR pin defaulting to input until firmware says
+  // otherwise). Read directly from the same register writePin/readPin
+  // already resolve through resolvePin() - no separate tracking needed,
+  // since avr8js's AVRIOPort already models DDR as a real CPU-visible
+  // register.
+  readPinDirection(pin: string): "input" | "output" {
+    const { port, bit } = this.resolvePin(pin);
+    return ((this.cpu.data[port.portConfig.DDR] >> bit) & 1) ? "output" : "input";
+  }
+
   writePin(pin: string, value: number): void {
     const { port, bit } = this.resolvePin(pin);
     port.setPin(bit, !!value);

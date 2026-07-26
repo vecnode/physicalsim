@@ -58,6 +58,12 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
           }
           result = adapter.readPin((params as ReadPinParams).pin);
           break;
+        case "readPinDirection":
+          if (!adapter.readPinDirection) {
+            throw new Error(`Adapter "${adapter.id}" does not support readPinDirection`);
+          }
+          result = adapter.readPinDirection((params as ReadPinParams).pin);
+          break;
         case "writePin":
           if (!adapter.writePin) {
             throw new Error(`Adapter "${adapter.id}" does not support writePin`);

@@ -55,6 +55,17 @@ describe("Avr8Adapter pin I/O", () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
+  it("readPinDirection reports input by default (DDR's real hardware reset state) and output once DDR is set", () => {
+    expect(adapter.readPinDirection("B5")).toBe("input");
+    const cpu = cpuOf(adapter);
+    const ddr = portBOf(adapter).portConfig.DDR;
+    cpu.writeData(ddr, 1 << 5); // pinMode(13, OUTPUT) compiles down to exactly this
+    expect(adapter.readPinDirection("B5")).toBe("output");
+    // A different bit on the same DDR register stays input - direction
+    // is per-pin, not a whole-port toggle.
+    expect(adapter.readPinDirection("B4")).toBe("input");
+  });
+
   it("onPinChange fires when the CPU drives an output pin (simulated firmware write)", () => {
     const cb = vi.fn();
     adapter.onPinChange("B5", cb);

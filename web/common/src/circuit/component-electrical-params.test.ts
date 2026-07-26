@@ -8,8 +8,19 @@ describe("componentElectricalParams", () => {
       displayName: "Resistance",
       unit: "ohm",
       defaultValue: 1000,
+      terminals: ["1", "2"],
     });
     expect(componentElectricalParams.capacitor.unit).toBe("F");
+  });
+
+  it("registers an LED with a forward-voltage default and its real anode/cathode terminal names", () => {
+    expect(componentElectricalParams.led).toEqual({
+      attrKey: "forwardVoltage",
+      displayName: "Forward voltage",
+      unit: "V",
+      defaultValue: 2,
+      terminals: ["A", "C"],
+    });
   });
 });
 
@@ -40,6 +51,11 @@ describe("getElectricalValue", () => {
   });
 
   it("returns undefined for a component type with no electrical param at all", () => {
-    expect(getElectricalValue("led", { value: "123" })).toBeUndefined();
+    expect(getElectricalValue("pushbutton", { value: "123" })).toBeUndefined();
+  });
+
+  it("reads an LED's forward-voltage attr, defaulting to 2V", () => {
+    expect(getElectricalValue("led", { forwardVoltage: "1.8" })).toBeCloseTo(1.8);
+    expect(getElectricalValue("led", undefined)).toBe(2);
   });
 });

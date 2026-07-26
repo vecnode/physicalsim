@@ -5,9 +5,10 @@ import type { Netlist, NetlistElement, NetlistNode } from "./netlist.js";
 // small, tens not thousands, so no sparse solver is warranted). Two
 // entry points share the same core (solveNetwork() below):
 //
-// - solveDc() - steady-state DC. Only resistors conduct; a capacitor is
-//   an open circuit, its real, textbook-correct behavior in DC steady
-//   state (a charged capacitor blocks DC current), not a simplification.
+// - solveDc() - steady-state DC. Only resistors (and, per below, LEDs)
+//   conduct; a capacitor is an open circuit, its real, textbook-correct
+//   behavior in DC steady state (a charged capacitor blocks DC current),
+//   not a simplification.
 // - solveTransientStep() - one fixed-timestep backward-Euler step (M4 of
 //   the analog signal-chain roadmap - see ARCHITECTURE.md's "Signal
 //   chain" plan): a capacitor becomes a companion conductance (C/dt) in
@@ -15,6 +16,11 @@ import type { Netlist, NetlistElement, NetlistNode } from "./netlist.js";
 //   voltage across it - the standard implicit-integration treatment,
 //   stamped fresh every call (no state kept in this file; the caller
 //   owns the voltage history and timestep cadence).
+//
+// An LED is genuinely nonlinear (its real I-V curve is exponential), and
+// this file deliberately doesn't implement a Newton-Raphson loop to
+// convergence for it - see stampLeds()'s own doc comment for the
+// two-pass piecewise-linear approximation used instead.
 //
 // A fixed-voltage node (netlist.ts's NetlistNode.fixedVoltage) only means
 // something relative to a ground reference. Both entry points partition
@@ -46,11 +52,70 @@ interface StampedEdge {
   sourceCurrent: number;
 }
 
-export function solveDc(netlist: Netlist): DcSolution {
-  const edges: StampedEdge[] = netlist.elements
+// LED companion-model constants (see stampLeds()). LED_ON_RESISTANCE_OHMS
+// is a typical small-signal dynamic resistance once a real LED is
+// conducting above its forward-voltage knee - not zero (a real diode
+// isn't an ideal switch) but small enough that a series current-limiting
+// resistor still dominates the divider, exactly like a real circuit.
+// LED_OFF_CONDUCTANCE is "not quite an open circuit" (a literal 0 would
+// risk an isolated/singular node in gaussianSolve()) while still being
+// negligible next to any real resistor value this app's examples use.
+const LED_ON_RESISTANCE_OHMS = 10;
+const LED_OFF_CONDUCTANCE = 1e-9;
+
+function stampResistors(elements: readonly NetlistElement[]): StampedEdge[] {
+  return elements
     .filter((e): e is NetlistElement & { kind: "resistor" } => e.kind === "resistor")
     .map((r) => ({ nodeA: r.nodeA, nodeB: r.nodeB, conductance: 1 / r.value, sourceCurrent: 0 }));
-  return { nodeVoltages: solveNetwork(netlist.nodes, edges) };
+}
+
+function voltageAcross(voltages: ReadonlyMap<string, number | undefined>, nodeA: string, nodeB: string): number {
+  return (voltages.get(nodeA) ?? 0) - (voltages.get(nodeB) ?? 0);
+}
+
+// An LED as a two-segment piecewise-linear diode: below its forward-
+// voltage threshold (e.value) it's LED_OFF_CONDUCTANCE (dark, effectively
+// open); at or above it, it's a small on-resistance in series with an
+// ideal `e.value`-volt drop, expressed the same way the capacitor's own
+// companion model already is here (a conductance stamp plus a current
+// source: G*e.value reproduces exactly a `value`-volt drop across
+// LED_ON_RESISTANCE_OHMS once conducting). Which segment applies depends
+// on the very voltage this element hasn't solved yet - the classic
+// diode chicken-and-egg problem a real SPICE engine resolves with
+// Newton-Raphson iteration to numerical convergence. This file instead
+// takes `guessVoltage` from the caller (0V, i.e. "assume off", for a
+// first pass; the first pass's own solved answer for a second) - one
+// re-linearization is enough to get the right segment for the steady,
+// non-borderline states a GPIO pin driving an LED actually produces
+// (comfortably above or below the threshold, never balanced exactly on
+// it), without the added complexity of iterating to a convergence
+// tolerance.
+function stampLed(e: NetlistElement, guessVoltage: number): StampedEdge {
+  const forwardVoltage = e.value;
+  if (guessVoltage >= forwardVoltage) {
+    const conductance = 1 / LED_ON_RESISTANCE_OHMS;
+    return { nodeA: e.nodeA, nodeB: e.nodeB, conductance, sourceCurrent: conductance * forwardVoltage };
+  }
+  return { nodeA: e.nodeA, nodeB: e.nodeB, conductance: LED_OFF_CONDUCTANCE, sourceCurrent: 0 };
+}
+
+// Resolves every LED in `netlist` against `baseEdges` (whatever resistor/
+// capacitor edges the caller already stamped) via the two-pass
+// re-linearization stampLed() itself documents. Returns the same
+// Map<string, number | undefined> shape solveNetwork() always does;
+// callers with no LEDs at all skip straight to a single solveNetwork()
+// call instead (there's nothing to re-linearize).
+function solveWithLeds(nodes: Netlist["nodes"], baseEdges: readonly StampedEdge[], leds: readonly NetlistElement[]): Map<string, number | undefined> {
+  if (leds.length === 0) return solveNetwork(nodes, baseEdges);
+  const pass1 = solveNetwork(nodes, [...baseEdges, ...leds.map((e) => stampLed(e, 0))]);
+  const pass2Edges = [...baseEdges, ...leds.map((e) => stampLed(e, voltageAcross(pass1, e.nodeA, e.nodeB)))];
+  return solveNetwork(nodes, pass2Edges);
+}
+
+export function solveDc(netlist: Netlist): DcSolution {
+  const resistorEdges = stampResistors(netlist.elements);
+  const leds = netlist.elements.filter((e) => e.kind === "led");
+  return { nodeVoltages: solveWithLeds(netlist.nodes, resistorEdges, leds) };
 }
 
 // One backward-Euler step at a fixed timestep `dt` (seconds). Every
@@ -72,9 +137,14 @@ export function solveTransientStep(
   const voltageAt = (nodeId: string): number => previousVoltages.get(nodeId) ?? 0;
 
   const edges: StampedEdge[] = [];
+  const leds: NetlistElement[] = [];
   for (const e of netlist.elements) {
     if (e.kind === "resistor") {
       edges.push({ nodeA: e.nodeA, nodeB: e.nodeB, conductance: 1 / e.value, sourceCurrent: 0 });
+      continue;
+    }
+    if (e.kind === "led") {
+      leds.push(e); // resolved below, alongside solveDc()'s own LED handling - not a companion model of its own
       continue;
     }
     // Capacitor, backward-Euler companion model: G_eq = C/dt, in
@@ -88,7 +158,7 @@ export function solveTransientStep(
     const vPrev = voltageAt(e.nodeA) - voltageAt(e.nodeB);
     edges.push({ nodeA: e.nodeA, nodeB: e.nodeB, conductance, sourceCurrent: conductance * vPrev });
   }
-  return { nodeVoltages: solveNetwork(netlist.nodes, edges) };
+  return { nodeVoltages: solveWithLeds(netlist.nodes, edges, leds) };
 }
 
 function solveNetwork(nodes: readonly NetlistNode[], edges: readonly StampedEdge[]): Map<string, number | undefined> {

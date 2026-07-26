@@ -37,6 +37,7 @@ const statePc = document.getElementById("state-pc") as HTMLElement;
 const energyVoltage = document.getElementById("energy-voltage") as HTMLElement;
 const energyCurrent = document.getElementById("energy-current") as HTMLElement;
 const energyPower = document.getElementById("energy-power") as HTMLElement;
+const solvedVoltageList = document.getElementById("solved-voltage-list") as HTMLElement;
 
 // -----------------------------------------------------------------------
 // Canvas (tab 1): everything about placing/dragging/wiring boards and
@@ -205,9 +206,46 @@ new WireValidation(canvas.scene);
 // on each wire. Recomputes on wire changes and on its own polling timer
 // (not just onWiresChanged, unlike the other chains above - a GPIO
 // pin's level can change continuously while a board runs). See
-// analog-net-chain.ts's own doc comment for what's still DC-only (no
-// live transient/capacitor animation yet).
-new AnalogNetChain(canvas.scene, getAdapterClient);
+// analog-net-chain.ts's own doc comment.
+const analogNetChain = new AnalogNetChain(canvas.scene, getAdapterClient);
+
+// A component's placed type, for a friendlier persistent-readout label
+// than its raw entityId (e.g. "led" instead of "c4f2a9...") - board or
+// component, whichever this id actually is.
+function labelForEntity(entityId: string): string {
+  const board = canvas.scene.circuit.boards.find((b) => b.id === entityId);
+  if (board) return board.type;
+  const component = canvas.scene.circuit.components.find((c) => c.id === entityId);
+  return component?.type ?? entityId;
+}
+
+// Rebuilds index.html's #solved-voltage-list wholesale from the latest
+// solve - called on every AnalogNetChain recompute (see
+// onVoltagesChanged() below), so it never keeps a stale entry from wiring
+// that's since changed (a stale wireId simply won't be in the new map).
+function renderSolvedVoltages(wireVoltages: ReadonlyMap<string, number>): void {
+  solvedVoltageList.replaceChildren();
+  if (wireVoltages.size === 0) {
+    const dt = document.createElement("dt");
+    dt.textContent = "solved";
+    const dd = document.createElement("dd");
+    dd.textContent = "no solved circuit yet";
+    solvedVoltageList.append(dt, dd);
+    return;
+  }
+  const wires = canvas.scene.wiring.getWires();
+  for (const [wireId, voltage] of wireVoltages) {
+    const wire = wires.find((w) => w.id === wireId);
+    if (!wire) continue;
+    const dt = document.createElement("dt");
+    dt.textContent = `${labelForEntity(wire.a.entityId)}.${wire.a.pin}`;
+    const dd = document.createElement("dd");
+    dd.textContent = `${voltage.toFixed(2)} V`;
+    solvedVoltageList.append(dt, dd);
+  }
+}
+
+analogNetChain.onVoltagesChanged(renderSolvedVoltages);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop

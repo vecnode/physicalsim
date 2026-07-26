@@ -26,11 +26,27 @@ export interface ComponentElectricalParam {
   // the right-click menu, which passes no attrs - see circuit.ts's
   // createComponent()) or an unparseable one.
   defaultValue: number;
+  // The component's own two electrical terminal pin names, exactly as
+  // wiring.connect() refs it - "1"/"2" for a plain two-lead part
+  // (ResistorElement/CapacitorElement, both generic @wokwi/elements
+  // terminals), but "A"/"C" for an LED (wokwi-led's real anode/cathode
+  // silkscreen names - see every wiring.connect(..., { pin: "A" | "C" })
+  // call already in main.ts's EXAMPLES table). netlist.ts reads this
+  // instead of assuming every electrical component shares the same "1"/"2"
+  // naming.
+  terminals: readonly [string, string];
 }
 
 export const componentElectricalParams: Record<string, ComponentElectricalParam> = {
-  resistor: { attrKey: "value", displayName: "Resistance", unit: "ohm", defaultValue: 1000 },
-  capacitor: { attrKey: "value", displayName: "Capacitance", unit: "F", defaultValue: 1e-7 },
+  resistor: { attrKey: "value", displayName: "Resistance", unit: "ohm", defaultValue: 1000, terminals: ["1", "2"] },
+  capacitor: { attrKey: "value", displayName: "Capacitance", unit: "F", defaultValue: 1e-7, terminals: ["1", "2"] },
+  // "value" here is a forward-voltage threshold in volts, not a
+  // resistance/capacitance - NetlistElement.value's own doc comment
+  // (netlist.ts) documents this third meaning. 2V is a typical red/green
+  // LED Vf (a real blue/white LED's is closer to 3V, but this is a
+  // starting default the same way resistor's 1000ohm/capacitor's 100nF
+  // are - not a claim about any specific placed LED's real color).
+  led: { attrKey: "forwardVoltage", displayName: "Forward voltage", unit: "V", defaultValue: 2, terminals: ["A", "C"] },
 };
 
 // Resolves a placed component's real electrical value - `attrs` missing
@@ -46,4 +62,12 @@ export function getElectricalValue(componentType: string, attrs: Record<string, 
   const raw = attrs?.[spec.attrKey];
   const parsed = raw !== undefined ? Number(raw) : NaN;
   return Number.isFinite(parsed) && parsed > 0 ? parsed : spec.defaultValue;
+}
+
+// The counterpart lookup for a component type's own two terminal pin
+// names (see ComponentElectricalParam.terminals' own doc comment).
+// Returns undefined for the same "not an electrical component" case
+// getElectricalValue() does - callers already gate on that together.
+export function getElectricalTerminals(componentType: string): readonly [string, string] | undefined {
+  return componentElectricalParams[componentType]?.terminals;
 }

@@ -158,6 +158,48 @@ describe("solveDc", () => {
     const { nodeVoltages } = solveDc(netlist);
     expect(nodeVoltages.get("mid")).toBeCloseTo(3, 2);
   });
+
+  it("an LED driven well above its forward voltage through a current-limiting resistor conducts, dropping close to its forward voltage", () => {
+    // 5V --- R(220) --- anode --[LED, Vf=2V]-- cathode --- GND
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "src", pins: [], isGround: false, fixedVoltage: 5 },
+        { id: "anode", pins: [], isGround: false },
+      ],
+      elements: [
+        { componentId: "r1", kind: "resistor", value: 220, nodeA: "src", nodeB: "anode" },
+        { componentId: "led1", kind: "led", value: 2, nodeA: "anode", nodeB: "gnd" },
+      ],
+    };
+    const { nodeVoltages } = solveDc(netlist);
+    // The anode should land close to the LED's own forward voltage (2V) -
+    // comfortably above the 0V it would be if the LED were still being
+    // stamped as off (no source current), and comfortably below the
+    // ~4.9V it would be if it were stamped as a plain high resistance
+    // never re-linearized upward.
+    expect(nodeVoltages.get("anode")!).toBeGreaterThan(1.9);
+    expect(nodeVoltages.get("anode")!).toBeLessThan(2.5);
+  });
+
+  it("an LED driven by a source voltage below its forward voltage stays off (dark), not clamped up to the threshold", () => {
+    // 1V is not enough to forward-bias a 2V-Vf LED - it should stay dark,
+    // the anode sitting near the source voltage (no significant current
+    // flowing through the LED's own off-state near-open conductance).
+    const netlist: Netlist = {
+      nodes: [
+        { id: "gnd", pins: [], isGround: true },
+        { id: "src", pins: [], isGround: false, fixedVoltage: 1 },
+        { id: "anode", pins: [], isGround: false },
+      ],
+      elements: [
+        { componentId: "r1", kind: "resistor", value: 220, nodeA: "src", nodeB: "anode" },
+        { componentId: "led1", kind: "led", value: 2, nodeA: "anode", nodeB: "gnd" },
+      ],
+    };
+    const { nodeVoltages } = solveDc(netlist);
+    expect(nodeVoltages.get("anode")!).toBeCloseTo(1, 1);
+  });
 });
 
 describe("solveTransientStep", () => {

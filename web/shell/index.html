@@ -193,6 +193,25 @@
                   <dt>current</dt><dd id="energy-current">0 mA</dd>
                   <dt>power</dt><dd id="energy-power">0 mW</dd>
                 </dl>
+
+                <!--
+                  Real solved node voltages (canvas/mna-solver.ts, via
+                  analog-net-chain.ts's onVoltagesChanged()) - a third,
+                  separate model from both readouts above: unlike the
+                  energy model, this is a genuine circuit-topology solve;
+                  unlike the hover-only hint wiring.ts's own tooltip gives,
+                  this stays visible without needing to point at a wire
+                  first. Only ever lists a wire whose node actually
+                  resolved (a real ground reachable in its connected
+                  subgraph - most of EXAMPLES' bare LED-to-GPIO wiring,
+                  with no ground return, never does) - main.ts's own
+                  renderSolvedVoltages() replaces this list wholesale on
+                  every recompute, so it never accumulates stale entries
+                  from wiring that's since changed.
+                -->
+                <dl id="solved-voltage-list" class="readout">
+                  <dt>solved</dt><dd id="solved-voltage-status">no solved circuit yet</dd>
+                </dl>
               </section>
 
               <!-- Pinned bottom-right of the canvas, stacked: minimap on

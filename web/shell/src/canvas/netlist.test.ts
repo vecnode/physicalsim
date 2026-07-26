@@ -171,7 +171,19 @@ describe("buildNetlist", () => {
     expect(node.fixedVoltage).toBeUndefined();
   });
 
-  it("skips components with no electrical param entry (e.g. an LED)", () => {
+  it("skips components with no electrical param entry (e.g. a pushbutton)", () => {
+    const netlist = buildNetlist(
+      [wire("w1", "btn1", "1.l", "uno", "13")],
+      entities({
+        uno: { kind: "board", type: "arduino-uno" },
+        btn1: { kind: "component", type: "pushbutton" },
+      }),
+      power({}),
+    );
+    expect(netlist.elements).toHaveLength(0);
+  });
+
+  it("resolves an LED into one element using its real anode/cathode terminal names, not \"1\"/\"2\"", () => {
     const netlist = buildNetlist(
       [wire("w1", "led1", "A", "uno", "13")],
       entities({
@@ -180,7 +192,14 @@ describe("buildNetlist", () => {
       }),
       power({}),
     );
-    expect(netlist.elements).toHaveLength(0);
+    expect(netlist.elements).toHaveLength(1);
+    expect(netlist.elements[0]).toMatchObject({ componentId: "led1", kind: "led", value: 2 });
+    // The anode (wired to the board pin) and cathode (left floating, but
+    // still its own real node - see the "fully unwired resistor" test
+    // above) must resolve to two distinct nodes.
+    expect(netlist.elements[0].nodeA).not.toBe(netlist.elements[0].nodeB);
+    expect(nodeOf(netlist, "led1", "A")?.id).toBe(netlist.elements[0].nodeA);
+    expect(nodeOf(netlist, "led1", "C")?.id).toBe(netlist.elements[0].nodeB);
   });
 
   it("falls back to the resistor default value when attrs has none set", () => {

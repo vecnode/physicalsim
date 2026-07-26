@@ -1,40 +1,105 @@
-import type { Netlist, NetlistElement } from "./netlist.js";
+import type { Netlist, NetlistElement, NetlistNode } from "./netlist.js";
 
-// Solves a netlist's resistive DC steady state via Modified Nodal
-// Analysis - dense Gaussian elimination with partial pivoting (component
-// counts here are always small, tens not thousands, so no sparse solver
-// is warranted). DC-only for now (M3 of the analog signal-chain roadmap -
-// see ARCHITECTURE.md's "Signal chain" plan): capacitors are treated as
-// open circuits here, which is their real, textbook-correct behavior in
-// DC steady state (a charged capacitor blocks DC current), not a
-// simplification - M4 adds their actual transient (backward-Euler)
-// behavior for a running, time-stepped solve.
+// Solves a netlist via Modified Nodal Analysis - dense Gaussian
+// elimination with partial pivoting (component counts here are always
+// small, tens not thousands, so no sparse solver is warranted). Two
+// entry points share the same core (solveNetwork() below):
+//
+// - solveDc() - steady-state DC. Only resistors conduct; a capacitor is
+//   an open circuit, its real, textbook-correct behavior in DC steady
+//   state (a charged capacitor blocks DC current), not a simplification.
+// - solveTransientStep() - one fixed-timestep backward-Euler step (M4 of
+//   the analog signal-chain roadmap - see ARCHITECTURE.md's "Signal
+//   chain" plan): a capacitor becomes a companion conductance (C/dt) in
+//   parallel with a current source derived from the *previous* step's
+//   voltage across it - the standard implicit-integration treatment,
+//   stamped fresh every call (no state kept in this file; the caller
+//   owns the voltage history and timestep cadence).
 //
 // A fixed-voltage node (netlist.ts's NetlistNode.fixedVoltage) only means
-// something relative to a ground reference. Rather than assume the whole
-// netlist shares one, this partitions it into connected components first
-// (nodes joined by at least one resistor path - see doc comment above on
-// why capacitors don't create an edge here) and solves each
-// independently: a component with a ground node solves normally with
-// that as its 0V reference; a component with no ground node in it at all
-// (a resistor network dangling off nothing, or an entirely separate
-// unwired sub-circuit) has every one of its node voltages reported as
-// undefined, rather than solved against an arbitrary, meaningless
-// reference.
+// something relative to a ground reference. Both entry points partition
+// the netlist into connected components first (nodes joined by at least
+// one conducting edge) and solve each independently: a component with a
+// ground node solves normally with that as its 0V reference; a component
+// with no ground node anywhere in it (a network dangling off nothing, or
+// an entirely separate unwired sub-circuit) has every one of its node
+// voltages reported as undefined, rather than solved against an
+// arbitrary, meaningless reference.
 export interface DcSolution {
   nodeVoltages: Map<string, number | undefined>;
 }
 
+export interface TransientSolution {
+  nodeVoltages: Map<string, number | undefined>;
+}
+
+// One conducting edge between two nodes, already reduced to its linear
+// companion model - a plain resistor (sourceCurrent 0) or a capacitor's
+// backward-Euler companion (conductance = C/dt, sourceCurrent derived
+// from its previous voltage). `sourceCurrent` flows into nodeA and out
+// of nodeB, matching the standard MNA independent-current-source
+// convention.
+interface StampedEdge {
+  nodeA: string;
+  nodeB: string;
+  conductance: number;
+  sourceCurrent: number;
+}
+
 export function solveDc(netlist: Netlist): DcSolution {
-  const nodeIds = netlist.nodes.map((n) => n.id);
-  const nodeById = new Map(netlist.nodes.map((n) => [n.id, n]));
-  const resistors = netlist.elements.filter((e) => e.kind === "resistor");
+  const edges: StampedEdge[] = netlist.elements
+    .filter((e): e is NetlistElement & { kind: "resistor" } => e.kind === "resistor")
+    .map((r) => ({ nodeA: r.nodeA, nodeB: r.nodeB, conductance: 1 / r.value, sourceCurrent: 0 }));
+  return { nodeVoltages: solveNetwork(netlist.nodes, edges) };
+}
+
+// One backward-Euler step at a fixed timestep `dt` (seconds). Every
+// resistor is stamped exactly as in solveDc(); every capacitor is
+// stamped as its companion conductance + a current source built from
+// `previousVoltages` (the prior step's solved voltages, e.g. this
+// function's own last return value, or solveDc()'s result for the very
+// first step if the caller wants to start from a resistive steady state
+// rather than "capacitors uncharged" - that policy choice belongs to the
+// caller, not this function). A node missing from `previousVoltages`
+// (never solved yet, or previously unresolved) is treated as 0V - a
+// capacitor with no prior history starts uncharged, the same real,
+// physically correct default most SPICE engines use.
+export function solveTransientStep(
+  netlist: Netlist,
+  dt: number,
+  previousVoltages: ReadonlyMap<string, number | undefined>,
+): TransientSolution {
+  const voltageAt = (nodeId: string): number => previousVoltages.get(nodeId) ?? 0;
+
+  const edges: StampedEdge[] = [];
+  for (const e of netlist.elements) {
+    if (e.kind === "resistor") {
+      edges.push({ nodeA: e.nodeA, nodeB: e.nodeB, conductance: 1 / e.value, sourceCurrent: 0 });
+      continue;
+    }
+    // Capacitor, backward-Euler companion model: G_eq = C/dt, in
+    // parallel with a current source I_eq = G_eq * v_prev (v_prev = the
+    // previous step's V(nodeA) - V(nodeB)) - with only this element
+    // between the two nodes, solving G_eq*(VA-VB) = I_eq reproduces
+    // VA-VB = v_prev exactly, which is the "memory" a capacitor's
+    // voltage can't change instantaneously without current actually
+    // flowing.
+    const conductance = e.value / dt;
+    const vPrev = voltageAt(e.nodeA) - voltageAt(e.nodeB);
+    edges.push({ nodeA: e.nodeA, nodeB: e.nodeB, conductance, sourceCurrent: conductance * vPrev });
+  }
+  return { nodeVoltages: solveNetwork(netlist.nodes, edges) };
+}
+
+function solveNetwork(nodes: readonly NetlistNode[], edges: readonly StampedEdge[]): Map<string, number | undefined> {
+  const nodeIds = nodes.map((n) => n.id);
+  const nodeById = new Map(nodes.map((n) => [n.id, n]));
 
   const adjacency = new Map<string, Set<string>>();
   for (const id of nodeIds) adjacency.set(id, new Set());
-  for (const r of resistors) {
-    adjacency.get(r.nodeA)?.add(r.nodeB);
-    adjacency.get(r.nodeB)?.add(r.nodeA);
+  for (const edge of edges) {
+    adjacency.get(edge.nodeA)?.add(edge.nodeB);
+    adjacency.get(edge.nodeB)?.add(edge.nodeA);
   }
 
   const visited = new Set<string>();
@@ -64,18 +129,18 @@ export function solveDc(netlist: Netlist): DcSolution {
       for (const id of component) nodeVoltages.set(id, undefined);
       continue;
     }
-    const solved = solveGroundedComponent(component, groundId, resistors, nodeById);
+    const solved = solveGroundedComponent(component, groundId, edges, nodeById);
     for (const [id, v] of solved) nodeVoltages.set(id, v);
   }
 
-  return { nodeVoltages };
+  return nodeVoltages;
 }
 
 function solveGroundedComponent(
   componentNodeIds: string[],
   groundId: string,
-  resistors: readonly NetlistElement[],
-  nodeById: ReadonlyMap<string, Netlist["nodes"][number]>,
+  edges: readonly StampedEdge[],
+  nodeById: ReadonlyMap<string, NetlistNode>,
 ): Map<string, number | undefined> {
   // Unknowns: every non-ground node's voltage, plus one extra unknown per
   // fixed-voltage node's own source current - the standard MNA
@@ -94,21 +159,26 @@ function solveGroundedComponent(
   const A: number[][] = Array.from({ length: size }, () => new Array(size).fill(0));
   const b: number[] = new Array(size).fill(0);
 
-  const stampConductance = (nodeA: string, nodeB: string, g: number): void => {
-    const ia = nodeA === groundId ? -1 : nodeIndex.get(nodeA)!;
-    const ib = nodeB === groundId ? -1 : nodeIndex.get(nodeB)!;
-    if (ia >= 0) A[ia][ia] += g;
-    if (ib >= 0) A[ib][ib] += g;
-    if (ia >= 0 && ib >= 0) {
-      A[ia][ib] -= g;
-      A[ib][ia] -= g;
-    }
-  };
+  const indexOf = (id: string): number => (id === groundId ? -1 : nodeIndex.get(id)!);
 
   const componentSet = new Set(componentNodeIds);
-  for (const r of resistors) {
-    if (!componentSet.has(r.nodeA) || !componentSet.has(r.nodeB)) continue;
-    stampConductance(r.nodeA, r.nodeB, 1 / r.value);
+  for (const edge of edges) {
+    if (!componentSet.has(edge.nodeA) || !componentSet.has(edge.nodeB)) continue;
+    const ia = indexOf(edge.nodeA);
+    const ib = indexOf(edge.nodeB);
+    if (ia >= 0) A[ia][ia] += edge.conductance;
+    if (ib >= 0) A[ib][ib] += edge.conductance;
+    if (ia >= 0 && ib >= 0) {
+      A[ia][ib] -= edge.conductance;
+      A[ib][ia] -= edge.conductance;
+    }
+    // Independent current source: flows into nodeA, out of nodeB (see
+    // StampedEdge's own doc comment) - contributes directly to the RHS,
+    // not the coefficient matrix.
+    if (edge.sourceCurrent !== 0) {
+      if (ia >= 0) b[ia] += edge.sourceCurrent;
+      if (ib >= 0) b[ib] -= edge.sourceCurrent;
+    }
   }
 
   for (const id of voltageSourceNodeIds) {

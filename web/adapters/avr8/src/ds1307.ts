@@ -1,10 +1,8 @@
-import type { AVRTWI, TWIEventHandler } from "avr8js";
+import type { I2CSubDevice } from "@physicalsim/common";
 
-// A minimal DS1307 RTC, emulated as an I2C slave against avr8js's own
-// TWIEventHandler contract (twi.ts) - the same shape a real DS1307 chip
-// presents on the bus, decoded from the datasheet's own register map
-// (0x00-0x06 BCD clock/calendar, 0x07 control, 0x08-0x3F battery-backed
-// NVRAM), not general RTClib folklore.
+// A minimal DS1307 RTC, emulated as an I2C slave - decoded from the
+// datasheet's own register map (0x00-0x06 BCD clock/calendar, 0x07
+// control, 0x08-0x3F battery-backed NVRAM), not general RTClib folklore.
 //
 // Deliberately simplified, not cycle-accurate, matching the posture
 // AVRUSART's own onByteTransmit already takes (see adapter.ts's comment
@@ -17,7 +15,8 @@ import type { AVRTWI, TWIEventHandler } from "avr8js";
 // documented tradeoff, not a silent gap. NVRAM (0x08-0x3F) has no such
 // caveat: it's plain read/write storage, exactly like the real chip's.
 //
-// Bound unconditionally in Avr8Adapter.attachPeripherals() - I2C is
+// Bound unconditionally, at this real fixed address, in
+// Avr8Adapter.attachPeripherals() (via I2CBus - see i2c-bus.ts) - I2C is
 // address-based, not wire-routed (a real I2C bus has every device
 // listening for its own address on the same two wires), so "the chip is
 // present" doesn't depend on whether a wokwi-ds1307 element happens to
@@ -30,37 +29,21 @@ function toBcd(value: number): number {
   return ((Math.floor(value / 10) % 10) << 4) | (value % 10);
 }
 
-export class DS1307Device implements TWIEventHandler {
+export class DS1307Device implements I2CSubDevice {
+  readonly address = DS1307_ADDRESS;
   private readonly registers = new Uint8Array(REGISTER_COUNT);
   private pointer = 0;
   // The DS1307 protocol always starts a transaction with the master
   // sending a register-pointer byte before any data byte - this tracks
-  // which of those two writeByte() means, reset on every fresh
-  // connectToSlave() the same way the real chip's own state machine does.
+  // which of those two writeByte() means, reset every time this device is
+  // freshly selected, the same way the real chip's own state machine does.
   private expectingPointerByte = true;
-  private selected = false;
 
-  constructor(private readonly twi: AVRTWI) {}
-
-  start(_repeated: boolean): void {
-    this.twi.completeStart();
-  }
-
-  stop(): void {
-    this.twi.completeStop();
-  }
-
-  connectToSlave(addr: number, _write: boolean): void {
-    this.selected = addr === DS1307_ADDRESS;
+  onSelected(): void {
     this.expectingPointerByte = true;
-    this.twi.completeConnect(this.selected);
   }
 
   writeByte(value: number): void {
-    if (!this.selected) {
-      this.twi.completeWrite(false);
-      return;
-    }
     if (this.expectingPointerByte) {
       this.pointer = value % REGISTER_COUNT;
       this.expectingPointerByte = false;
@@ -68,18 +51,13 @@ export class DS1307Device implements TWIEventHandler {
       this.registers[this.pointer] = value;
       this.pointer = (this.pointer + 1) % REGISTER_COUNT;
     }
-    this.twi.completeWrite(true);
   }
 
-  readByte(_ack: boolean): void {
-    if (!this.selected) {
-      this.twi.completeRead(0xff);
-      return;
-    }
+  readByte(): number {
     if (this.pointer < 7) this.refreshClockRegisters();
     const value = this.registers[this.pointer];
     this.pointer = (this.pointer + 1) % REGISTER_COUNT;
-    this.twi.completeRead(value);
+    return value;
   }
 
   private refreshClockRegisters(): void {

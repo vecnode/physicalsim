@@ -57,6 +57,12 @@ const ARDUINO_CORE_COMPLETIONS: Array<{ label: string; detail: string; insertTex
   { label: "Serial.println", detail: "void Serial.println(...)", insertText: "Serial.println(${1:value})" },
 ];
 
+// Exposed for diagnostics.ts's "did you mean X?" suggestions on an unknown-
+// symbol compile error - the same list this editor already offers as
+// autocomplete is the right "known Arduino symbols" dictionary to match a
+// typo against, not a second one maintained separately.
+export const ARDUINO_KNOWN_SYMBOLS: readonly string[] = ARDUINO_CORE_COMPLETIONS.map((c) => c.label);
+
 let completionProviderRegistered = false;
 
 function ensureCompletionProviderRegistered(): void {
@@ -126,6 +132,50 @@ export class SketchEditor {
 
   getValue(): string {
     return this.editor.getValue();
+  }
+
+  // Renders compile diagnostics (diagnostics.ts's parseCompilerLog() output)
+  // as real Monaco markers - red/yellow squiggles under the offending code,
+  // with the explained (or raw) message on hover, exactly like a real
+  // language server would show them. Only sketch-line diagnostics are
+  // passed in by main.ts (core/library file lines have nothing to
+  // underline in this editor), and a fresh compile attempt should always
+  // replace the previous set rather than accumulate stale ones - so this
+  // always overwrites the "avr-gcc" marker owner wholesale, never appends.
+  setDiagnostics(
+    diagnostics: Array<{ line: number; column: number; severity: "error" | "warning" | "note"; message: string }>,
+  ): void {
+    const model = this.editor.getModel();
+    if (!model) return;
+    monaco.editor.setModelMarkers(
+      model,
+      "avr-gcc",
+      diagnostics.map((d) => ({
+        startLineNumber: d.line,
+        startColumn: d.column,
+        endLineNumber: d.line,
+        // No token-boundary info from gcc beyond the starting column -
+        // underlining to the end of the line is the honest amount of
+        // precision available, not a guessed narrower span.
+        endColumn: model.getLineMaxColumn(d.line),
+        message: d.message,
+        severity:
+          d.severity === "error"
+            ? monaco.MarkerSeverity.Error
+            : d.severity === "warning"
+              ? monaco.MarkerSeverity.Warning
+              : monaco.MarkerSeverity.Info,
+      })),
+    );
+  }
+
+  // Scrolls a given 1-based line to the center of the editor and puts the
+  // cursor there - used by main.ts when a diagnostic line in the terminal
+  // is clicked, so "jump to the error" is a real navigation, not just text.
+  revealLine(line: number): void {
+    this.editor.revealLineInCenter(line);
+    this.editor.setPosition({ lineNumber: line, column: 1 });
+    this.editor.focus();
   }
 
   // Replaces the whole sketch (an example's "Load" action) - a real model

@@ -48,6 +48,14 @@ export interface PlacedComponent {
   x: number;
   y: number;
   rotation: number; // degrees clockwise, any angle - see canvas/scene.ts's startRotateDrag()
+  // Extra DOM attributes applied at placement (e.g. an LED's `color` -
+  // see EXAMPLES' colored-LED entries in main.ts). Not modeled as its own
+  // per-type field since most components need none; kept on the model
+  // itself (not just applied to the DOM, which addComponentAt() already
+  // did before this field existed) so a saved circuit (psim-file.ts) can
+  // restore a component exactly as configured, not just "one of this
+  // type, somewhere."
+  attrs?: Record<string, string>;
 }
 
 export interface Circuit {
@@ -184,7 +192,7 @@ let nextComponentId = 1;
 // Returns null for an unknown component type - mirrors createBoard()'s
 // contract so callers (addComponentAt() in main.ts) handle both the same
 // way.
-export function createComponent(type: string): PlacedComponent | null {
+export function createComponent(type: string, attrs?: Record<string, string>): PlacedComponent | null {
   if (!componentRegistry[type]) return null;
-  return { id: `component-${nextComponentId++}`, type, x: 0, y: 0, rotation: 0 };
+  return { id: `component-${nextComponentId++}`, type, x: 0, y: 0, rotation: 0, ...(attrs ? { attrs } : {}) };
 }

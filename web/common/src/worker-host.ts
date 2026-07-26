@@ -27,6 +27,10 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
   // per adapter (not one per pin), so a single flag is enough to make
   // "subscribeSerial" idempotent.
   let serialSubscribed = false;
+  // Same shape again for I2C device frames - one stream per adapter
+  // (individual devices are distinguished by the event's own `device`
+  // field, not by a separate subscription each).
+  let i2cFrameSubscribed = false;
 
   self.addEventListener("message", async (ev: MessageEvent<RpcRequest>) => {
     const { id, method, params } = ev.data;
@@ -96,6 +100,19 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
             serialSubscribed = true;
             adapter.onSerialData((byte) => {
               const event: RpcResponse = { event: "serialData", byte };
+              postMessage(event);
+            });
+          }
+          result = undefined;
+          break;
+        case "subscribeI2CFrame":
+          if (!adapter.onI2CFrame) {
+            throw new Error(`Adapter "${adapter.id}" does not support onI2CFrame`);
+          }
+          if (!i2cFrameSubscribed) {
+            i2cFrameSubscribed = true;
+            adapter.onI2CFrame((device, data) => {
+              const event: RpcResponse = { event: "i2cFrame", device, data };
               postMessage(event);
             });
           }

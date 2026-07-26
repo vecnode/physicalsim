@@ -1,4 +1,5 @@
 import type { Viewport } from "./viewport.js";
+import type { WireIssue } from "./wire-validator.js";
 
 // Pin-to-pin connections between placed boards/components - click one
 // pin, then click another, and a wire is drawn between them. A second,
@@ -79,6 +80,15 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 // can offer it as one of its swatches, alongside eight others.
 export const DEFAULT_WIRE_COLOR = "#f5b400";
 
+// Colors a flagged wire is forced to, regardless of the palette's chosen
+// color - a short reads as more urgent (bright red) than a voltage
+// mismatch (amber), matching the same severity ordering
+// diagnostics.ts's terminal-diagnostic-error/-warning colors already use.
+const WIRE_ISSUE_COLOR: Record<WireIssue["severity"], string> = {
+  short: "#ff3b3b",
+  "voltage-mismatch": "#e0a634",
+};
+
 export class WiringLayer {
   private readonly svg: SVGSVGElement;
   private wires: Wire[] = [];
@@ -114,6 +124,14 @@ export class WiringLayer {
   // re-resolve which pins are electrically linked, without needing to
   // poll getWires() itself.
   private wireChangeListeners: Array<() => void> = [];
+
+  // Set by wire-validation.ts's WireValidation (canvas/wire-validator.ts's
+  // pure validateWires(), recomputed on every wire-set change) - keyed by
+  // wireId, at most one issue shown per wire even though validateWires()
+  // could theoretically report more than one for the same wire today it
+  // never does (a wire only has two endpoints, so "GND-vs-VCC" and
+  // "VCC-vs-VCC voltage mismatch" are mutually exclusive per wire).
+  private wireIssues = new Map<string, WireIssue>();
 
   constructor(
     private readonly content: HTMLElement,
@@ -197,6 +215,15 @@ export class WiringLayer {
 
   onWiresChanged(cb: () => void): void {
     this.wireChangeListeners.push(cb);
+  }
+
+  // Replaces the whole issue set and re-renders - called by
+  // WireValidation after every recompute, never mutated incrementally,
+  // since a validation pass always judges every current wire fresh rather
+  // than patching a stale one.
+  setWireIssues(issues: readonly WireIssue[]): void {
+    this.wireIssues = new Map(issues.map((issue) => [issue.wireId, issue]));
+    this.render();
   }
 
   private notifyWiresChanged(): void {
@@ -362,6 +389,7 @@ export class WiringLayer {
       const b = this.endpoint(wire.b);
       if (!a || !b) continue;
       const selected = wire.id === this.selectedWireId;
+      const issue = this.wireIssues.get(wire.id);
       const d = this.pathFor(a, b, wire);
 
       // A wide, invisible path for hit-testing (a 2px visible stroke is
@@ -384,7 +412,9 @@ export class WiringLayer {
 
       const visible = document.createElementNS(SVG_NS, "path");
       visible.setAttribute("d", d);
-      visible.setAttribute("class", selected ? "wire-line selected" : "wire-line");
+      let className = selected ? "wire-line selected" : "wire-line";
+      if (issue) className += ` wire-line-${issue.severity}`;
+      visible.setAttribute("class", className);
       // Keeps the drawn stroke a constant *screen* width regardless of
       // the content layer's own CSS scale - without this, a wire looks
       // thicker at 250% zoom and hairline-thin at 25%.
@@ -394,9 +424,23 @@ export class WiringLayer {
       // an external stylesheet rule at equal or lower specificity, which
       // a plain CSS class override wouldn't reliably do here. Selected
       // stays white regardless of the chosen color - the same "brighter,
-      // this is what Backspace/Delete acts on" language .wire-endpoint.
-      // selected already uses below.
-      visible.style.stroke = selected ? "#ffffff" : this.color;
+      // this is what Backspace/Delete acts on" language .wire-endpoint
+      // selected already uses below. A flagged wire overrides the chosen
+      // color too (unlike selected, inline here rather than left to the
+      // .wire-line-short/-voltage-mismatch CSS classes, for the same
+      // "must win over an inline style" reason) - an electrical warning
+      // should read the same regardless of which cable color the palette
+      // happens to be set to.
+      visible.style.stroke = selected ? "#ffffff" : issue ? WIRE_ISSUE_COLOR[issue.severity] : this.color;
+
+      if (issue) {
+        // A native SVG tooltip - hovering the wire shows exactly what's
+        // wrong, the same message a validation-summary UI would show,
+        // without needing one yet.
+        const title = document.createElementNS(SVG_NS, "title");
+        title.textContent = issue.message;
+        visible.appendChild(title);
+      }
 
       this.svg.append(hit, visible);
 

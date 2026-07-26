@@ -102,6 +102,14 @@ body {
   margin: 0;
 }
 
+/* A visual gap between icon-rail groups (run controls / Load .hex… /
+   Save+Load .psim…) - extra top margin on the spacer itself rather than a
+   border, since every button already draws its own border-bottom and a
+   second border here would double up right against the previous button's. */
+.icon-rail-sep {
+  height: 10px;
+}
+
 /* 480px = 384px + 25% - the code editor's column, widened on request. */
 .sidebar {
   flex: none;
@@ -614,6 +622,43 @@ button:disabled {
   font-style: italic;
 }
 
+/* Terminal.writeDiagnostics() - one line per parsed compile diagnostic,
+   colored by severity so an error stands out from a warning/note at a
+   glance, distinct from both plain Serial output and .terminal-system-line
+   (which reads as neutral status text, not something to act on). */
+.terminal-diagnostic {
+  font-family: inherit;
+}
+
+.terminal-diagnostic-error {
+  color: #ff6b6b;
+}
+
+.terminal-diagnostic-warning {
+  color: #e0b34d;
+}
+
+.terminal-diagnostic-note {
+  color: #9a9a9a;
+}
+
+.terminal-diagnostic-clickable {
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+
+.terminal-diagnostic-clickable:hover {
+  color: #fff;
+}
+
+/* The full raw compiler log, kept below the translated diagnostics above -
+   never hidden, just visually secondary (smaller, dimmer) since the
+   translated lines above are the primary read for most compile failures. */
+.terminal-raw-log {
+  font-size: 0.65rem;
+  opacity: 0.75;
+}
+
 .board-item {
   position: absolute;
   cursor: grab;
@@ -775,6 +820,19 @@ button:disabled {
    own, for the same reason). */
 .wire-line.selected {
   stroke-width: 3;
+}
+
+/* wire-validator.ts's flagged wires (canvas/wiring.ts's render()) - color
+   itself is set inline (WIRE_ISSUE_COLOR, overriding the palette's chosen
+   color), so this only owns the dashed pattern: a wire's severity should
+   read even without hovering for the tooltip, not only on mouseover. A
+   short dashes tighter/more urgently than a voltage mismatch. */
+.wire-line-short {
+  stroke-dasharray: 4 3;
+}
+
+.wire-line-voltage-mismatch {
+  stroke-dasharray: 8 4;
 }
 
 /* The small terminal dot at each end of every wire, in every link style

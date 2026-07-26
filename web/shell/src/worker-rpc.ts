@@ -14,6 +14,7 @@ export class AdapterClient {
   private stateListeners = new Set<(state: SimState) => void>();
   private pinChangeListeners = new Set<(pin: string, value: number) => void>();
   private serialDataListeners = new Set<(byte: number) => void>();
+  private i2cFrameListeners = new Set<(device: string, data: Uint8Array) => void>();
 
   constructor(private worker: Worker) {
     this.worker.addEventListener("message", (ev: MessageEvent<RpcResponse>) => {
@@ -23,8 +24,10 @@ export class AdapterClient {
           for (const listener of this.stateListeners) listener(msg.state);
         } else if (msg.event === "pinChange") {
           for (const listener of this.pinChangeListeners) listener(msg.pin, msg.value);
-        } else {
+        } else if (msg.event === "serialData") {
           for (const listener of this.serialDataListeners) listener(msg.byte);
+        } else {
+          for (const listener of this.i2cFrameListeners) listener(msg.device, msg.data);
         }
         return;
       }
@@ -63,11 +66,17 @@ export class AdapterClient {
     return () => this.serialDataListeners.delete(cb);
   }
 
+  onI2CFrame(cb: (device: string, data: Uint8Array) => void): () => void {
+    this.i2cFrameListeners.add(cb);
+    return () => this.i2cFrameListeners.delete(cb);
+  }
+
   terminate(): void {
     this.worker.terminate();
     this.pending.clear();
     this.stateListeners.clear();
     this.pinChangeListeners.clear();
     this.serialDataListeners.clear();
+    this.i2cFrameListeners.clear();
   }
 }

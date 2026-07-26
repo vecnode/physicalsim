@@ -153,6 +153,24 @@ export class Scene {
     return this.circuit.boards.find((b) => b.adapterId === adapterId);
   }
 
+  // Sets an already-placed entity's rotation directly, bypassing the
+  // rotate-handle drag - for psim-file.ts's loader, restoring a saved
+  // layout's rotation on a board/component that was just placed via
+  // addBoardAt()/addComponentAt() (which always start at rotation 0, the
+  // same way createBoard()/createComponent() do). Mirrors exactly what
+  // startRotateDrag()'s own mousemove handler does to entity.rotation/the
+  // wrapper's transform, minus the handle-follows-cursor math that only
+  // matters mid-drag.
+  setEntityRotation(entityId: string, rotationDeg: number): void {
+    const dom = this.dom.get(entityId);
+    const entity = this.allEntities().find((e) => e.id === entityId);
+    if (!dom || !entity) return;
+    entity.rotation = rotationDeg;
+    dom.wrapper.style.transform = `rotate(${rotationDeg}deg)`;
+    this.wiring.render();
+    this.notifyChange();
+  }
+
   // Rectangles for the minimap - in the scene's own world coordinates,
   // sized from the actual rendered element (divided by zoom to undo the
   // CSS scale, matching every other world-coordinate computation here).
@@ -563,7 +581,7 @@ export class Scene {
     attrs?: Record<string, string>,
   ): Promise<PlacedComponent | null> {
     const tagName = componentRegistry[type]?.tagName;
-    const component = createComponent(type);
+    const component = createComponent(type, attrs);
     if (!tagName || !component) return null;
 
     this.circuit.components.push(component);

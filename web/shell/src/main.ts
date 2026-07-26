@@ -5,9 +5,13 @@ import { computeEnergy, type BoardEnergy } from "./energy.js";
 import { SignalChain } from "./signal-chain.js";
 import { ProtocolChain } from "./protocol-chain.js";
 import { AnalogChain } from "./analog-chain.js";
+import { WireValidation } from "./wire-validation.js";
 import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
+import { parseCompilerLog } from "./diagnostics.js";
+import { paintSsd1306Frame } from "./i2c-display.js";
+import { buildPsimFile, downloadPsimFile, parsePsimFile, applyPsimFile, sanitizeFileName, PsimParseError } from "./psim-file.js";
 import "./native-bridge.js";
 // Side-effect only: registers every <wokwi-*> custom element (Lit's
 // @customElement decorator calls customElements.define() when each
@@ -68,6 +72,7 @@ const terminal = new Terminal({
 
 let unsubscribe: (() => void) | null = null;
 let unsubscribeSerial: (() => void) | null = null;
+let unsubscribeI2CFrame: (() => void) | null = null;
 // The adapter the Start/Pause/Stop controls act on. Only changes
 // when Apply is clicked - picking a different item in the dropdown alone
 // does not switch anything, so a control click always applies to the
@@ -112,6 +117,7 @@ function renderState(state: SimState): void {
 function apply(id: AdapterId): void {
   unsubscribe?.();
   unsubscribeSerial?.();
+  unsubscribeI2CFrame?.();
   activeAdapterId = id;
   const client = getAdapterClient(id);
   unsubscribe = client.onStateChange(renderState);
@@ -126,7 +132,34 @@ function apply(id: AdapterId): void {
   } else {
     unsubscribeSerial = null;
   }
+  // Same optional-capability guard for I2C device frames (SSD1306's
+  // decoded GDDRAM buffer, today) - see adapter-types.ts's onI2CFrame?.
+  if (client.onI2CFrame) {
+    unsubscribeI2CFrame = client.onI2CFrame(applyI2CFrame);
+    void client.call("subscribeI2CFrame");
+  } else {
+    unsubscribeI2CFrame = null;
+  }
   terminal.writeLine(`watching ${id} (native bridge can drive it too)`);
+}
+
+// I2C devices are address-based, not wire-routed (ARCHITECTURE.md) - a
+// decoded frame isn't tied to any particular wire, so this just needs to
+// find whichever placed component(s) of the matching type exist on the
+// canvas right now and push pixels into them, the same "present
+// regardless of wiring" reasoning DS1307Device already established for
+// devices with no visual payload at all. Supports more than one placed
+// ssd1306 (unlikely, but no reason to silently only update the first).
+function applyI2CFrame(device: string, data: Uint8Array): void {
+  if (device !== "ssd1306") return; // no other I2C device has a visual payload yet
+  for (const component of canvas.scene.circuit.components) {
+    if (component.type !== "ssd1306") continue;
+    const dom = canvas.scene.getDom(component.id);
+    const el = dom?.boardEl as unknown as { imageData?: ImageData; redraw?: () => void } | undefined;
+    if (!el?.imageData) continue;
+    paintSsd1306Frame(el.imageData, data);
+    el.redraw?.();
+  }
 }
 
 // Plugs a newly-placed board into its adapter, from either an Example's
@@ -154,6 +187,15 @@ new ProtocolChain(canvas.scene, getAdapterClient);
 // cortex-m board is inert (caught inside AnalogChain.attach()), not an
 // error.
 new AnalogChain(canvas.scene, getAdapterClient);
+
+// Wire-level electrical validation (ARCHITECTURE.md's "Wire-level
+// electrical validation" section) - flags a wire that shorts GND directly
+// to a power rail, or ties two different fixed-voltage rails together,
+// by coloring it and attaching a hover tooltip. Advisory only, same as
+// the other three chains above: it never blocks a connection from being
+// made. Constructed once, the same "subscribes to onWiresChanged() and
+// needs nothing further from this file" shape - see wire-validation.ts.
+new WireValidation(canvas.scene);
 
 // If the board currently backing the active adapter gets deleted
 // (Backspace/Delete - see canvas/index.ts), the Start/Pause/Stop
@@ -297,6 +339,65 @@ async function loadFirmwareFile(file: File): Promise<void> {
     terminal.writeLine(`${file.name} loaded (${bytes.length} bytes)`);
   } catch (err) {
     terminal.writeLine(err instanceof Error ? err.message : "firmware load failed");
+  }
+}
+
+// -----------------------------------------------------------------------
+// Persistence (psim-file.ts): save the whole session - placed circuit,
+// wiring, and sketch - as one ".psim" file, and load one back. A separate
+// concern from firmware loading above: that puts compiled bytes into an
+// already-placed board's flash; this replaces the whole canvas + sketch,
+// same shape as loadExample() but from a user-supplied file instead of
+// the built-in EXAMPLES table.
+// -----------------------------------------------------------------------
+
+const savePsimBtn = document.getElementById("save-psim-btn") as HTMLButtonElement;
+const loadPsimBtn = document.getElementById("load-psim-btn") as HTMLButtonElement;
+const psimFileInput = document.getElementById("psim-file-input") as HTMLInputElement;
+
+savePsimBtn.addEventListener("click", () => {
+  if (canvas.scene.circuit.boards.length === 0 && canvas.scene.circuit.components.length === 0) {
+    terminal.writeLine("nothing placed yet - place a board before saving");
+    return;
+  }
+  const defaultName = canvas.scene.circuit.boards[0]?.type ?? "circuit";
+  const name = window.prompt("Save as (filename, without .psim):", defaultName);
+  if (name === null) return; // cancelled
+  const psim = buildPsimFile(canvas, sketchEditor.getValue(), name);
+  downloadPsimFile(psim);
+  terminal.writeLine(`saved "${sanitizeFileName(name)}.psim"`);
+});
+
+loadPsimBtn.addEventListener("click", () => psimFileInput.click());
+
+psimFileInput.addEventListener("change", () => {
+  const file = psimFileInput.files?.[0];
+  psimFileInput.value = ""; // allow re-selecting the same file next time
+  if (file) void loadPsimFile(file);
+});
+
+async function loadPsimFile(file: File): Promise<void> {
+  let psim;
+  try {
+    psim = parsePsimFile(await file.text());
+  } catch (err) {
+    terminal.writeLine(err instanceof PsimParseError ? `couldn't load "${file.name}": ${err.message}` : `couldn't read "${file.name}"`);
+    return;
+  }
+
+  const result = await applyPsimFile(psim, canvas, sketchEditor, () => stopBtn.click());
+  terminal.clear();
+  terminal.writeLine(
+    `loaded "${file.name}": ${result.boardsPlaced} board(s), ${result.componentsPlaced} component(s), ${result.wiresConnected} wire(s)`,
+  );
+  for (const type of result.skippedBoardTypes) {
+    terminal.writeLine(`skipped unknown board type "${type}" (saved by a different/newer build?)`);
+  }
+  for (const type of result.skippedComponentTypes) {
+    terminal.writeLine(`skipped unknown component type "${type}" (saved by a different/newer build?)`);
+  }
+  if (result.skippedWires > 0) {
+    terminal.writeLine(`skipped ${result.skippedWires} wire(s) attached to a skipped board/component`);
   }
 }
 
@@ -1281,9 +1382,27 @@ async function compileAndRun(): Promise<void> {
 
     if (!body.ok) {
       terminal.clear();
-      terminal.writeLine(`compile failed after ${elapsedSeconds()}s:\n${body.log || "(no compiler output)"}`);
+      terminal.writeLine(`compile failed after ${elapsedSeconds()}s`);
+      const diagnostics = parseCompilerLog(body.log || "", board);
+      terminal.writeDiagnostics(diagnostics, body.log || "(no compiler output)", (line) =>
+        sketchEditor.revealLine(line),
+      );
+      sketchEditor.setDiagnostics(
+        diagnostics
+          .filter((d) => d.isSketchLine && d.severity !== "note")
+          .map((d) => ({
+            line: d.line,
+            column: d.column,
+            severity: d.severity,
+            message: d.explanation ?? d.rawMessage,
+          })),
+      );
       return;
     }
+    // A successful compile means whatever was flagged last time no longer
+    // applies - clear stale squiggles rather than leaving them pointing at
+    // now-fixed (or since-edited-away) lines.
+    sketchEditor.setDiagnostics([]);
 
     let bytes: Uint8Array;
     if (

@@ -221,6 +221,104 @@ describe("Avr8Adapter I2C (DS1307 RTC)", () => {
   });
 });
 
+// Confirms I2CBus's address-based dispatch (i2c-bus.ts) end-to-end at the
+// real CPU register level - DS1307 (0x68), MPU6050 (0x69 - see
+// MPU6050Device's own comment on why not 0x68), and SSD1306 (0x3c) all
+// sit behind the one AVRTWI eventHandler slot, and this exercises the
+// other two now that DS1307's own block above already covers 0x68.
+describe("Avr8Adapter I2C (MPU6050 + SSD1306, multiplexed bus)", () => {
+  let adapter: Avr8Adapter;
+
+  beforeEach(async () => {
+    adapter = new Avr8Adapter();
+    await adapter.init(undefined);
+  });
+
+  function i2cReadRegister(address: number, reg: number): number {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, address << 1); // SLA+W
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, reg);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+
+    cpu.writeData(TWCR_ADDRESS, TWCR_START); // repeated start
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, (address << 1) | 1); // SLA+R
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO_ACK);
+    adapter.step(20);
+
+    return cpu.data[TWDR_ADDRESS];
+  }
+
+  // Writes a plain byte stream to `address` (SLA+W, then every byte in
+  // order, then STOP) - what a real Wire.beginTransmission()/write()/
+  // endTransmission() sequence produces, used here for SSD1306's control-
+  // byte-then-command/data-stream protocol rather than DS1307/MPU6050's
+  // pointer-then-value shape.
+  function i2cWriteStream(address: number, bytes: number[]): void {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, address << 1); // SLA+W
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    for (const b of bytes) {
+      cpu.writeData(TWDR_ADDRESS, b);
+      cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+      adapter.step(20);
+    }
+    cpu.writeData(TWCR_ADDRESS, 0x94); // TWSTO | TWINT | TWEN - stop
+    adapter.step(20);
+  }
+
+  it("MPU6050 (bound at 0x69) WHO_AM_I (0x75) reads back the real, fixed chip ID (0x68) regardless of bus address", () => {
+    expect(i2cReadRegister(0x69, 0x75)).toBe(0x68);
+  });
+
+  it("0x68 still answers as DS1307, not MPU6050 (register 0x0b is unwritten NVRAM, not WHO_AM_I's 0x68)", () => {
+    // DS1307's register map wraps every pointer into its own 64-byte
+    // array (0x75 % 64 = 0x0b, unwritten NVRAM - see ds1307.ts) - reading
+    // it back as 0 (not 0x68, what MPU6050's WHO_AM_I would answer)
+    // confirms DS1307Device, not MPU6050Device, is still what 0x68
+    // dispatches to.
+    expect(i2cReadRegister(0x68, 0x75)).toBe(0);
+  });
+
+  it("SSD1306 acks its own address (0x3c), distinct from DS1307/MPU6050's 0x68", () => {
+    const cpu = cpuOf(adapter);
+    cpu.writeData(TWCR_ADDRESS, TWCR_START);
+    adapter.step(20);
+    cpu.writeData(TWDR_ADDRESS, 0x3c << 1);
+    cpu.writeData(TWCR_ADDRESS, TWCR_GO);
+    adapter.step(20);
+    expect(cpu.data[TWSR_ADDRESS] & 0xf8).toBe(0x18); // STATUS_SLAW_ACK
+  });
+
+  it("onI2CFrame fires with the decoded GDDRAM buffer after a real SSD1306 command+data sequence", () => {
+    const cb = vi.fn();
+    adapter.onI2CFrame(cb);
+
+    const SSD1306_ADDR = 0x3c;
+    // Matches Adafruit_SSD1306's own display() sequence: full-range
+    // COLUMNADDR/PAGEADDR commands, then the framebuffer as data.
+    i2cWriteStream(SSD1306_ADDR, [0x00, 0x21, 0, 127, 0x22, 0, 7]); // control byte 0x00 + COLUMNADDR/PAGEADDR
+    i2cWriteStream(SSD1306_ADDR, [0x40, 0xff, 0x81]); // control byte 0x40 + two GDDRAM bytes
+
+    expect(cb).toHaveBeenCalledTimes(1);
+    const [device, data] = cb.mock.calls[0] as [string, Uint8Array];
+    expect(device).toBe("ssd1306");
+    expect(data.length).toBe(1024);
+    expect(data[0]).toBe(0xff);
+    expect(data[1]).toBe(0x81);
+  });
+});
+
 describe("Avr8Adapter serial output", () => {
   let adapter: Avr8Adapter;
 

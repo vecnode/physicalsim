@@ -64,6 +64,26 @@
           <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,144v64a8,8,0,0,1-8,8H40a8,8,0,0,1-8-8V144a8,8,0,0,1,16,0v56H208V144a8,8,0,0,1,16,0ZM93.66,77.66,120,51.31V144a8,8,0,0,0,16,0V51.31l26.34,26.35a8,8,0,0,0,11.32-11.32l-40-40a8,8,0,0,0-11.32,0l-40,40A8,8,0,0,0,93.66,77.66Z"/></svg>
         </button>
         <input id="firmware-file-input" type="file" accept=".hex" hidden>
+
+        <!--
+          Persistence (psim-file.ts, ARCHITECTURE.md's "Persistence"
+          section): saves the whole session - placed boards/components,
+          their wiring, and the sketch - as one ".psim" file (plain JSON
+          under a distinct extension), and loads one back. A separate
+          concern from "Load .hex…" above: that loads *compiled firmware*
+          into an already-placed board; this replaces the whole canvas +
+          sketch with a saved one. A visual separator (icon-rail-sep)
+          marks the boundary the same way the run controls are already set
+          apart from Load .hex….
+        -->
+        <div class="icon-rail-sep"></div>
+        <button id="save-psim-btn" type="button" title="Save circuit + sketch as .psim…">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M224,152v56a16,16,0,0,1-16,16H48a16,16,0,0,1-16-16V152a8,8,0,0,1,16,0v56H208V152a8,8,0,0,1,16,0ZM117.66,157.66a8,8,0,0,0,11.32,0l40-40a8,8,0,0,0-11.32-11.32L136,127.51V32a8,8,0,0,0-16,0v95.51l-21.66-21.17a8,8,0,0,0-11.32,11.32Z"/></svg>
+        </button>
+        <button id="load-psim-btn" type="button" title="Load a saved .psim file…">
+          <svg class="icon rail-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="currentColor"><path d="M216,72H131.31L104,44.69A15.86,15.86,0,0,0,92.69,40H40A16,16,0,0,0,24,56V200.62A15.4,15.4,0,0,0,39.38,216H216.89A15.13,15.13,0,0,0,232,200.89V88A16,16,0,0,0,216,72ZM40,56H92.69l16,16H40ZM216,200H40V88H216Z"/></svg>
+        </button>
+        <input id="psim-file-input" type="file" accept=".psim,application/json" hidden>
       </nav>
 
       <!--

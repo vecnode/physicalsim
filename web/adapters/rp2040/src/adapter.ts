@@ -12,8 +12,9 @@ interface TickableClock {
   tick(deltaNanos: number): void;
   readonly nanosToNextAlarm: number;
 }
-import type { SimState, SimulatorAdapter } from "@physicalsim/common";
+import { MPU6050Device, SSD1306Device, type SimState, type SimulatorAdapter } from "@physicalsim/common";
 import { DS1307Device } from "./ds1307.js";
+import { I2CBus } from "./i2c-bus.js";
 import { bootromB1 } from "./bootrom-b1.js";
 
 // The application's own vector table sits immediately after the 256-byte
@@ -57,6 +58,7 @@ export class Rp2040Adapter implements SimulatorAdapter {
   private lastPinValues = new Map<string, number>();
   private subscribedPins = new Set<number>();
   private serialListeners = new Set<(byte: number) => void>();
+  private i2cFrameListeners = new Set<(device: string, data: Uint8Array) => void>();
 
   constructor() {
     // Real ROM (see bootrom-b1.ts) - pico-sdk's runtime calls into a
@@ -80,10 +82,18 @@ export class Rp2040Adapter implements SimulatorAdapter {
     // rp2040.ts's own `readonly i2c = [...]` field) - there's no
     // equivalent of AVRSPI/AVRTWI's "never constructed, so the bus hangs"
     // bug to fix here. What's missing is device-specific behavior on top,
-    // same as avr8: this binds the one device decoder that exists so far
-    // (ds1307.ts, a near-duplicate of avr8's own DS1307Device against
-    // RPI2C's different callback shape) to I2C0.
-    new DS1307Device(this.mcu.i2c[0]);
+    // same as avr8: this binds every device decoder that exists so far -
+    // DS1307 (0x68), MPU6050 (0x69 - its real AD0-high alternate address,
+    // deliberately not its 0x68 default, to avoid colliding with
+    // DS1307's own fixed 0x68 - see MPU6050Device's own comment), and
+    // SSD1306 (0x3c) - to I2C0 via I2CBus (see i2c-bus.ts).
+    new I2CBus(this.mcu.i2c[0], [
+      new DS1307Device(),
+      new MPU6050Device(),
+      new SSD1306Device((data) => {
+        for (const cb of this.i2cFrameListeners) cb("ssd1306", data);
+      }),
+    ]);
   }
 
   async init(_config: unknown): Promise<void> {
@@ -193,6 +203,13 @@ export class Rp2040Adapter implements SimulatorAdapter {
   onSerialData(cb: (byte: number) => void): () => void {
     this.serialListeners.add(cb);
     return () => this.serialListeners.delete(cb);
+  }
+
+  // rp2040 counterpart to Avr8Adapter's onI2CFrame - see that method's
+  // own comment.
+  onI2CFrame(cb: (device: string, data: Uint8Array) => void): () => void {
+    this.i2cFrameListeners.add(cb);
+    return () => this.i2cFrameListeners.delete(cb);
   }
 
   // Writes a raw flash image (rp2040_toolchain.cpp's compiled output - a

@@ -18,8 +18,9 @@ import {
   twiConfig,
   usart0Config,
 } from "avr8js";
-import type { SimState, SimulatorAdapter } from "@physicalsim/common";
+import { MPU6050Device, SSD1306Device, type SimState, type SimulatorAdapter } from "@physicalsim/common";
 import { DS1307Device } from "./ds1307.js";
+import { I2CBus } from "./i2c-bus.js";
 import { ATMEGA328P, type AvrChipConfig } from "./chip.js";
 
 const CLOCK_HZ = 16e6;
@@ -90,6 +91,10 @@ export class Avr8Adapter implements SimulatorAdapter {
   // must survive a reset() the same way pinListeners does, since resetting
   // the CPU shouldn't silently drop whoever's listening to Serial output.
   private serialListeners = new Set<(byte: number) => void>();
+  // Same "survives reset(), not per-run state" reasoning as
+  // serialListeners - an I2C display decoder's frames shouldn't stop
+  // reaching a subscriber just because the CPU was reset.
+  private i2cFrameListeners = new Set<(device: string, data: Uint8Array) => void>();
 
   // Defaults to the atmega328p (Arduino Uno/Nano - both the exact same
   // MCU, see boards/arduino-nano.ts) - pass ATMEGA2560 (chip.ts) for a
@@ -203,6 +208,14 @@ export class Avr8Adapter implements SimulatorAdapter {
   onSerialData(cb: (byte: number) => void): () => void {
     this.serialListeners.add(cb);
     return () => this.serialListeners.delete(cb);
+  }
+
+  // Fires whenever a device behind the I2C bus (see i2c-bus.ts) publishes
+  // a decoded frame - today, only SSD1306Device does ("ssd1306"). Same
+  // "survives reset()" posture as onSerialData above.
+  onI2CFrame(cb: (device: string, data: Uint8Array) => void): () => void {
+    this.i2cFrameListeners.add(cb);
+    return () => this.i2cFrameListeners.delete(cb);
   }
 
   // Writes a parsed flash image (see @physicalsim/common's
@@ -334,7 +347,18 @@ export class Avr8Adapter implements SimulatorAdapter {
         this.chip.twiVectorOverride ? { ...twiConfig, twiInterrupt: this.chip.twiVectorOverride } : twiConfig,
         CLOCK_HZ,
       );
-      this.twi.eventHandler = new DS1307Device(this.twi);
+      // Three devices behind one AVRTWI.eventHandler slot, dispatched by
+      // address (see i2c-bus.ts) - DS1307 (0x68), MPU6050 (0x69 - its
+      // real AD0-high alternate address, not its more common 0x68
+      // default, specifically to avoid colliding with DS1307's own fixed
+      // 0x68 - see MPU6050Device's own doc comment), and SSD1306 (0x3c).
+      this.twi.eventHandler = new I2CBus(this.twi, [
+        new DS1307Device(),
+        new MPU6050Device(),
+        new SSD1306Device((data) => {
+          for (const cb of this.i2cFrameListeners) cb("ssd1306", data);
+        }),
+      ]);
       // reset() replaces this.cpu and re-runs attachPeripherals(), which
       // constructs a brand-new AVRUSART with its own (null) onByteTransmit -
       // re-wiring it here, not just once at construction, is what keeps

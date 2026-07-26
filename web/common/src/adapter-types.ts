@@ -33,6 +33,20 @@ export interface SimulatorAdapter {
   // transmits"), not Serial.read() support. Only avr8 implements it today
   // (rp2040/cortex-m have no UART peripheral wired up yet).
   onSerialData?(cb: (byte: number) => void): () => void;
+  // Optional - fires with a device-decoder's decoded output whenever it
+  // has a new frame to publish (today: SSD1306Device's GDDRAM buffer,
+  // "device" is always "ssd1306" for now). Modeled as one generic event
+  // keyed by device name, not a dedicated onSsd1306Frame, so a second
+  // I2C device with a visual payload doesn't need its own new RPC method
+  // added everywhere this one already reaches (worker-host.ts,
+  // worker-rpc.ts, adapter-registry.ts) - only a new `device` string
+  // value flowing through the same plumbing. I2C devices are address-
+  // based, not wire-routed (see ARCHITECTURE.md), so this fires whenever
+  // the adapter's bus decodes a frame regardless of whether anything on
+  // the canvas is "wired" to it - i2c-display-chain.ts (web/shell) is
+  // what decides whether a matching element is actually placed to push
+  // pixels into.
+  onI2CFrame?(cb: (device: string, data: Uint8Array) => void): () => void;
   // Stage 2 of the terminal feature: writes a flash image (already
   // parsed from Intel HEX - see intel-hex.ts - into plain bytes) into
   // the adapter's own program memory and resets, so it actually runs.
@@ -59,6 +73,7 @@ export type AdapterMethod =
   | "writeAnalogPin"
   | "subscribePin"
   | "subscribeSerial"
+  | "subscribeI2CFrame"
   | "loadFirmware";
 
 export interface ReadPinParams {
@@ -111,7 +126,13 @@ export interface SerialDataEvent {
   byte: number;
 }
 
-export type RpcEvent = StateChangeEvent | PinChangeEvent | SerialDataEvent;
+export interface I2CFrameEvent {
+  event: "i2cFrame";
+  device: string;
+  data: Uint8Array;
+}
+
+export type RpcEvent = StateChangeEvent | PinChangeEvent | SerialDataEvent | I2CFrameEvent;
 
 export type RpcResponse = RpcResult | RpcError | RpcEvent;
 

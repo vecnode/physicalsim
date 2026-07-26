@@ -45,6 +45,8 @@ export interface SimClient {
   // NativeAdapterClient doesn't implement this one - no native adapter
   // has a Serial/UART peripheral wired up yet.
   onSerialData?(cb: (byte: number) => void): () => void;
+  // Same story - no native adapter has an I2C bus wired up yet either.
+  onI2CFrame?(cb: (device: string, data: Uint8Array) => void): () => void;
 }
 
 // Adapters with no JS/Worker side at all - the C++ shell spawns and

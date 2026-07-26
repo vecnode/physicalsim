@@ -107,6 +107,54 @@ export class Terminal {
     this.updatingLines.delete(key);
   }
 
+  // Renders parsed compiler diagnostics (diagnostics.ts's Diagnostic[]) -
+  // one line per diagnostic, the explained plain-English message when one
+  // was recognized, the compiler's own raw message otherwise (never
+  // hidden, just not the primary text when a better one exists). Sketch-
+  // line diagnostics get a "line N" prefix and are click-to-jump
+  // (onJumpToLine, wired by main.ts to sketchEditor.revealLine()) since
+  // there's somewhere real to jump to; core/library-file diagnostics print
+  // their file name instead and aren't clickable. Always followed by the
+  // full raw log under its own header, so nothing the compiler said is
+  // ever actually lost - this is a translation layered on top of the raw
+  // output, not a replacement for it.
+  writeDiagnostics(
+    diagnostics: Array<{
+      line: number;
+      severity: "error" | "warning" | "note";
+      rawMessage: string;
+      explanation?: string;
+      isSketchLine: boolean;
+      file: string;
+    }>,
+    rawLog: string,
+    onJumpToLine: (line: number) => void,
+  ): void {
+    for (const d of diagnostics) {
+      const line = document.createElement("div");
+      line.className = `terminal-diagnostic terminal-diagnostic-${d.severity}`;
+      const location = d.isSketchLine ? `line ${d.line}` : d.file;
+      line.textContent = `${d.severity}: ${location}: ${d.explanation ?? d.rawMessage}`;
+      if (d.isSketchLine) {
+        line.classList.add("terminal-diagnostic-clickable");
+        line.title = "click to jump to this line";
+        line.addEventListener("click", () => onJumpToLine(d.line));
+      }
+      this.el.output.appendChild(line);
+    }
+    this.trimToMaxLines();
+    this.currentLineEl = null;
+    if (rawLog.trim()) {
+      this.writeLine("raw compiler output:");
+      const pre = document.createElement("div");
+      pre.className = "terminal-system-line terminal-raw-log";
+      pre.textContent = rawLog;
+      this.el.output.appendChild(pre);
+      this.trimToMaxLines();
+    }
+    this.scrollToBottom();
+  }
+
   // Feeds one byte of UART TX data. CR is dropped (Arduino's Serial
   // library, like most serial links, sends CRLF line endings - keeping
   // only LF as the line break avoids a stray blank-looking line for

@@ -18,7 +18,7 @@
 // memory note).
 //
 // This adapter's pin I/O now needs a *further* patch on top of that fork
-// (hw/xtensa/esp32_picsimlab.c + hmp-commands.hx: two new HMP monitor
+// (hw/xtensa/esp32.c + hmp-commands.hx: two new HMP monitor
 // commands, "esp32_set_gpio_input" and "esp32_set_adc" - see
 // write_pin()/write_analog_pin()'s own comments) to close the input half
 // of the loop; read_pin()/read_pin_direction() need no fork changes at
@@ -74,7 +74,7 @@ class Esp32QemuInstance : public QemuBackedAdapter {
   Esp32QemuInstance(const Esp32QemuInstance &) = delete;
   Esp32QemuInstance &operator=(const Esp32QemuInstance &) = delete;
 
-  // Spawns qemu-system-xtensa (-machine esp32-picsimlab, halted via -S,
+  // Spawns qemu-system-xtensa (-machine esp32, halted via -S,
   // booting the bundled demo flash image) and connects the QMP and GDB
   // RSP sockets. Throws std::runtime_error on failure (binary/ROM/demo
   // image not found, spawn failure, or the sockets never come up).
@@ -99,11 +99,11 @@ class Esp32QemuInstance : public QemuBackedAdapter {
 
   // Drives an external input into GPIO_IN_REG - unlike GPIO_OUT_REG,
   // that register has no plain memory-mapped write path (QEMU's
-  // hw/gpio/esp32_gpio.c only updates it from inside set_gpio(), called
+  // hw/esp32/esp32_gpio.c only updates it from inside set_gpio(), called
   // via a qdev GPIO-in line, not from a bus write handler). Reaches it
   // through a small addition to vecnode/qemu-esp32 itself: a new HMP
   // monitor command ("esp32_set_gpio_input <gpio> <value>", added to
-  // hw/xtensa/esp32_picsimlab.c + hmp-commands.hx in that fork) invoked
+  // hw/xtensa/esp32.c + hmp-commands.hx in that fork) invoked
   // here over the same GDB RSP connection read_pin() already uses, via
   // its qRcmd ("monitor command") extension - see run_monitor_command()
   // in the .cpp file.
@@ -117,7 +117,7 @@ class Esp32QemuInstance : public QemuBackedAdapter {
   // Feeds an ADC1-channel-capable pin (GPIO32-39) a real voltage, scaled
   // to a 12-bit raw count against the SAR ADC's ADC_values[] array - the
   // same vecnode/qemu-esp32 HMP-command path write_pin() uses, targeting
-  // hw/misc/esp32_sens.c's Esp32SensState instead of the GPIO device. A
+  // hw/esp32/esp32_sens.c's Esp32SensState instead of the GPIO device. A
   // pin outside GPIO32-39 has no ADC1 channel behind it and this silently
   // no-ops, matching avr8/rp2040's own "reject a non-ADC pin, caught not
   // thrown" posture.

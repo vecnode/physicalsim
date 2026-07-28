@@ -1866,7 +1866,7 @@ reads, not a new kind of compromise.
 
 **`write_pin()` is not implemented.** Unlike `GPIO_OUT_REG`, driving an
 external input (a simulated button) would need QEMU's internal
-`set_gpio()` IRQ-line handler (`hw/gpio/esp32_gpio.c`) invoked from
+`set_gpio()` IRQ-line handler (`hw/esp32/esp32_gpio.c`) invoked from
 outside the process - there's no memory-mapped or QMP-exposed path to it
 today. Throws a clear error rather than silently no-op'ing, same posture
 as `cortex-m`'s own pin-I/O stubs.

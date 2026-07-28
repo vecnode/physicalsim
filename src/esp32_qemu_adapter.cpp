@@ -47,7 +47,7 @@ constexpr const char *kExeName = "qemu-system-xtensa";
 #endif
 
 // GPIO peripheral base address on real ESP32 silicon (and in QEMU's model,
-// hw/gpio/esp32_gpio.c) - GPIO_OUT_REG sits at offset 0x04 within it,
+// hw/esp32/esp32_gpio.c) - GPIO_OUT_REG sits at offset 0x04 within it,
 // GPIO_ENABLE_REG (direction, 1 = output) at offset 0x20.
 constexpr std::uint32_t kGpioOutRegAddress = 0x3ff44004;
 constexpr std::uint32_t kGpioEnableRegAddress = 0x3ff44020;
@@ -371,7 +371,7 @@ struct Esp32QemuInstance::Impl {
 #ifdef _WIN32
     std::ostringstream cmd;
     cmd << "\"" << exe.string() << "\""
-        << " -machine esp32-picsimlab -nographic -S"
+        << " -machine esp32 -nographic -S"
         << " -L \"" << bios_dir->string() << "\""
         << " -drive file=\"" << flash_image->string() << "\",if=mtd,format=raw"
         << " -qmp " << qmp_arg.str()
@@ -422,7 +422,7 @@ struct Esp32QemuInstance::Impl {
 #else
     std::vector<std::string> arg_storage = {
         exe.string(),
-        "-machine", "esp32-picsimlab",
+        "-machine", "esp32",
         "-nographic",
         "-S",
         "-L", bios_dir->string(),
@@ -582,7 +582,7 @@ json Esp32QemuInstance::load_firmware(const std::string &binary) {
   // full declared flash size (see that file's own comment - it made an
   // 8MB+ hex payload cross the HTTP bridge, hit and fixed during Phase 1
   // verification) - QEMU's -drive still needs a file matching the
-  // esp32-picsimlab machine's flash chip size, so the trailing 0xFF
+  // esp32 machine's flash chip size, so the trailing 0xFF
   // filler esptool would have added is reconstructed here instead,
   // right before writing to disk, never transported.
   constexpr std::size_t kFlashImageSize = 4 * 1024 * 1024;

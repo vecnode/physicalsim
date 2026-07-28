@@ -37,7 +37,6 @@
 #include <cpp-embedlib-httplib.h>
 #include "WebAssets.h"
 #include "webview/webview.h"
-#include "qemu_adapter.hpp"
 #include "esp32_qemu_adapter.hpp"
 #include "qemu_backed_adapter.hpp"
 #include "avr_toolchain.hpp"
@@ -303,19 +302,19 @@ void install_bridge(webview::webview &w) {
   });
 }
 
-// --- QEMU-backed adapters (e.g. "cortex-m", "esp32") ------------------------
+// --- QEMU-backed adapters (e.g. "esp32") -------------------------------------
 // Unlike avr8/rp2040 (JS/TS running in a Worker, reached via eval()/bind()
 // above), a QEMU-backed adapter has no JS side at all — the C++ shell
 // spawns and controls a real qemu-system-* process directly (see
-// qemu_adapter.hpp/.cpp for "cortex-m"/qemu-system-arm,
-// esp32_qemu_adapter.hpp/.cpp for "esp32"/qemu-system-xtensa). Both
-// implement the same QemuBackedAdapter interface, so this dispatch table
-// doesn't grow a new special case per adapter kind - just a new entry here.
+// esp32_qemu_adapter.hpp/.cpp for "esp32"/qemu-system-xtensa). Every kind
+// implements the same QemuBackedAdapter interface, so this dispatch table
+// doesn't grow a new special case per adapter kind - just a new entry here
+// and a new branch in get_or_create_qemu_instance() below.
 // Writes into the same g_bridge_latest_state map install_bridge()'s
 // JS->C++ handler populates, so GET /bridge/:adapter/state needs no
 // separate code path for any adapter kind.
 bool is_qemu_backed_adapter(const std::string &adapter) {
-  return adapter == "cortex-m" || adapter == "esp32";
+  return adapter == "esp32";
 }
 
 // Guards both g_qemu_instances (the lookup/creation map) *and* every call
@@ -341,12 +340,10 @@ std::unordered_map<std::string, std::unique_ptr<QemuBackedAdapter>> g_qemu_insta
 QemuBackedAdapter &get_or_create_qemu_instance(const std::string &adapter) {
   auto it = g_qemu_instances.find(adapter);
   if (it == g_qemu_instances.end()) {
-    std::unique_ptr<QemuBackedAdapter> instance;
-    if (adapter == "esp32") {
-      instance = std::make_unique<esp32qemu::Esp32QemuInstance>();
-    } else {
-      instance = std::make_unique<qemu::QemuInstance>();
+    if (adapter != "esp32") {
+      throw std::runtime_error("no QEMU-backed adapter registered for \"" + adapter + "\"");
     }
+    std::unique_ptr<QemuBackedAdapter> instance = std::make_unique<esp32qemu::Esp32QemuInstance>();
     instance->start_process();
     it = g_qemu_instances.emplace(adapter, std::move(instance)).first;
   }
@@ -395,11 +392,12 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
   try {
     auto &instance = get_or_create_qemu_instance(adapter);
 
-    // Plain number, matching worker-host.ts's SimulatorAdapter.readPin()
-    // shape (adapter-types.ts) - native-adapter-client.ts's call() returns
-    // this "result" field straight through to circuit-pin.ts, which
-    // expects a bare number|undefined, not a wrapper object.
-    json read_pin_result = nullptr;
+    // Plain scalar (number, string, or null), matching worker-host.ts's
+    // SimulatorAdapter method shapes (adapter-types.ts) -
+    // native-adapter-client.ts's call() returns this "result" field
+    // straight through to the caller, which expects a bare value, not a
+    // wrapper object.
+    json result_value = nullptr;
 
     if (method == "start") {
       instance.start();
@@ -416,9 +414,14 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       const std::string pin = params.is_object() && params.contains("pin")
                                    ? params.at("pin").get<std::string>()
                                    : "";
-      // Throws for cortex-m (unimplemented, see qemu_adapter.hpp); for
-      // esp32 returns {"value": 0|1} (see esp32_qemu_adapter.hpp).
-      read_pin_result = instance.read_pin(pin).value("value", json(nullptr));
+      // {"value": 0|1} - see esp32_qemu_adapter.hpp's read_pin().
+      result_value = instance.read_pin(pin).value("value", json(nullptr));
+    } else if (method == "readPinDirection") {
+      const std::string pin = params.is_object() && params.contains("pin")
+                                   ? params.at("pin").get<std::string>()
+                                   : "";
+      // {"value": "input"|"output"} - see read_pin_direction().
+      result_value = instance.read_pin_direction(pin).value("value", json(nullptr));
     } else if (method == "writePin") {
       const std::string pin = params.is_object() && params.contains("pin")
                                    ? params.at("pin").get<std::string>()
@@ -426,14 +429,22 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       const int value = params.is_object() && params.contains("value")
                              ? params.at("value").get<int>()
                              : 0;
-      instance.write_pin(pin, value);  // always throws today, see the adapter headers
+      instance.write_pin(pin, value);
+    } else if (method == "writeAnalogPin") {
+      const std::string pin = params.is_object() && params.contains("pin")
+                                   ? params.at("pin").get<std::string>()
+                                   : "";
+      const double voltage = params.is_object() && params.contains("voltage")
+                                  ? params.at("voltage").get<double>()
+                                  : 0.0;
+      instance.write_analog_pin(pin, voltage);
     } else if (method == "loadFirmware") {
       // main.ts's compileAndRun() sends a plain hex string here for
       // native-backed adapters (see decode_hex_bytes() above) - a raw
       // Uint8Array, the shape avr8/rp2040's Worker-side loadFirmware()
       // takes, can't cross the JSON HTTP bridge directly.
       const std::string hex = params.is_string() ? params.get<std::string>() : "";
-      instance.load_firmware(decode_hex_bytes(hex));  // throws for cortex-m, see qemu_adapter.hpp
+      instance.load_firmware(decode_hex_bytes(hex));
     } else {
       return json{{"error", "Unknown method: " + method}};
     }
@@ -442,7 +453,7 @@ json handle_qemu_bridge_call(const std::string &adapter, const std::string &meth
       std::lock_guard<std::mutex> lock(g_bridge_state_mutex);
       g_bridge_latest_state[adapter] = instance.state();
     }
-    return json{{"result", read_pin_result}};
+    return json{{"result", result_value}};
   } catch (const std::exception &e) {
     return json{{"error", e.what()}};
   }
@@ -711,6 +722,29 @@ int main(int argc, char **argv) {
 
   // Start HTTP server thread
   std::thread server_thread([&]() { server.listen_after_bind(); });
+
+  // Warms the ESP32 compile pipeline (cmake configure + a full first ninja
+  // build of the whole component tree) in the background, right as the app
+  // starts, instead of paying that cost the moment a user's first ESP32
+  // "Compile & Run" click is sitting there waiting on it - by the time
+  // anyone has actually opened the app, picked an ESP32 board, written a
+  // sketch, and clicked Compile & Run, this has normally already finished.
+  // compile_sketch()'s own g_compile_mutex/CrossProcessCompileLock already
+  // serialize a real request behind this safely if it hasn't (see
+  // esp32_toolchain.cpp) - it just queues, same as it would behind any
+  // other in-flight ESP32 compile. Detached, not joined: a best-effort
+  // warm-up, not something app shutdown should ever block on. Skipped
+  // entirely if the toolchain isn't even available on this machine, same
+  // check /compile itself makes before attempting a real one.
+  if (esp32toolchain::toolchain_available()) {
+    std::thread([]() {
+      esp32toolchain::compile_sketch(
+          "// physicalsim startup warm-up build - see main.cpp's own comment\n"
+          "// on why this runs automatically; not a real user sketch.\n"
+          "void app_main(void) {\n"
+          "}\n");
+    }).detach();
+  }
 
 
   // -----------------------------

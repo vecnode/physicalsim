@@ -3,20 +3,27 @@
 //
 // C++ side of the "esp32" board: a real qemu-system-xtensa process
 // (vecnode/qemu-esp32, forked from lcgamboa/qemu, itself a fork of
-// espressif/qemu) the native shell spawns and controls, the same pattern
-// qemu_adapter.hpp/.cpp already uses for "cortex-m"/qemu-system-arm - see
-// that file for the general shape (QMP for start/stop/reset, GDB Remote
-// Serial Protocol for register/memory access).
+// espressif/qemu) the native shell spawns and controls, using QMP for
+// start/stop/reset and GDB Remote Serial Protocol for register/memory
+// access and (see write_pin()/write_analog_pin() below) monitor commands.
 //
-// Why a *different* QEMU fork than cortex-m's plain upstream qemu-system-arm:
-// the official espressif/qemu fork's own peripheral-support docs mark
-// "GPIO matrix / IOMUX" unimplemented on ESP32/S3/C3 - the exact mechanism
+// Why a *different* QEMU fork than plain upstream qemu-system-xtensa: the
+// official espressif/qemu fork's own peripheral-support docs mark "GPIO
+// matrix / IOMUX" unimplemented on ESP32/S3/C3 - the exact mechanism
 // behind gpio_set_level()/digitalWrite() on arbitrary pins, so an LED
 // wired to a GPIO would never toggle under it. lcgamboa/qemu (PICSimLab's
 // fork) adds that support; empirically confirmed 2026-07-25 by running a
 // real ESP-IDF GPIO example under it and watching GPIO_OUT_REG toggle in
 // lockstep with the firmware's writes (see the esp32-qemu-gpio-spike
-// memory note). Unlike cortex-m, this adapter's read_pin() actually works.
+// memory note).
+//
+// This adapter's pin I/O now needs a *further* patch on top of that fork
+// (hw/xtensa/esp32_picsimlab.c + hmp-commands.hx: two new HMP monitor
+// commands, "esp32_set_gpio_input" and "esp32_set_adc" - see
+// write_pin()/write_analog_pin()'s own comments) to close the input half
+// of the loop; read_pin()/read_pin_direction() need no fork changes at
+// all, since GPIO_OUT_REG/GPIO_ENABLE_REG are plain memory-mapped
+// registers a GDB memory read already reaches.
 //
 // Firmware: unlike avr8/rp2040/cortex-m's "empty but bootable" or
 // minimal-stub posture, ESP32's boot ROM requires a real, checksummed,
@@ -90,16 +97,31 @@ class Esp32QemuInstance : public QemuBackedAdapter {
   // or a bare GPIO number.
   json read_pin(const std::string &pin) const override;
 
-  // Not yet supported: driving an external input (e.g. a simulated button)
-  // requires invoking QEMU's internal set_gpio() IRQ-line handler
-  // (hw/gpio/esp32_gpio.c), which - unlike GPIO_OUT_REG - has no
-  // memory-mapped or QMP-exposed path from outside the QEMU process today.
-  // That needs its own follow-up (a small patch to vecnode/qemu-esp32
-  // exposing it, e.g. as a QOM property or monitor command), not something
-  // achievable through the existing QMP/GDB surface - so this throws
-  // rather than silently doing nothing, same "don't fake it" posture as
-  // qemu_adapter.hpp's cortex-m stub.
+  // Drives an external input into GPIO_IN_REG - unlike GPIO_OUT_REG,
+  // that register has no plain memory-mapped write path (QEMU's
+  // hw/gpio/esp32_gpio.c only updates it from inside set_gpio(), called
+  // via a qdev GPIO-in line, not from a bus write handler). Reaches it
+  // through a small addition to vecnode/qemu-esp32 itself: a new HMP
+  // monitor command ("esp32_set_gpio_input <gpio> <value>", added to
+  // hw/xtensa/esp32_picsimlab.c + hmp-commands.hx in that fork) invoked
+  // here over the same GDB RSP connection read_pin() already uses, via
+  // its qRcmd ("monitor command") extension - see run_monitor_command()
+  // in the .cpp file.
   json write_pin(const std::string &pin, int value) override;
+
+  // Same GPIO_ENABLE_REG memory read pattern as read_pin()'s GPIO_OUT_REG
+  // - direction is just another plain memory-mapped register, no fork
+  // patch needed for this one.
+  json read_pin_direction(const std::string &pin) const override;
+
+  // Feeds an ADC1-channel-capable pin (GPIO32-39) a real voltage, scaled
+  // to a 12-bit raw count against the SAR ADC's ADC_values[] array - the
+  // same vecnode/qemu-esp32 HMP-command path write_pin() uses, targeting
+  // hw/misc/esp32_sens.c's Esp32SensState instead of the GPIO device. A
+  // pin outside GPIO32-39 has no ADC1 channel behind it and this silently
+  // no-ops, matching avr8/rp2040's own "reject a non-ADC pin, caught not
+  // thrown" posture.
+  json write_analog_pin(const std::string &pin, double voltage) override;
 
   // Replaces the booted firmware with newly compiled bytes and respawns
   // qemu-system-xtensa fresh, halted (matching avr8/rp2040's own

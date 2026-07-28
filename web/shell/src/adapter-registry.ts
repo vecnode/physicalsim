@@ -26,7 +26,6 @@ export type AdapterId =
   | "avr8-mega"
   | "avr8-attiny85"
   | "avr8-leonardo"
-  | "cortex-m"
   | "esp32";
 
 // Structural interface both AdapterClient (Worker-backed) and
@@ -36,12 +35,12 @@ export type AdapterId =
 export interface SimClient {
   call(method: AdapterMethod, params?: unknown): Promise<unknown>;
   onStateChange(cb: (state: SimState) => void): () => void;
-  // Optional: not every client kind implements this. NativeAdapterClient
-  // does (polling readPin - the native bridge has no real push channel
-  // from the C++ process, see that file), a Worker-backed AdapterClient
-  // does too (real postMessage push) - the only clients that don't are
-  // ones whose adapter has no working readPin at all yet (cortex-m).
-  onPinChange?(cb: (pin: string, value: number) => void): () => void;
+  // Mandatory - every registered adapter's pin I/O is a real, working
+  // capability now (adapter-types.ts), and every SimClient kind actually
+  // implements this: a Worker-backed AdapterClient via real postMessage
+  // push, NativeAdapterClient via polling readPin (the native bridge has
+  // no real push channel from the C++ process, see that file).
+  onPinChange(cb: (pin: string, value: number) => void): () => void;
   // NativeAdapterClient doesn't implement this one - no native adapter
   // has a Serial/UART peripheral wired up yet.
   onSerialData?(cb: (byte: number) => void): () => void;
@@ -50,9 +49,9 @@ export interface SimClient {
 }
 
 // Adapters with no JS/Worker side at all - the C++ shell spawns and
-// controls these directly (see src/qemu_adapter.hpp). Reached only
+// controls these directly (see src/esp32_qemu_adapter.hpp). Reached only
 // through the HTTP bridge, never postMessage.
-const NATIVE_ADAPTER_IDS = new Set<AdapterId>(["cortex-m", "esp32"]);
+const NATIVE_ADAPTER_IDS = new Set<AdapterId>(["esp32"]);
 
 function createWorker(id: AdapterId): Worker {
   if (id === "rp2040") {

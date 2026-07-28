@@ -11,7 +11,7 @@ import {
 import { componentRegistry } from "../component-registry.js";
 import { componentElectricalParams, getElectricalValue } from "@physicalsim/common";
 import type { Viewport } from "./viewport.js";
-import { WiringLayer, type Wire } from "./wiring.js";
+import { WiringLayer, voltageColor, type Wire } from "./wiring.js";
 
 type PlacedEntity = CircuitBoard | PlacedComponent;
 
@@ -391,12 +391,16 @@ export class Scene {
       marker.style.top = `${pin.y}px`;
       marker.title = pin.name;
       marker.dataset.pin = pin.name;
+      marker.dataset.entityId = entityId;
       this.wiring.registerPin(entityId, pin.name, pin.x, pin.y);
 
       // Stop both events from reaching the board wrapper/container - a
       // pin click should select/connect the pin, not start a board drag
       // or deselect the board underneath it.
-      marker.addEventListener("mousedown", (ev) => ev.stopPropagation());
+      marker.addEventListener("mousedown", (ev) => {
+        ev.stopPropagation();
+        this.startPinDrag(entityId, pin.name, marker);
+      });
       marker.addEventListener("click", (ev) => {
         ev.stopPropagation();
         this.selectPin(marker);
@@ -405,6 +409,71 @@ export class Scene {
       });
       wrapper.appendChild(marker);
     }
+  }
+
+  // Colors every currently-rendered pin marker by its own solved node
+  // voltage, using the exact same blue->red scale (voltageColor(),
+  // wiring.ts) a wire is already colored by - so "what voltage is this
+  // pin at" reads the same way whether you're looking at the wire or the
+  // pin it terminates at, instead of the wire being the only place this
+  // app expresses voltage visually. `voltages` is keyed "entityId::pin",
+  // matching the marker's own dataset.entityId/dataset.pin (set in
+  // overlayPinMarkers() above) - called by AnalogNetChain after every
+  // solve, with an empty map on reset()/a fresh example.
+  //
+  // A box-shadow glow rather than touching border-color/background
+  // directly: those two properties are exactly what .pin-marker:hover/
+  // .selected/.connecting (style.css) already use for interaction state,
+  // and inline styles would otherwise permanently win over those classes'
+  // rules (same specificity family, later/inline wins) - a hovered or
+  // selected pin would stop looking hovered/selected the moment it also
+  // had a solved voltage. box-shadow is untouched by any of those three
+  // states, so the voltage glow and the interaction-state look coexist
+  // instead of one clobbering the other.
+  setPinVoltages(voltages: ReadonlyMap<string, number>): void {
+    for (const { wrapper } of this.dom.values()) {
+      for (const marker of wrapper.querySelectorAll<HTMLElement>(".pin-marker")) {
+        const entityId = marker.dataset.entityId;
+        const pin = marker.dataset.pin;
+        const voltage = entityId && pin ? voltages.get(`${entityId}::${pin}`) : undefined;
+        marker.style.boxShadow = voltage !== undefined ? `0 0 0 3px ${voltageColor(voltage)}` : "";
+        marker.title = voltage !== undefined ? `${pin} - ${voltage.toFixed(2)} V` : (pin ?? "");
+      }
+    }
+  }
+
+  // Lets a connection be made in one motion (mousedown on a pin, drag,
+  // release over a different pin) as an alternative to the existing
+  // click-then-click flow (handlePinClick(), wired into the marker's own
+  // "click" listener above) - that flow still works unchanged for a
+  // plain click (mousedown and mouseup on the same marker always fire a
+  // real "click" event, handled exactly as before). This only adds
+  // behavior for the cross-element case a "click" event never covers:
+  // mousedown on one marker, mouseup on a *different* one, which browsers
+  // don't synthesize a click for at all. Bigger than a naive
+  // mousemove/mouseup pair would need since .pin-marker's own hit area
+  // (style.css) is already the intended drag *target* size - this reuses
+  // that same hit-testing via elementFromPoint() at drop time rather than
+  // computing its own hover radius.
+  private startPinDrag(entityId: string, pin: string, marker: HTMLElement): void {
+    const onMouseUp = (ev: MouseEvent): void => {
+      window.removeEventListener("mouseup", onMouseUp);
+      const target = (document.elementFromPoint(ev.clientX, ev.clientY) as HTMLElement | null)?.closest(
+        ".pin-marker",
+      ) as HTMLElement | null;
+      if (!target || target === marker) return; // same pin (plain click) or empty space (abandoned drag)
+      const targetEntityId = target.dataset.entityId;
+      const targetPin = target.dataset.pin;
+      if (!targetEntityId || !targetPin) return;
+      // A drag-completed connection supersedes whatever click-flow might
+      // still be pending (e.g. a pin clicked earlier, then abandoned in
+      // favor of this drag) - left as-is it would sit there glowing
+      // ".connecting" with no way to tell it's now stale.
+      this.wiring.cancelPending();
+      this.wiring.clearSelection();
+      this.wiring.connect({ entityId, pin }, { entityId: targetEntityId, pin: targetPin });
+    };
+    window.addEventListener("mouseup", onMouseUp);
   }
 
   // Wires drag on one placed item's wrapper. Returns a dispose function

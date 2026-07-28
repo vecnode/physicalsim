@@ -78,6 +78,27 @@ std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
   return std::nullopt;
 }
 
+// Bundled "esp32-toolchain/esptool" next to the executable (CMakeLists.txt's
+// BUNDLE_ESPTOOL fetches espressif/esptool's own standalone PyInstaller
+// build and copies it there) - a real esptool.exe with Python and every
+// dependency it needs already frozen in, not a script that needs an
+// interpreter to run it. Checked first, same "bundled beats dev-machine"
+// priority find_bundled_xtensa_gcc_bin_dir() above already has; falling
+// back to `python_exe -m esptool` (compile_sketch()'s merge_bin step)
+// when this hasn't been bundled costs nothing extra - just a fresh Python
+// cold-start per compile, same as before this existed.
+std::optional<std::filesystem::path> find_bundled_esptool_exe() {
+  const auto bundled = executable_dir() / "esp32-toolchain" / "esptool";
+  std::error_code ec;
+#ifdef _WIN32
+  const auto exe = bundled / "esptool.exe";
+#else
+  const auto exe = bundled / "esptool";
+#endif
+  if (std::filesystem::exists(exe, ec)) return exe;
+  return std::nullopt;
+}
+
 // Bundled "esp-idf/" next to the executable (CMakeLists.txt's
 // BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds -
 // opt-in given the size, unlike pico-sdk's unconditional copy), then
@@ -490,10 +511,26 @@ CompileResult compile_sketch(const std::string &source) {
   // before writing the file QEMU's -drive actually reads.
   std::cerr << "[esp32_toolchain] starting esptool merge_bin" << std::endl;
   const auto merge_start = std::chrono::steady_clock::now();
-  const auto merge_run = procexec::run_and_wait(
-      toolchain->python_exe, {"-m", "esptool", "--chip", "esp32", "merge_bin", "-o", "flash_image.bin",
-                              "@flash_args"},
-      dir / "build", 60);
+  // A bundled standalone esptool.exe (find_bundled_esptool_exe(), see its
+  // own comment) skips a fresh Python interpreter cold-start plus esptool's
+  // own import chain on every single compile - real, measurable overhead
+  // paid once per merge_bin call regardless of how "warm" the ninja build
+  // itself already is (see esp32_toolchain.hpp's toolchain-discovery notes
+  // on why cmake/ninja/python still aren't bundled themselves; esptool is
+  // the one piece of this call that doesn't need any of those three).
+  // Identical arguments either way - only the launcher (a real exe vs.
+  // `python -m esptool`) differs.
+  const auto bundled_esptool = find_bundled_esptool_exe();
+  const std::vector<std::string> merge_args = {"--chip", "esp32", "merge_bin", "-o", "flash_image.bin",
+                                                "@flash_args"};
+  procexec::RunResult merge_run;
+  if (bundled_esptool) {
+    merge_run = procexec::run_and_wait(*bundled_esptool, merge_args, dir / "build", 60);
+  } else {
+    std::vector<std::string> python_args = {"-m", "esptool"};
+    python_args.insert(python_args.end(), merge_args.begin(), merge_args.end());
+    merge_run = procexec::run_and_wait(toolchain->python_exe, python_args, dir / "build", 60);
+  }
   const auto merge_seconds =
       std::chrono::duration<double>(std::chrono::steady_clock::now() - merge_start).count();
   std::cerr << "[esp32_toolchain] esptool merge_bin exit_code=" << merge_run.exit_code << " (" << merge_seconds

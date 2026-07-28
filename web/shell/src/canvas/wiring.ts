@@ -62,12 +62,27 @@ export interface ElbowRoute {
   legBY?: number;
 }
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface Wire {
   id: string;
   a: PinRef;
   b: PinRef;
   // Unused by "straight"/"bezier" styles.
   elbow: ElbowRoute;
+  // User-added corner points for the "elbow" style, in order from A to B -
+  // Ctrl+click on a selected elbow wire inserts one (see insertWaypoint()),
+  // each independently draggable (see the "waypoint" case in the
+  // constructor's mousemove/mouseup handlers). Empty by default: an
+  // untouched elbow wire still draws as the plain 3-segment "Z" the
+  // elbow/legAY/legBY scheme above already produces (elbowRoute()/
+  // pathFor() both leave that scheme in place and only switch to
+  // waypoint-based routing once this is non-empty), so existing wires and
+  // saved .psim files render identically to before this field existed.
+  waypoints: Point[];
 }
 
 const SVG_NS = "http://www.w3.org/2000/svg";
@@ -105,7 +120,7 @@ const VOLTAGE_COLOR_MAX_V = 5;
 // wire at a different solved voltage) at a glance, without needing to
 // hover for the tooltip mna-solver.ts's answer already has (see render()
 // below).
-function voltageColor(voltage: number): string {
+export function voltageColor(voltage: number): string {
   const t = Math.max(0, Math.min(1, voltage / VOLTAGE_COLOR_MAX_V));
   const hue = 220 - t * 220;
   return `hsl(${hue}, 85%, 55%)`;
@@ -119,15 +134,22 @@ export class WiringLayer {
   private style: LinkStyle = "straight";
   private color = DEFAULT_WIRE_COLOR;
 
-  // Set while one of the elbow style's three segment handles is being
-  // dragged - a persistent window-level mousemove/mouseup (registered
-  // once, in the constructor) reads/clears this, rather than attaching a
-  // fresh listener pair per render() call the way a one-off drag handler
-  // normally would; render() rebuilds every wire's DOM from scratch on
-  // every call (including every mousemove while dragging), so listeners
-  // attached *inside* render() would never get cleaned up and pile up
-  // indefinitely.
+  // Set while one of the elbow style's three (legacy Z-scheme) segment
+  // handles is being dragged - a persistent window-level mousemove/mouseup
+  // (registered once, in the constructor) reads/clears this, rather than
+  // attaching a fresh listener pair per render() call the way a one-off
+  // drag handler normally would; render() rebuilds every wire's DOM from
+  // scratch on every call (including every mousemove while dragging), so
+  // listeners attached *inside* render() would never get cleaned up and
+  // pile up indefinitely.
   private dragging: { wireId: string; segment: keyof ElbowRoute } | null = null;
+
+  // Same idea as `dragging` above, for one of a wire's user-added
+  // waypoints (Wire.waypoints) instead of the legacy Z-scheme's fixed
+  // three segments - a separate field rather than folding into `dragging`
+  // since a waypoint drag moves a point freely (both x and y), not one
+  // axis of a fixed segment.
+  private draggingWaypoint: { wireId: string; index: number } | null = null;
 
   // Pin-local offsets (the same pin.x/pin.y used to position the marker
   // itself, relative to its entity's wrapper) - registered by the scene
@@ -185,6 +207,16 @@ export class WiringLayer {
     content.appendChild(this.svg);
 
     window.addEventListener("mousemove", (ev) => {
+      if (this.draggingWaypoint) {
+        const wire = this.wires.find((w) => w.id === this.draggingWaypoint?.wireId);
+        const point = wire?.waypoints[this.draggingWaypoint.index];
+        if (!point) return;
+        const world = this.viewport.screenToWorld(ev.clientX, ev.clientY);
+        point.x = world.x;
+        point.y = world.y;
+        this.render();
+        return;
+      }
       if (!this.dragging) return;
       const wire = this.wires.find((w) => w.id === this.dragging?.wireId);
       if (!wire) return;
@@ -197,6 +229,7 @@ export class WiringLayer {
     });
     window.addEventListener("mouseup", () => {
       this.dragging = null;
+      this.draggingWaypoint = null;
     });
   }
 
@@ -315,6 +348,7 @@ export class WiringLayer {
       a: { entityId: this.pending.entityId, pin: this.pending.pin },
       b: { entityId, pin },
       elbow: {},
+      waypoints: [],
     };
     this.cancelPending();
     this.wires.push(wire);
@@ -331,7 +365,7 @@ export class WiringLayer {
   // just not enforced here since there's no marker to fail gracefully
   // against; callers are expected to await placement first.
   connect(a: PinRef, b: PinRef): Wire {
-    const wire: Wire = { id: `wire-${this.nextId++}`, a, b, elbow: {} };
+    const wire: Wire = { id: `wire-${this.nextId++}`, a, b, elbow: {}, waypoints: [] };
     this.wires.push(wire);
     this.render();
     this.notifyWiresChanged();
@@ -378,6 +412,7 @@ export class WiringLayer {
     this.pinOffsets.clear();
     this.selectedWireId = null;
     this.dragging = null;
+    this.draggingWaypoint = null;
     this.cancelPending();
     this.render();
     if (hadWires) this.notifyWiresChanged();
@@ -399,9 +434,49 @@ export class WiringLayer {
     };
   }
 
+  // The ordered chain of logical points a waypoint-routed elbow wire's
+  // path passes through - just [A, ...waypoints, B], with no synthesized
+  // corners of its own (those come from orthogonalSegments() below,
+  // purely for the *rendered* path - a waypoint itself is always a real,
+  // user-placed point, not an implicit bend).
+  private waypointChain(a: Point, b: Point, wire: Wire): Point[] {
+    return [a, ...wire.waypoints, b];
+  }
+
+  // Expands a chain of logical points into the literal horizontal-then-
+  // vertical sub-segments an orthogonal ("elbow") path actually draws
+  // between each consecutive pair - a fixed dogleg convention (always
+  // horizontal first), not alternating the way the legacy Z-scheme's
+  // fixed three segments do, since an arbitrary-length chain has no
+  // natural "which axis first" alternation to fall back on. Each returned
+  // segment carries `afterIndex`, the index into `points` it was
+  // generated from (segment 2*i and 2*i+1 both come from the interval
+  // between points[i] and points[i+1]) - insertWaypointNear() below uses
+  // this to turn "closest to this literal segment" back into "insert
+  // after this point in the chain".
+  private orthogonalSegments(
+    points: readonly Point[],
+  ): Array<{ from: Point; to: Point; afterIndex: number }> {
+    const segments: Array<{ from: Point; to: Point; afterIndex: number }> = [];
+    for (let i = 0; i < points.length - 1; i++) {
+      const from = points[i];
+      const to = points[i + 1];
+      const corner = { x: to.x, y: from.y };
+      segments.push({ from, to: corner, afterIndex: i });
+      segments.push({ from: corner, to, afterIndex: i });
+    }
+    return segments;
+  }
+
   // The SVG path data for one wire, in the current global style. Shared
   // by the hit-path and the visible path (both trace the same shape).
   private pathFor(a: { x: number; y: number }, b: { x: number; y: number }, wire: Wire): string {
+    if (this.style === "elbow" && wire.waypoints.length > 0) {
+      const segments = this.orthogonalSegments(this.waypointChain(a, b, wire));
+      let d = `M ${a.x} ${a.y}`;
+      for (const seg of segments) d += ` L ${seg.to.x} ${seg.to.y}`;
+      return d;
+    }
     if (this.style === "elbow") {
       const { midX, legAY, legBY } = this.elbowRoute(a, b, wire);
       return (
@@ -449,6 +524,17 @@ export class WiringLayer {
       hit.addEventListener("mousedown", (ev) => ev.stopPropagation());
       hit.addEventListener("click", (ev) => {
         ev.stopPropagation();
+        // Ctrl+click on a selected elbow wire adds a new draggable corner
+        // at the click point instead of (just) selecting - see
+        // insertWaypointNear()'s own comment. Requires the wire already
+        // selected first (a plain click always selects, never inserts) so
+        // an accidental Ctrl held down while clicking an unrelated wire
+        // doesn't silently reshape it.
+        if (ev.ctrlKey && this.style === "elbow" && selected) {
+          const world = this.viewport.screenToWorld(ev.clientX, ev.clientY);
+          this.insertWaypointNear(wire, world);
+          return;
+        }
         this.selectWire(wire.id);
       });
 
@@ -516,22 +602,69 @@ export class WiringLayer {
         this.svg.appendChild(dot);
       }
 
-      // The elbow style's three draggable segment handles - one per
-      // "axis" (both horizontal legs, and the vertical channel between
-      // them), each at the midpoint of the segment it drags. A leg
-      // handle only moves vertically (it drags that leg's height);
-      // the channel handle only moves horizontally (it drags the
-      // channel's x) - see the mousemove handler in the constructor.
-      // Only drawn for the *selected* wire - otherwise every elbow wire
-      // on the canvas would be covered in handles at once, which reads
-      // as noise rather than "this is what you can drag right now".
+      // Only drawn for the *selected* wire - otherwise every elbow wire on
+      // the canvas would be covered in handles at once, which reads as
+      // noise rather than "this is what you can drag right now". Two
+      // mutually exclusive handle sets: a wire with user-added waypoints
+      // gets one freely-draggable circle per waypoint (plus Ctrl+click to
+      // remove one); an untouched wire still gets the legacy three-
+      // segment Z handles, so a wire never has to "opt in" via some
+      // separate action before Ctrl+click starts working on it (the
+      // hit-path's own click handler always seeds the waypoint list from
+      // scratch on the first Ctrl+click - see insertWaypointNear()).
       if (this.style === "elbow" && selected) {
-        const { midX, legAY, legBY } = this.elbowRoute(a, b, wire);
-        this.addElbowHandle(wire, (a.x + midX) / 2, legAY, "legAY", "v");
-        this.addElbowHandle(wire, midX, (legAY + legBY) / 2, "midX", "h");
-        this.addElbowHandle(wire, (midX + b.x) / 2, legBY, "legBY", "v");
+        if (wire.waypoints.length > 0) {
+          wire.waypoints.forEach((point, index) => this.addWaypointHandle(wire, point, index));
+        } else {
+          const { midX, legAY, legBY } = this.elbowRoute(a, b, wire);
+          this.addElbowHandle(wire, (a.x + midX) / 2, legAY, "legAY", "v");
+          this.addElbowHandle(wire, midX, (legAY + legBY) / 2, "midX", "h");
+          this.addElbowHandle(wire, (midX + b.x) / 2, legBY, "legBY", "v");
+        }
       }
     }
+  }
+
+  // Adds a new corner to `wire`'s route at `world`, ordered by proximity
+  // to the wire's existing orthogonal path rather than always appended at
+  // the end - clicking near the *start* of a long wire should add a
+  // corner there, not silently at the far end. Seeds `wire.waypoints`
+  // from the endpoints alone on a wire's very first Ctrl+click (no prior
+  // waypoints yet - the legacy Z-scheme's own midX/legAY/legBY are left
+  // exactly as they were, just no longer read once waypoints exist, per
+  // pathFor()'s own branch), so the feature works immediately on any
+  // elbow wire without a separate "convert to waypoints" step.
+  private insertWaypointNear(wire: Wire, world: Point): void {
+    const a = this.endpoint(wire.a);
+    const b = this.endpoint(wire.b);
+    if (!a || !b) return;
+    const chain = this.waypointChain(a, b, wire);
+    const segments = this.orthogonalSegments(chain);
+    let bestIndex = 0;
+    let bestDistance = Infinity;
+    for (const seg of segments) {
+      const distance = distanceToSegment(world, seg.from, seg.to);
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        bestIndex = seg.afterIndex;
+      }
+    }
+    // afterIndex is an index into `chain` (which starts with A); the
+    // waypoints array itself doesn't include A, so inserting "after
+    // chain[bestIndex]" is inserting at that same index within
+    // `waypoints` (chain[0]=A, waypoints[0]=chain[1], ... - the offset-by-
+    // one cancels out exactly).
+    wire.waypoints.splice(bestIndex, 0, { x: world.x, y: world.y });
+    this.selectWire(wire.id);
+  }
+
+  // Removes one waypoint - Ctrl+click on its own handle (see
+  // addWaypointHandle() below), the symmetric undo to
+  // insertWaypointNear(). Falls back to the legacy Z-scheme automatically
+  // once the last one is gone (pathFor()'s branch just stops matching).
+  private removeWaypoint(wire: Wire, index: number): void {
+    wire.waypoints.splice(index, 1);
+    this.render();
   }
 
   // Creates one draggable elbow-segment handle at (cx, cy). `axis`
@@ -560,6 +693,32 @@ export class WiringLayer {
     this.svg.appendChild(handle);
   }
 
+  // Creates one draggable waypoint handle at `point` - freely draggable
+  // (both x and y, unlike addElbowHandle()'s axis-locked ones, since a
+  // user-placed corner isn't constrained to one segment's fixed geometry)
+  // via draggingWaypoint (see the constructor's mousemove/mouseup
+  // handlers). Ctrl+click removes it instead of starting a drag - the
+  // mousedown listener checks ev.ctrlKey before committing to a drag so a
+  // Ctrl+click doesn't also nudge the point first.
+  private addWaypointHandle(wire: Wire, point: Point, index: number): void {
+    const handle = document.createElementNS(SVG_NS, "circle");
+    handle.setAttribute("cx", String(point.x));
+    handle.setAttribute("cy", String(point.y));
+    handle.setAttribute("r", "5");
+    handle.setAttribute("class", "wire-handle wire-handle-waypoint");
+    handle.setAttribute("vector-effect", "non-scaling-stroke");
+    handle.addEventListener("mousedown", (ev) => {
+      ev.stopPropagation();
+      this.selectWire(wire.id);
+      if (ev.ctrlKey) {
+        this.removeWaypoint(wire, index);
+        return;
+      }
+      this.draggingWaypoint = { wireId: wire.id, index };
+    });
+    this.svg.appendChild(handle);
+  }
+
   // A pin's world position is its entity's top-left plus its registered
   // local offset, rotated around the wrapper's own center by the
   // entity's current rotation - matching the CSS transform: rotate()
@@ -574,6 +733,20 @@ export class WiringLayer {
     const rotated = rotateAround(offset, frame.width / 2, frame.height / 2, frame.rotation);
     return { x: frame.x + rotated.x, y: frame.y + rotated.y };
   }
+}
+
+// Shortest distance from `point` to the line segment `from`-`to` - used
+// by insertWaypointNear() to find which literal segment of a wire's
+// rendered orthogonal path a Ctrl+click landed closest to.
+function distanceToSegment(point: Point, from: Point, to: Point): number {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared === 0) return Math.hypot(point.x - from.x, point.y - from.y);
+  let t = ((point.x - from.x) * dx + (point.y - from.y) * dy) / lengthSquared;
+  t = Math.max(0, Math.min(1, t));
+  const closest = { x: from.x + t * dx, y: from.y + t * dy };
+  return Math.hypot(point.x - closest.x, point.y - closest.y);
 }
 
 // Rotates `point` clockwise by `degrees` around (cx, cy) - screen-space

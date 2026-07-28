@@ -7,15 +7,14 @@ import { resolvePin, type BoardPinMap } from "../boards/board.js";
 // this shape structurally, so no explicit wiring is needed either way.
 export interface PinClient {
   call(method: AdapterMethod, params?: unknown): Promise<unknown>;
-  onPinChange?(cb: (pin: string, value: number) => void): () => void;
+  onPinChange(cb: (pin: string, value: number) => void): () => void;
 }
 
 // Thin wrapper around one adapter pin, reached through a client's generic
 // call()/onPinChange(). Adapter-agnostic: works the same whether the
-// underlying client is Worker-backed (avr8, rp2040) or native (cortex-m),
-// though onChange() throws for clients that don't support pin-change push
-// (see PinClient.onPinChange being optional, and NativeAdapterClient not
-// implementing it today).
+// underlying client is Worker-backed (avr8, rp2040) or native (esp32) -
+// every client kind implements onPinChange (adapter-registry.ts's
+// SimClient, which both AdapterClient and NativeAdapterClient satisfy).
 export class CircuitPin {
   private subscribed = false;
 
@@ -51,11 +50,6 @@ export class CircuitPin {
   }
 
   onChange(cb: (value: number) => void): () => void {
-    if (!this.client.onPinChange) {
-      throw new Error(
-        `Cannot subscribe to pin "${this.pin}": this client does not support pin-change events`,
-      );
-    }
     if (!this.subscribed) {
       this.subscribed = true;
       void this.client.call("subscribePin", { pin: this.pin });

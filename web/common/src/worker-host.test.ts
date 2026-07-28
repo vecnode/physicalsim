@@ -35,6 +35,13 @@ function makeFakeAdapter(overrides: Partial<SimulatorAdapter> = {}): SimulatorAd
     step: vi.fn(),
     reset: vi.fn(),
     onStateChange: vi.fn((_cb: (state: SimState) => void) => () => undefined),
+    // Mandatory on every adapter (adapter-types.ts) - harmless no-op
+    // defaults here, overridden per test with the behavior it's checking.
+    readPin: vi.fn(() => undefined),
+    writePin: vi.fn(),
+    onPinChange: vi.fn(() => () => undefined),
+    readPinDirection: vi.fn(() => undefined),
+    writeAnalogPin: vi.fn(),
     ...overrides,
   };
 }
@@ -64,16 +71,6 @@ describe("hostAdapter pin dispatch", () => {
 
     expect(writePin).toHaveBeenCalledWith("B5", 1);
     expect(worker.posted).toEqual([{ id: 2, result: undefined }]);
-  });
-
-  it("rejects readPin/writePin when the adapter doesn't implement them", async () => {
-    hostAdapter(makeFakeAdapter());
-
-    await worker.send({ id: 3, method: "readPin", params: { pin: "B5" } });
-
-    expect(worker.posted).toEqual([
-      { id: 3, error: 'Adapter "fake" does not support readPin' },
-    ]);
   });
 
   it("subscribePin wires the adapter's onPinChange to a pinChange event, once per pin", async () => {

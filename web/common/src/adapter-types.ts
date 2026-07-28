@@ -16,36 +16,38 @@ export interface SimulatorAdapter {
   step(n: number): void;
   reset(): void;
   onStateChange(cb: (state: SimState) => void): () => void;
-  // Pin I/O is an optional capability - not every adapter kind supports it
-  // (e.g. a native/QEMU-backed adapter may only support a subset, or none,
-  // depending on what its underlying machine model exposes).
-  readPin?(pin: string): number | undefined;
-  writePin?(pin: string, value: number): void;
-  onPinChange?(pin: string, cb: (value: number) => void): () => void;
+  // Pin I/O is a MANDATORY capability, not an optional one - every adapter
+  // this project registers (JS-worker or native/QEMU-backed) is required
+  // to give the analog netlist/solver (web/shell's canvas/netlist.ts +
+  // mna-solver.ts, driven by analog-net-chain.ts) a real, working answer
+  // for all five of these, the same way avr8/rp2040 already do. A pin
+  // that genuinely has no ADC hardware still answers writeAnalogPin() (by
+  // cleanly rejecting it, matching avr8/rp2040's own "reject a non-ADC
+  // pin, caught not thrown" posture) rather than the method being absent -
+  // "no such capability" is not a valid response for a registered adapter
+  // any more, only "this particular pin doesn't support it."
+  readPin(pin: string): number | undefined;
+  writePin(pin: string, value: number): void;
+  onPinChange(pin: string, cb: (value: number) => void): () => void;
   // Whether a pin is currently configured as a firmware-driven output or
-  // a (possibly externally-driven) input - readPin?/writePin? alone
-  // don't distinguish these, and the analog netlist/solver (web/shell's
-  // canvas/netlist.ts + mna-solver.ts) needs to know: an output pin
-  // driving HIGH/LOW is a real, if small, voltage source for the
-  // circuit it's wired into; an input pin is high-impedance, just
-  // another node. Optional and adapter-specific in how it's determined
-  // (avr8: the port's real DDR register bit; rp2040: GPIOPin's own
-  // outputEnable) - not every adapter kind can answer this (cortex-m's
-  // QEMU bridge has no working pin I/O at all yet, see readPin's own
-  // "Why cortex-m has no real pin I/O" note in ARCHITECTURE.md).
-  readPinDirection?(pin: string): PinDirection | undefined;
-  // Analog input - separate from readPin?/writePin? (which are always
+  // a (possibly externally-driven) input - readPin()/writePin() alone
+  // don't distinguish these, and the analog netlist/solver needs to know:
+  // an output pin driving HIGH/LOW is a real, if small, voltage source for
+  // the circuit it's wired into; an input pin is high-impedance, just
+  // another node. Adapter-specific in how it's determined (avr8: the
+  // port's real DDR register bit; rp2040: GPIOPin's own outputEnable;
+  // esp32: QEMU's GPIO_ENABLE_REG peeked over QMP) but always answerable.
+  readPinDirection(pin: string): PinDirection | undefined;
+  // Analog input - separate from readPin()/writePin() (which are always
   // digital 0/1) because an ADC channel is fed a continuous voltage, not
-  // a bit. "pin" is the same adapter-level pin id writePin? uses (e.g.
+  // a bit. "pin" is the same adapter-level pin id writePin() uses (e.g.
   // "C0" for avr8's A0) - the ADC channel it maps to is an adapter-
-  // internal detail, not something callers need to know. Optional: only
-  // a board whose adapter actually has an ADC peripheral wired up
-  // supports this (avr8 as of this addition; rp2040/cortex-m don't yet).
-  writeAnalogPin?(pin: string, voltage: number): void;
+  // internal detail, not something callers need to know.
+  writeAnalogPin(pin: string, voltage: number): void;
   // Serial (UART TX) output - also optional, and read-only for now: this
   // is Stage 1 of the terminal feature ("show whatever the firmware
   // transmits"), not Serial.read() support. Only avr8 implements it today
-  // (rp2040/cortex-m have no UART peripheral wired up yet).
+  // (rp2040/esp32 have no UART peripheral wired up yet).
   onSerialData?(cb: (byte: number) => void): () => void;
   // Optional - fires with a device-decoder's decoded output whenever it
   // has a new frame to publish (today: SSD1306Device's GDDRAM buffer,

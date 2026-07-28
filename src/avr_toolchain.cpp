@@ -6,6 +6,7 @@
 #include <atomic>
 #include <cstdlib>
 #include <fstream>
+#include <functional>
 #include <sstream>
 #include <vector>
 
@@ -302,6 +303,44 @@ using procexec::run_and_wait;
 
 std::atomic<int> g_step_counter{0};
 
+// Persistent, cross-process cache for core/library object files, under the
+// OS temp dir (survives repeated "Compile & Run" clicks *and* physicalsim
+// restarts, unlike g_configured-style in-process flags) - the core/library
+// sources are vendored, fixed once a build ships, so recompiling e.g. every
+// ArduinoCore-avr .cpp on every single click (the original behavior) was
+// pure waste: only sketch.cpp ever actually changes between clicks.
+std::filesystem::path core_cache_root() {
+  return std::filesystem::temp_directory_path() / "physicalsim-avr-core-cache";
+}
+
+// One string uniquely identifying "this exact set of compiler inputs" -
+// the toolchain/core/variant paths (so a different avr-gcc install or a
+// differently-resolved vendored core busts the cache) plus every compile
+// flag (so e.g. a board's -mmcu/-D set is part of the key, not just its
+// name). Hashed down to a fixed-width directory name rather than used
+// literally, since raw absolute paths joined together make an unwieldy
+// (and on Windows, potentially too long) directory name.
+std::string core_cache_key(const ToolchainPaths &tc, const std::vector<std::string> &flags) {
+  std::ostringstream key;
+  key << tc.bin_dir.string() << '|' << tc.core_dir.string() << '|' << tc.variant_dir.string();
+  for (const auto &flag : flags) key << '|' << flag;
+  return std::to_string(std::hash<std::string>{}(key.str()));
+}
+
+// Turns an absolute source path into a filesystem-safe, collision-free
+// object filename - same "one .o per source file, no basename clashes
+// across separate source trees" concern compile_sketch()'s own counter-
+// prefixing addressed for the per-compile work_dir, but stable across
+// runs here (no counter) so a repeat compile recognizes and reuses the
+// same cached .o instead of writing a new one next to it.
+std::string sanitize_for_filename(const std::filesystem::path &src) {
+  std::string s = src.string();
+  for (auto &c : s) {
+    if (c == '/' || c == '\\' || c == ':') c = '_';
+  }
+  return s;
+}
+
 // Common flags shared by every compile step, matching what a real
 // arduino-cli build uses for the target board: -Os for flash-size-
 // conscious code, LTO + --gc-sections to drop unused core functions, and
@@ -390,6 +429,9 @@ CompileResult compile_sketch(const std::string &source, const std::string &board
   std::vector<std::filesystem::path> object_files;
   std::ostringstream full_log;
 
+  // sketch.cpp always compiles fresh into work_dir (removed at the end -
+  // see cleanup() below) - it's the one input that actually changes
+  // between clicks, so there's nothing to cache it against.
   auto compile_one = [&](const std::filesystem::path &src, bool is_cpp) -> bool {
     // Prefixed with a running counter, not just the filename - core and
     // library directories are compiled from separate source trees now
@@ -417,6 +459,42 @@ CompileResult compile_sketch(const std::string &source, const std::string &board
     return true;
   };
 
+  // Core/library sources, by contrast, are vendored and don't change
+  // between compiles - cache_dir is keyed off the exact toolchain/flag set
+  // (core_cache_key()) so a stale .o from a different board/toolchain can
+  // never be reused, but a repeat compile against the *same* board just
+  // finds every core/library .o already sitting there and skips straight
+  // to reusing it, only ever paying real avr-g++ time for sketch.cpp
+  // itself plus the final link.
+  const auto cache_dir = core_cache_root() / core_cache_key(*toolchain, flags);
+  std::filesystem::create_directories(cache_dir, ec);
+
+  auto compile_cached = [&](const std::filesystem::path &src, bool is_cpp) -> bool {
+    const auto obj = cache_dir / (sanitize_for_filename(src) + ".o");
+    std::error_code exists_ec;
+    if (std::filesystem::exists(obj, exists_ec)) {
+      object_files.push_back(obj);
+      return true;
+    }
+    std::vector<std::string> args = flags;
+    if (is_cpp) {
+      args.insert(args.end(), {"-std=gnu++11", "-fpermissive", "-fno-exceptions",
+                                "-fno-threadsafe-statics"});
+    } else {
+      args.insert(args.end(), {"-std=gnu11"});
+    }
+    args.push_back("-c");
+    args.push_back(src.string());
+    args.push_back("-o");
+    args.push_back(obj.string());
+
+    const auto run = run_and_wait(is_cpp ? gxx : gcc, args, cache_dir);
+    full_log << run.output;
+    if (run.exit_code != 0) return false;
+    object_files.push_back(obj);
+    return true;
+  };
+
   bool ok = compile_one(work_dir / "sketch.cpp", /*is_cpp=*/true);
 
   if (ok) {
@@ -425,9 +503,9 @@ CompileResult compile_sketch(const std::string &source, const std::string &board
       if (!entry.is_regular_file()) continue;
       const auto ext = entry.path().extension().string();
       if (ext == ".c") {
-        ok = compile_one(entry.path(), /*is_cpp=*/false);
+        ok = compile_cached(entry.path(), /*is_cpp=*/false);
       } else if (ext == ".cpp") {
-        ok = compile_one(entry.path(), /*is_cpp=*/true);
+        ok = compile_cached(entry.path(), /*is_cpp=*/true);
       }
     }
   }
@@ -446,9 +524,9 @@ CompileResult compile_sketch(const std::string &source, const std::string &board
         if (!entry.is_regular_file()) continue;
         const auto ext = entry.path().extension().string();
         if (ext == ".c") {
-          ok = compile_one(entry.path(), /*is_cpp=*/false);
+          ok = compile_cached(entry.path(), /*is_cpp=*/false);
         } else if (ext == ".cpp") {
-          ok = compile_one(entry.path(), /*is_cpp=*/true);
+          ok = compile_cached(entry.path(), /*is_cpp=*/true);
         }
       }
     }

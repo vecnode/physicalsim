@@ -4,7 +4,7 @@ import type { Wire } from "./wiring.js";
 import type { PinPowerInfo } from "./wire-validator.js";
 
 function wire(id: string, aEntity: string, aPin: string, bEntity: string, bPin: string): Wire {
-  return { id, a: { entityId: aEntity, pin: aPin }, b: { entityId: bEntity, pin: bPin }, elbow: {} };
+  return { id, a: { entityId: aEntity, pin: aPin }, b: { entityId: bEntity, pin: bPin }, elbow: {}, waypoints: [] };
 }
 
 function entities(map: Record<string, NetlistEntityInfo>): ReadonlyMap<string, NetlistEntityInfo> {

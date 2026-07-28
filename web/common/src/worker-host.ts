@@ -53,39 +53,26 @@ export function hostAdapter(adapter: SimulatorAdapter): void {
           result = adapter.reset();
           break;
         case "readPin":
-          if (!adapter.readPin) {
-            throw new Error(`Adapter "${adapter.id}" does not support readPin`);
-          }
+          // Mandatory on every adapter (adapter-types.ts) - no capability
+          // guard needed, unlike onSerialData/onI2CFrame/loadFirmware below.
           result = adapter.readPin((params as ReadPinParams).pin);
           break;
         case "readPinDirection":
-          if (!adapter.readPinDirection) {
-            throw new Error(`Adapter "${adapter.id}" does not support readPinDirection`);
-          }
           result = adapter.readPinDirection((params as ReadPinParams).pin);
           break;
         case "writePin":
-          if (!adapter.writePin) {
-            throw new Error(`Adapter "${adapter.id}" does not support writePin`);
-          }
           {
             const { pin, value } = params as WritePinParams;
             result = adapter.writePin(pin, value);
           }
           break;
         case "writeAnalogPin":
-          if (!adapter.writeAnalogPin) {
-            throw new Error(`Adapter "${adapter.id}" does not support writeAnalogPin`);
-          }
           {
             const { pin, voltage } = params as WriteAnalogPinParams;
             result = adapter.writeAnalogPin(pin, voltage);
           }
           break;
         case "subscribePin":
-          if (!adapter.onPinChange) {
-            throw new Error(`Adapter "${adapter.id}" does not support onPinChange`);
-          }
           {
             const { pin } = params as SubscribePinParams;
             if (!pinSubscriptions.has(pin)) {

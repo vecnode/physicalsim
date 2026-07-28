@@ -125,10 +125,10 @@ curl -X POST http://127.0.0.1:<port>/bridge/rp2040/stop
 # Last known state (from the adapter's own stateChange events)
 curl http://127.0.0.1:<port>/bridge/rp2040/state
 
-# cortex-m works over the exact same surface, backed by qemu-system-arm
-# instead of a Worker
-curl -X POST http://127.0.0.1:<port>/bridge/cortex-m/start
-curl http://127.0.0.1:<port>/bridge/cortex-m/state
+# esp32 works over the exact same surface, backed by a spawned
+# qemu-system-xtensa process instead of a Worker
+curl -X POST http://127.0.0.1:<port>/bridge/esp32/start
+curl http://127.0.0.1:<port>/bridge/esp32/state
 ```
 
 

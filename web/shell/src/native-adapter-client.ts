@@ -1,6 +1,6 @@
-// Client for a *native-backed* adapter (e.g. "cortex-m", "esp32") - one the
-// C++ shell spawns and controls directly (see src/qemu_adapter.{hpp,cpp},
-// src/esp32_qemu_adapter.{hpp,cpp}), not a Worker running JS/TS. There is
+// Client for a *native-backed* adapter (e.g. "esp32") - one the C++ shell
+// spawns and controls directly (see src/esp32_qemu_adapter.{hpp,cpp}), not
+// a Worker running JS/TS. There is
 // no postMessage channel to this kind of adapter at all, so this talks to
 // the same HTTP bridge surface external callers use (POST
 // /bridge/:adapter/:method, GET /bridge/:adapter/state) directly from the
@@ -19,18 +19,11 @@ interface BridgeHttpResult {
   error?: string;
 }
 
-// Implements SimClient's optional onPinChange by polling readPin for every
-// subscribed pin on the same timer that already polls adapter state - the
-// native bridge has no push channel from the C++ process into the page
-// (unlike a Worker's postMessage), so polling is the only option here.
-// Not implemented until now because no native adapter had real per-pin
-// state worth polling: cortex-m's QemuInstance still stubs readPin as
-// unsupported (see src/qemu_adapter.hpp); esp32_qemu_adapter.hpp's
-// readPin() is the first one that actually returns live state, and
-// wiring an LED to it with no push channel at all left the LED showing a
-// single stale snapshot from the moment it was wired, never updating
-// again - found while checking the "GPIO Blink (ESP32)" example's LEDs
-// didn't visually blink even with the adapter genuinely running.
+// Implements SimClient's mandatory onPinChange by polling readPin for
+// every subscribed pin on the same timer that already polls adapter state
+// - the native bridge has no push channel from the C++ process into the
+// page (unlike a Worker's postMessage), so polling is the only option
+// here.
 export class NativeAdapterClient {
   private stateListeners = new Set<(state: SimState) => void>();
   private pinListeners = new Set<(pin: string, value: number) => void>();

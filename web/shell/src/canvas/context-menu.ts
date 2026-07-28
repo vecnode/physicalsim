@@ -1,14 +1,18 @@
 import { boardDisplayName, boardTagName } from "../circuit.js";
-import { componentRegistry, type ComponentCategory } from "../component-registry.js";
+import { componentRegistry } from "../component-registry.js";
 
-// Right-click "Boards" / "Sensors" / "Connections" submenus, each one
-// entry per registered type (boardTagName/boardDisplayName in circuit.ts
-// for boards, componentRegistry in component-registry.ts for the other
-// two) - a new board or component type is automatically listed here too,
-// no separate menu registry to maintain. Built fresh on each open (no
-// persistent element to keep in sync); submenus are nested DOM (not a
-// second popup) shown via CSS :hover (style.css's .context-submenu), the
-// standard flyout-menu convention.
+// Right-click "Boards" / "Components" submenus, each one entry per
+// registered type (boardTagName/boardDisplayName in circuit.ts for
+// boards, componentRegistry in component-registry.ts for components,
+// every category flattened into one list rather than one submenu per
+// ComponentCategory - "sensors" vs "connections" is an internal grouping
+// for component-registry.ts's own organization, not a distinction worth
+// making someone hunt across two flyouts for) - a new board or component
+// type is automatically listed here too, no separate menu registry to
+// maintain. Built fresh on each open (no persistent element to keep in
+// sync); submenus are nested DOM (not a second popup) shown via CSS
+// :hover (style.css's .context-submenu), the standard flyout-menu
+// convention.
 
 // A menu row either runs an action (a leaf, e.g. one board/component
 // type) or opens a nested list (a category header like "Boards") - not
@@ -27,16 +31,11 @@ function boardMenuEntries(onAddBoard: (type: string) => void): MenuEntry[] {
   }));
 }
 
-function componentMenuEntries(
-  category: ComponentCategory,
-  onAddComponent: (type: string) => void,
-): MenuEntry[] {
-  return Object.entries(componentRegistry)
-    .filter(([, def]) => def.category === category)
-    .map(([type, def]) => ({
-      label: def.displayName,
-      onSelect: () => onAddComponent(type),
-    }));
+function componentMenuEntries(onAddComponent: (type: string) => void): MenuEntry[] {
+  return Object.entries(componentRegistry).map(([type, def]) => ({
+    label: def.displayName,
+    onSelect: () => onAddComponent(type),
+  }));
 }
 
 // Flips a submenu to open on whichever side of its parent row actually
@@ -123,12 +122,8 @@ export class ContextMenu {
     const entries: MenuEntry[] = [
       { label: "Boards", submenu: boardMenuEntries((type) => this.onAddBoard(type, worldX, worldY)) },
       {
-        label: "Sensors",
-        submenu: componentMenuEntries("sensors", (type) => this.onAddComponent(type, worldX, worldY)),
-      },
-      {
-        label: "Connections",
-        submenu: componentMenuEntries("connections", (type) => this.onAddComponent(type, worldX, worldY)),
+        label: "Components",
+        submenu: componentMenuEntries((type) => this.onAddComponent(type, worldX, worldY)),
       },
     ];
 

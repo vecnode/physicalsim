@@ -14,7 +14,7 @@
 import type { AdapterId } from "./adapter-registry.js";
 import type { Circuit, CircuitBoard, PlacedComponent } from "./circuit.js";
 import type { CanvasController } from "./canvas/index.js";
-import type { PinRef, ElbowRoute } from "./canvas/wiring.js";
+import type { PinRef, ElbowRoute, Point } from "./canvas/wiring.js";
 import type { SketchEditor } from "./sketch-editor.js";
 
 // Bumped only if a future, incompatible change to this shape is needed -
@@ -30,6 +30,9 @@ interface SerializedWire {
   // omitted entirely otherwise, so a straight/bezier-only circuit's file
   // doesn't carry meaningless empty {} noise per wire.
   elbow?: ElbowRoute;
+  // User-added elbow corners (wiring.ts's Wire.waypoints) - same "omit
+  // when empty" posture as elbow above, for the same reason.
+  waypoints?: Point[];
 }
 
 export interface PsimFile {
@@ -66,6 +69,16 @@ function isElbowRoute(v: unknown): v is ElbowRoute {
   );
 }
 
+function isPoint(v: unknown): v is Point {
+  if (typeof v !== "object" || v === null) return false;
+  const p = v as Record<string, unknown>;
+  return typeof p.x === "number" && typeof p.y === "number";
+}
+
+function isWaypoints(v: unknown): v is Point[] {
+  return Array.isArray(v) && v.every(isPoint);
+}
+
 function isPinRef(v: unknown): v is PinRef {
   if (typeof v !== "object" || v === null) return false;
   const r = v as Record<string, unknown>;
@@ -79,7 +92,12 @@ function isPinRef(v: unknown): v is PinRef {
 export function buildPsimFile(canvas: CanvasController, sketch: string, name: string): PsimFile {
   const wires: SerializedWire[] = canvas.scene.wiring.getWires().map((w) => {
     const hasCustomElbow = w.elbow.midX !== undefined || w.elbow.legAY !== undefined || w.elbow.legBY !== undefined;
-    return { a: w.a, b: w.b, ...(hasCustomElbow ? { elbow: w.elbow } : {}) };
+    return {
+      a: w.a,
+      b: w.b,
+      ...(hasCustomElbow ? { elbow: w.elbow } : {}),
+      ...(w.waypoints.length > 0 ? { waypoints: w.waypoints.map((p) => ({ ...p })) } : {}),
+    };
   });
   return {
     psimVersion: PSIM_VERSION,
@@ -154,7 +172,12 @@ export function parsePsimFile(jsonText: string): PsimFile {
   }
   for (const w of p.wires) {
     const wire = w as Record<string, unknown>;
-    if (!isPinRef(wire.a) || !isPinRef(wire.b) || (wire.elbow !== undefined && !isElbowRoute(wire.elbow))) {
+    if (
+      !isPinRef(wire.a) ||
+      !isPinRef(wire.b) ||
+      (wire.elbow !== undefined && !isElbowRoute(wire.elbow)) ||
+      (wire.waypoints !== undefined && !isWaypoints(wire.waypoints))
+    ) {
       throw new PsimParseError("malformed .psim file (a wire entry is missing pin references)");
     }
   }
@@ -232,6 +255,7 @@ export async function applyPsimFile(
     }
     const connected = canvas.scene.wiring.connect({ entityId: a, pin: wire.a.pin }, { entityId: b, pin: wire.b.pin });
     if (wire.elbow) Object.assign(connected.elbow, wire.elbow);
+    if (wire.waypoints) connected.waypoints = wire.waypoints.map((p) => ({ ...p }));
     result.wiresConnected++;
   }
   // connect() already re-renders per call; one more pass picks up any

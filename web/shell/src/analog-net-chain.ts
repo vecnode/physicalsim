@@ -117,6 +117,29 @@ export class AnalogNetChain {
     this.pinSubscriptions.clear();
   }
 
+  // Clears this chain's own transient state - call whenever the canvas
+  // itself was just wiped and rebuilt wholesale (main.ts's loadExample())
+  // rather than incrementally edited. Without this, a fresh example's
+  // very first solve could inherit the *previous* example's voltage
+  // history: netlist.ts's node ids are plain sequential ("n0", "n1", ...)
+  // reassigned fresh by every buildNetlist() call, not stable identities,
+  // so a new circuit's "n0" is essentially guaranteed to collide with
+  // whatever the old circuit's "n0" last solved to - solveTransientStep()
+  // would then step forward from a stale, unrelated voltage instead of
+  // bootstrapping cleanly from solveDc() the way a first-ever solve does.
+  // That showed up as wires briefly holding the *previous* example's
+  // solved color/voltage the instant a new one loaded, before the next
+  // tick corrected it - this makes the correction immediate instead of a
+  // visible flash of stale state.
+  reset(): void {
+    for (const unsubscribe of this.pinSubscriptions.values()) unsubscribe();
+    this.pinSubscriptions.clear();
+    this.previousVoltages = new Map();
+    this.lastSolveAt = null;
+    this.scene.wiring.setWireVoltages(new Map());
+    this.scene.setPinVoltages(new Map());
+  }
+
   // Pushes every solve's wireVoltages to `listener` going forward.
   // Returns an unsubscribe function, the same shape every other
   // subscription in this codebase (onPinChange, onWiresChanged, ...) uses.
@@ -214,7 +237,6 @@ export class AnalogNetChain {
       const key = `${wired.entityId}::${wired.pin}`;
       if (this.pinSubscriptions.has(key)) continue;
       const client = this.getAdapterClient(wired.board.adapterId);
-      if (!client.onPinChange) continue; // this adapter kind doesn't push pin changes at all
       const unsubscribe = client.onPinChange((changedPin) => {
         if (changedPin === wired.rawPin) this.scheduleRecompute();
       });
@@ -240,9 +262,11 @@ export class AnalogNetChain {
           const level = await client.call("readPin", { pin: wired.rawPin });
           result.set(key, { direction, level });
         } catch {
-          // This adapter kind doesn't support one or both (e.g. cortex-m/
-          // esp32 - no real pin I/O there yet) - leave it unresolved
-          // rather than throwing the whole recompute away.
+          // A real RPC failure (e.g. a native adapter's gdbstub round-trip
+          // timing out) rather than a missing capability - every
+          // registered adapter implements both calls now (adapter-
+          // types.ts) - leave this pin unresolved rather than throwing
+          // the whole recompute away.
         }
       }),
     );
@@ -294,6 +318,24 @@ export class AnalogNetChain {
       }
       this.scene.wiring.setWireVoltages(wireVoltages);
       for (const listener of this.voltageListeners) listener(wireVoltages);
+
+      // Same solved voltages, keyed by pin instead of by wire - lets
+      // Scene.setPinVoltages() glow each pin marker the same blue->red
+      // scale its own wire is colored by (see that method's own doc
+      // comment for why this is a separate call rather than reusing
+      // wireVoltages directly: a pin's key is "entityId::pin", a wire's
+      // is its own id, and a pin has no wire id to look one up by).
+      const pinVoltages = new Map<string, number>();
+      for (const wire of wires) {
+        for (const ref of [wire.a, wire.b]) {
+          const key = `${ref.entityId}::${ref.pin}`;
+          if (pinVoltages.has(key)) continue;
+          const node = findNodeForPin(netlist, ref.entityId, ref.pin);
+          const voltage = node ? nodeVoltages.get(node.id) : undefined;
+          if (voltage !== undefined) pinVoltages.set(key, voltage);
+        }
+      }
+      this.scene.setPinVoltages(pinVoltages);
 
       // Write the solved voltage back into every *input*-configured wired
       // pin - the other half of closing the loop (see this file's own

@@ -13,6 +13,7 @@
 
 #include "esp32_qemu_adapter.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cctype>
@@ -46,8 +47,26 @@ constexpr const char *kExeName = "qemu-system-xtensa";
 #endif
 
 // GPIO peripheral base address on real ESP32 silicon (and in QEMU's model,
-// hw/gpio/esp32_gpio.c) - GPIO_OUT_REG sits at offset 0x04 within it.
+// hw/gpio/esp32_gpio.c) - GPIO_OUT_REG sits at offset 0x04 within it,
+// GPIO_ENABLE_REG (direction, 1 = output) at offset 0x20.
 constexpr std::uint32_t kGpioOutRegAddress = 0x3ff44004;
+constexpr std::uint32_t kGpioEnableRegAddress = 0x3ff44020;
+
+// ESP32 ADC1's fixed GPIO-to-channel map (TRM Table 4-3) - the only 8 pins
+// with a real SAR ADC channel behind them. -1 means "not ADC1-capable".
+int adc1_channel_for_gpio(int gpio) {
+  switch (gpio) {
+    case 36: return 0;
+    case 37: return 1;
+    case 38: return 2;
+    case 39: return 3;
+    case 32: return 4;
+    case 33: return 5;
+    case 34: return 6;
+    case 35: return 7;
+    default: return -1;
+  }
+}
 
 std::optional<std::filesystem::path> find_on_path() {
 #ifdef _WIN32
@@ -102,9 +121,8 @@ int reserve_free_port(boost::asio::io_context &io) {
 }
 
 // ---- Minimal GDB Remote Serial Protocol client -----------------------------
-// Just enough of the $packet#checksum protocol for memory reads ('m') -
-// see qemu_adapter.cpp for the same protocol used for register readback
-// and single-stepping on the "cortex-m" adapter.
+// Just enough of the $packet#checksum protocol for memory reads ('m') and
+// monitor commands ('qRcmd', run_monitor_command() below).
 std::string rsp_checksum(const std::string &data) {
   unsigned int sum = 0;
   for (unsigned char c : data) sum += c;
@@ -139,6 +157,37 @@ std::string rsp_recv(boost::asio::ip::tcp::socket &sock) {
   const char ack = '+';
   boost::asio::write(sock, boost::asio::buffer(&ack, 1));
   return buf;
+}
+
+std::string to_hex(const std::string &data) {
+  static const char *digits = "0123456789abcdef";
+  std::string hex;
+  hex.reserve(data.size() * 2);
+  for (unsigned char c : data) {
+    hex.push_back(digits[c >> 4]);
+    hex.push_back(digits[c & 0xf]);
+  }
+  return hex;
+}
+
+// Runs an HMP monitor command line (e.g. "esp32_set_gpio_input 5 1") over
+// the same GDB RSP connection read_memory_word() uses, via GDB's "monitor"
+// extension (qRcmd, hex-encoded) - gdbstub/system.c's
+// gdb_handle_query_rcmd() dispatches this straight into QEMU's HMP monitor.
+// Any monitor_printf() output the command produces comes back as one or
+// more "O<hex>" packets before the final "OK"/"E<nn>" - discarded here
+// (the two commands this adapter needs print nothing), but still read off
+// the socket so a later, unrelated read doesn't pick up a stale reply.
+void run_monitor_command(boost::asio::ip::tcp::socket &sock, const std::string &command) {
+  rsp_send(sock, "qRcmd," + to_hex(command));
+  while (true) {
+    const std::string reply = rsp_recv(sock);
+    if (reply == "OK") return;
+    if (!reply.empty() && reply[0] == 'E') {
+      throw std::runtime_error("esp32 adapter: monitor command \"" + command + "\" failed: " + reply);
+    }
+    // "O<hex>" (monitor output) - keep reading until OK/E.
+  }
 }
 
 // Parses a byte string from GDB's 'm' (read memory) reply - unlike
@@ -458,6 +507,8 @@ struct Esp32QemuInstance::Impl {
     return parse_le_hex_memory_word(reply);
   }
 
+  void run_monitor(const std::string &command) { run_monitor_command(gdb_socket, command); }
+
   // Tears down the current process/sockets and boots `firmware_path`
   // fresh - the QEMU-backed equivalent of avr8/rp2040's
   // loadFirmware()-then-reset() (see Esp32QemuInstance::load_firmware).
@@ -579,9 +630,10 @@ json Esp32QemuInstance::read_pin(const std::string &pin) const {
   // vCPU is halted - confirmed empirically (a read sent while running
   // just times out; the identical request succeeds immediately once QMP
   // "stop" halts the target), not assumed from general GDB-stub folklore.
-  // So: briefly stop, read, and resume if it was running - the same
-  // "polled state costs a tiny stutter" tradeoff qemu_adapter.cpp's
-  // cortex-m step() already accepts for its own register reads.
+  // So: briefly stop, read, and resume if it was running - a small
+  // "polled state costs a tiny stutter" tradeoff, accepted the same way
+  // by every other gdbstub round-trip this adapter makes (write_pin(),
+  // read_pin_direction(), write_analog_pin() below).
   const bool was_running = running_;
   if (was_running) {
     impl_->qmp_command("stop");
@@ -594,11 +646,61 @@ json Esp32QemuInstance::read_pin(const std::string &pin) const {
   return json{{"value", level}};
 }
 
-json Esp32QemuInstance::write_pin(const std::string &pin, int /*value*/) {
-  throw std::runtime_error(
-      "esp32 does not support pin input injection yet (writePin \"" + pin +
-      "\"): QEMU's set_gpio() IRQ-line handler has no external/QMP entry point, "
-      "see esp32_qemu_adapter.hpp");
+json Esp32QemuInstance::write_pin(const std::string &pin, int value) {
+  const int gpio = parse_gpio_number(pin);
+  if (gpio < 0 || gpio > 31) {
+    throw std::runtime_error(
+        "esp32 adapter: writePin \"" + pin + "\" resolves to GPIO" + std::to_string(gpio) +
+        ", outside the 0-31 range esp32_set_gpio_input covers");
+  }
+  // Same "briefly halt around a gdbstub round-trip" bracketing read_pin()
+  // uses - the monitor command still runs through the same GDB RSP
+  // connection, and this fork's gdbstub was only confirmed to service it
+  // reliably while the vCPU is halted.
+  const bool was_running = running_;
+  if (was_running) impl_->qmp_command("stop");
+  impl_->run_monitor("esp32_set_gpio_input " + std::to_string(gpio) + " " + std::to_string(value ? 1 : 0));
+  if (was_running) impl_->qmp_command("cont");
+  return json::object();
+}
+
+json Esp32QemuInstance::read_pin_direction(const std::string &pin) const {
+  const int gpio = parse_gpio_number(pin);
+  if (gpio < 0 || gpio > 31) {
+    throw std::runtime_error(
+        "esp32 adapter: readPinDirection \"" + pin + "\" resolves to GPIO" + std::to_string(gpio) +
+        ", outside the 0-31 range GPIO_ENABLE_REG covers");
+  }
+  const bool was_running = running_;
+  if (was_running) impl_->qmp_command("stop");
+  const std::uint32_t enable_reg = impl_->read_memory_word(kGpioEnableRegAddress);
+  if (was_running) impl_->qmp_command("cont");
+  const bool is_output = ((enable_reg >> gpio) & 1u) != 0;
+  return json{{"value", is_output ? "output" : "input"}};
+}
+
+json Esp32QemuInstance::write_analog_pin(const std::string &pin, double voltage) {
+  const int gpio = parse_gpio_number(pin);
+  const int channel = adc1_channel_for_gpio(gpio);
+  if (channel < 0) {
+    // Not one of GPIO32-39 - no ADC1 channel behind it. Matches avr8/
+    // rp2040's own "reject a non-ADC pin, caught not thrown" posture
+    // (adapter-types.ts's writeAnalogPin doc comment) rather than an error.
+    return json::object();
+  }
+  // ESP32 ADC1 is a 12-bit SAR ADC against a (default, no attenuation)
+  // ~1.1V reference in real hardware, but esp32_sens.c's ADC_values[] is
+  // just a raw count with no register-level attenuation/calibration model
+  // - approximated here as a plain 0-3.3V -> 0-4095 linear scale (the
+  // Arduino-core default full-scale most sketches assume), not a faithful
+  // per-attenuation curve.
+  const double clamped = std::max(0.0, std::min(3.3, voltage));
+  const int raw = static_cast<int>(clamped / 3.3 * 4095.0 + 0.5);
+  const bool was_running = running_;
+  if (was_running) impl_->qmp_command("stop");
+  impl_->run_monitor("esp32_set_adc " + std::to_string(channel) + " " + std::to_string(raw));
+  if (was_running) impl_->qmp_command("cont");
+  return json::object();
 }
 
 }  // namespace esp32qemu

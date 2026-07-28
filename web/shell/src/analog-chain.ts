@@ -80,8 +80,9 @@ export class AnalogChain {
     const apply = () => {
       const el = dom.boardEl as unknown as Record<string, unknown>;
       void pin.writeAnalog(spec.toVoltage(el)).catch(() => {
-        // Board's adapter has no ADC (e.g. cortex-m today) - silently
-        // inert, same as an unresolvable board pin elsewhere in this file.
+        // This particular pin isn't ADC-capable (writeAnalogPin() rejects
+        // it on its own - adapter-types.ts) - silently inert, same as an
+        // unresolvable board pin elsewhere in this file.
       });
     };
     dom.boardEl.addEventListener("input", apply);

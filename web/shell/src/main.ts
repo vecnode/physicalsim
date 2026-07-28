@@ -79,10 +79,17 @@ let unsubscribeI2CFrame: (() => void) | null = null;
 // when Apply is clicked - picking a different item in the dropdown alone
 // does not switch anything, so a control click always applies to the
 // adapter you last confirmed, not whatever the select happens to show.
-// Starts (and, for now, stays) null: avr8/rp2040/cortex-m are parked out
-// of the dropdown - see index.html - so there's no running adapter to
-// attach to until Arduino Uno gets wired to one.
+// Starts (and, for now, stays) null: avr8/rp2040 are parked out of the
+// dropdown - see index.html - so there's no running adapter to attach to
+// until Arduino Uno gets wired to one.
 let activeAdapterId: AdapterId | null = null;
+
+// Tracks the in-flight /compile request (if any) so switching examples can
+// cancel a stale compile rather than let it land after a different board's
+// sketch/adapter is already active - without this, an in-flight compile for
+// the example the user just left could still resolve and flash firmware
+// into whatever example they switched to.
+let activeCompileAbort: AbortController | null = null;
 
 // A second, separate model from the circuit itself - see energy.ts.
 // Keyed by CircuitBoard.id, same reasoning as circuit.ts's own
@@ -184,10 +191,9 @@ new ProtocolChain(canvas.scene, getAdapterClient);
 // Analog counterpart to SignalChain, for components that drive a
 // continuous ADC voltage rather than a digital bit (potentiometer,
 // slide-potentiometer, analog-joystick's VERT/HORZ) - see analog-
-// chain.ts. avr8 and rp2040 boards both have an ADC wired up (see
-// writeAnalogPin? in adapter-types.ts); wiring one of these to a
-// cortex-m board is inert (caught inside AnalogChain.attach()), not an
-// error.
+// chain.ts. Every adapter implements writeAnalogPin (adapter-types.ts);
+// wiring one of these to a pin with no real ADC channel behind it is
+// inert (caught inside AnalogChain.attach()), not an error.
 new AnalogChain(canvas.scene, getAdapterClient);
 
 // Wire-level electrical validation (ARCHITECTURE.md's "Wire-level
@@ -535,6 +541,15 @@ const EXAMPLES: Record<string, Example> = {
       // internally); "A" is wokwi-led's anode, the one pin
       // component-signal-pin.ts's role: "read" entry actually checks.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+      // Current-limiting resistor between the LED's cathode and board
+      // ground - the same real closed loop "rp2040-blink" already has
+      // (see that example's own comment), so this one gets a genuine MNA
+      // solve too instead of only ever showing SignalChain's raw digital
+      // bit.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 140);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "button-led": {
@@ -577,6 +592,12 @@ void loop() {
       // identity-shaped PB<n> -> B<n> map.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "PB0" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "PB1" }, { entityId: led.id, pin: "A" });
+      // Same real closed loop as "led-blink"'s own LED - see that
+      // example's comment.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "traffic-light": {
@@ -629,6 +650,18 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "11" }, { entityId: red.id, pin: "A" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "12" }, { entityId: yellow.id, pin: "A" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: green.id, pin: "A" });
+      // Same real closed loop as "led-blink"'s own LED, one resistor per
+      // LED - see that example's comment.
+      const redResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 10);
+      const yellowResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 90);
+      const greenResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 170);
+      if (!redResistor || !yellowResistor || !greenResistor) return;
+      canvas.scene.wiring.connect({ entityId: red.id, pin: "C" }, { entityId: redResistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: redResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+      canvas.scene.wiring.connect({ entityId: yellow.id, pin: "C" }, { entityId: yellowResistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: yellowResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+      canvas.scene.wiring.connect({ entityId: green.id, pin: "C" }, { entityId: greenResistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: greenResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "toggle-switch": {
@@ -677,6 +710,12 @@ void loop() {
       if (!led) return;
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+      // Same real closed loop as "led-blink"'s own LED - see that
+      // example's comment.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "leonardo-relay-leds": {
@@ -735,6 +774,19 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: led1.id, pin: "A" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D4" }, { entityId: relay2.id, pin: "COIL1" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D5" }, { entityId: led2.id, pin: "A" });
+      // The two LEDs are driven directly off D3/D5 (not through the
+      // relays' own switched contacts - see this example's own comment on
+      // why), so they get the same real closed loop "led-blink"'s LED
+      // has; the relays themselves still have no per-component circuit
+      // model (a coil's real electrical behavior, unlike an LED's forward
+      // voltage, isn't modeled yet).
+      const resistor1 = await canvas.scene.addComponentAt("resistor", board.x + 700, board.y + 60);
+      const resistor2 = await canvas.scene.addComponentAt("resistor", board.x + 700, board.y + 220);
+      if (!resistor1 || !resistor2) return;
+      canvas.scene.wiring.connect({ entityId: led1.id, pin: "C" }, { entityId: resistor1.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor1.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+      canvas.scene.wiring.connect({ entityId: led2.id, pin: "C" }, { entityId: resistor2.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor2.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "rp2040-blink": {
@@ -819,6 +871,12 @@ void loop(void) {
       // RP2040 examples don't collide if ever placed side by side.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: button.id, pin: "1.l" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "D13" }, { entityId: led.id, pin: "A" });
+      // Same real closed loop as "rp2040-blink"'s own LED - see that
+      // example's comment.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "pico-led-chase": {
@@ -855,10 +913,20 @@ void loop(void) {
       const board = await canvas.scene.showBoard("pi-pico");
       if (!board) return;
       const pins = ["GP2", "GP3", "GP4", "GP5", "GP6"];
+      const gndPins = ["GND.1", "GND.2", "GND.3", "GND.4", "GND.5"];
       for (let i = 0; i < pins.length; i++) {
         const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 10 + i * 80);
         if (!led) return;
         canvas.scene.wiring.connect({ entityId: board.id, pin: pins[i] }, { entityId: led.id, pin: "A" });
+        // Same real closed loop as "rp2040-blink"'s own LED, one resistor
+        // per LED - see that example's comment. A different GND marker
+        // per LED (pi-pico-element.ts has eight) rather than all five
+        // sharing one, purely to keep the wiring visually untangled -
+        // they're all the same ground node either way.
+        const resistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 10 + i * 80);
+        if (!resistor) return;
+        canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+        canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: gndPins[i] });
       }
     },
   },
@@ -1226,6 +1294,12 @@ void loop() {
       if (!led) return;
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: joystick.id, pin: "SEL" });
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+      // Same real closed loop as "led-blink"'s own LED - see that
+      // example's comment.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
   "mpu6050-indicator": {
@@ -1286,7 +1360,14 @@ async function loadExample(id: string): Promise<void> {
   // reusing it here, before the old board disappears, so a fresh example
   // always starts from a genuinely stopped simulation, not a stale one
   // still running underneath it.
+  activeCompileAbort?.abort();
+  activeCompileAbort = null;
   stopBtn.click();
+  // Drops the previous example's solved-voltage history before the new
+  // one builds - see AnalogNetChain.reset()'s own doc comment for why a
+  // fresh example's wires would otherwise briefly render stale colors
+  // from whatever was solved a moment ago.
+  analogNetChain.reset();
   await example.build();
   // Zooms out (never in - see zoomToFit()'s own doc comment) to fit
   // whatever the example just placed - a fresh circuit should be fully
@@ -1391,6 +1472,13 @@ async function compileAndRun(): Promise<void> {
 
   railCompileBtn.disabled = true;
 
+  // Cancels whatever compile was still in flight for a previous example -
+  // Compile & Run twice in a row (or a slow compile the user gives up on)
+  // should not race a fresh one.
+  activeCompileAbort?.abort();
+  const abortController = new AbortController();
+  activeCompileAbort = abortController;
+
   // Compiling the sketch + the whole Arduino core (avr_toolchain.cpp
   // shells out to a real avr-gcc, one process per source file - see
   // ARCHITECTURE.md's "The compiler" section) can take a few seconds,
@@ -1421,6 +1509,7 @@ async function compileAndRun(): Promise<void> {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ source, board }),
+      signal: abortController.signal,
     });
     const body = (await res.json()) as CompileResponse;
     // Done ticking before the final message is written below - the ticks
@@ -1429,6 +1518,12 @@ async function compileAndRun(): Promise<void> {
     // gets written next.
     window.clearInterval(progressTimer);
     terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
+
+    // The example was switched (or another Compile & Run started) while
+    // this fetch was in flight - the response landed too late to matter,
+    // and applying it now would flash firmware for the wrong sketch/board
+    // onto whatever is active now.
+    if (abortController.signal.aborted) return;
 
     if (!body.ok) {
       terminal.clear();
@@ -1483,6 +1578,10 @@ async function compileAndRun(): Promise<void> {
   } catch (err) {
     window.clearInterval(progressTimer);
     terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
+    // AbortError means the user switched examples (or re-clicked Compile &
+    // Run) - that's an intentional cancellation, not a failure worth
+    // reporting as "compile error".
+    if (err instanceof DOMException && err.name === "AbortError") return;
     terminal.clear();
     terminal.writeLine(
       err instanceof Error
@@ -1490,6 +1589,7 @@ async function compileAndRun(): Promise<void> {
         : "compile failed",
     );
   } finally {
+    if (activeCompileAbort === abortController) activeCompileAbort = null;
     railCompileBtn.disabled = false;
   }
 }

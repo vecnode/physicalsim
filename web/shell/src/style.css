@@ -80,6 +80,14 @@ body {
   display: flex;
   flex-direction: column;
   align-items: stretch;
+  /* Without this, the rail (a flex item of .body) stretches to match its
+     tallest sibling's full height, leaving a long empty column below the
+     last button (save/load .psim…) on anything taller than a small
+     window - the buttons themselves always stayed flush together, but
+     that trailing blank strip (with the border-right still running
+     through it) read as a layout bug. Sizing to content keeps the whole
+     toolbar as one compact, self-contained column instead. */
+  align-self: flex-start;
 }
 
 .icon-rail button {
@@ -210,6 +218,15 @@ button {
   height: 12px;
   vertical-align: -2px;
   margin-right: 4px;
+}
+
+/* SVG elements don't reliably inherit the HTML UA stylesheet's
+   `[hidden] { display: none }` rule in every engine - without this, a
+   JS-toggled `<svg hidden>` (e.g. link-style-btn's three style icons,
+   main.ts's linkStyleIcons) stays visually rendered, stacking all of
+   them instead of showing only the active one. */
+svg[hidden] {
+  display: none;
 }
 
 button:hover:not(:disabled) {
@@ -611,7 +628,6 @@ button:disabled {
    as the same kind of line. */
 .terminal-system-line {
   color: #9a9a9a;
-  font-style: italic;
 }
 
 /* Shown only via :empty, so it disappears the instant real output
@@ -733,8 +749,17 @@ button:disabled {
    underneath. */
 .pin-marker {
   position: absolute;
-  width: 6px;
-  height: 6px;
+  /* Bigger than the pin's own visible dot (still drawn by the board's
+     underlying SVG at its real size) - the real pin hole is only a
+     couple of px wide at normal zoom, too small a target to reliably
+     click. This just widens the invisible hit area (still centered on
+     the exact same pin coordinate via the transform below), not the
+     dot's rendered appearance. Kept under most boards' own pin pitch
+     (~9.5px on arduino-uno-element.ts, the tightest common case) so two
+     adjacent pins' hit areas don't overlap enough to make clicking one
+     ambiguous. */
+  width: 10px;
+  height: 10px;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   background: transparent;
@@ -865,6 +890,13 @@ button:disabled {
 
 .wire-handle-v {
   cursor: ns-resize;
+}
+
+/* A user-added waypoint (wiring.ts's Wire.waypoints) - freely draggable
+   in both directions (move), not locked to one axis the way -h/-v are,
+   and Ctrl+click removes it (see addWaypointHandle()'s own comment). */
+.wire-handle-waypoint {
+  cursor: move;
 }
 
 /* Right-click "Boards/Sensors/Connections" menu (canvas/context-menu.ts)

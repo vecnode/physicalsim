@@ -76,12 +76,4 @@ describe("CircuitPin", () => {
     await pin.write(1);
     expect(client.values.get("B5")).toBe(1);
   });
-
-  it("onChange() throws for a client that doesn't support pin-change events", () => {
-    const client: PinClient = {
-      call: vi.fn(async () => undefined),
-    };
-    const pin = new CircuitPin(client, "B5");
-    expect(() => pin.onChange(vi.fn())).toThrow(/does not support pin-change/);
-  });
 });

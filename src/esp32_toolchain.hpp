@@ -4,13 +4,18 @@
 // Compiles a user sketch (an app_main()-shaped body, ESP-IDF's own C API -
 // gpio_set_level()/vTaskDelay(), not Arduino's digitalWrite()/delay(), same
 // "no Arduino-compatible core vendored yet" posture rp2040_toolchain.hpp
-// documents for RP2040) into a merged, esptool-ready flash image, the same
-// role rp2040_toolchain.hpp/avr_toolchain.hpp play for their targets.
+// documents for RP2040) into a plain ELF32 image - the shape esp32js's
+// loadElf() expects (see web/adapters/esp32/src/adapter.ts), not a merged/
+// flashable image the way avr8's Intel HEX or rp2040's raw flash binary
+// are for their own JS-Worker adapters.
 //
 // Genuinely heavier than either of those: a real ESP-IDF project is its
-// own multi-component CMake build (bootloader + partition table + app,
-// merged via esptool), not pico-sdk's flat add_executable() or avr-gcc's
-// per-file compile - see esp32_sketch_template/CMakeLists.txt.
+// own multi-component CMake build (bootloader + partition table + app),
+// not pico-sdk's flat add_executable() or avr-gcc's per-file compile -
+// see esp32_sketch_template/CMakeLists.txt. Only the app ELF itself
+// (build/physicalsim_esp32_sketch.elf) is read back out - the bootloader/
+// partition-table/esptool merge step that a real flash write would need
+// is skipped entirely, since esp32js runs the ELF directly.
 //
 // esp-idf itself is vendored (simulators/esp-idf, a fork of
 // espressif/esp-idf pinned to v5.3.1, added as a git submodule the same
@@ -36,8 +41,9 @@ namespace esp32toolchain {
 struct CompileResult {
   bool ok = false;
   std::string log;
-  // A merged, esptool-ready flash image (bootloader + partition table +
-  // app, offsets baked in) - same "raw bytes, not Intel HEX" posture as
+  // Raw bytes of the compiled app's ELF32 image - esp32js's loadElf() reads
+  // this directly (PT_LOAD segments at their real p_vaddr, entry point from
+  // e_entry), same "raw bytes, not Intel HEX" posture as
   // rp2040toolchain::CompileResult::binary (ESP32 has no Intel-HEX-shaped
   // convention any more than RP2040 does).
   std::string binary;

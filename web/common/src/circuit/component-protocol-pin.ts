@@ -15,9 +15,7 @@
 // table would mean one of the two grew awkward optional fields the other
 // never uses. Board-agnostic by construction, same as componentSignalPins
 // - this table only ever names a component's own pin names, never a
-// board type or adapter kind, so it needs no change for a future board
-// (an ESP32-over-QEMU board included, once that adapter implements real
-// pin I/O).
+// board type or adapter kind, so it needs no change for a future board.
 export interface ProtocolPinRole {
   // Any one of these @wokwi/elements pin names counts as satisfying this
   // role - mirrors ComponentSignalPin.pinNames' own "any one of these is

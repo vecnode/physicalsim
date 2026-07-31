@@ -80,8 +80,7 @@ RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::
     return result;
   }
 
-  // A Job Object with KILL_ON_JOB_CLOSE, same pattern qemu_adapter.cpp/
-  // esp32_qemu_adapter.cpp already use - without this, TerminateProcess()
+  // A Job Object with KILL_ON_JOB_CLOSE - without this, TerminateProcess()
   // below only kills the immediate child (e.g. cmake.exe), not the whole
   // tree it spawns (ninja, and every xtensa-esp32-elf-gcc/cc1.exe
   // instance it runs) - a real bug found while debugging a "compile

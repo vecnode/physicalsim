@@ -13,8 +13,6 @@ pushd "%~dp0"
 REM --- Output and runtime resolution state -----------------------------------
 set "OUT_DIR=%USERPROFILE%\Desktop\Release"
 set "FIXED_RUNTIME_DIR="
-set "QEMU_ARM_DIR="
-set "QEMU_ARM_ARGS="
 
 REM --- CMake discovery --------------------------------------------------------
 set "CMAKE_EXE="
@@ -72,27 +70,11 @@ if not defined FIXED_RUNTIME_DIR_FOR_CMAKE set "FIXED_RUNTIME_DIR_FOR_CMAKE=!FIX
 
 echo     Using fixed runtime from: !FIXED_RUNTIME_DIR!
 
-REM qemu-system-arm (the "cortex-m" adapter's backend) is optional -
-REM physicalsim runs fine without it, just without that one adapter, so
-REM this is a warning, not a packaging failure, when not found.
-if exist "%ProgramFiles%\qemu\qemu-system-arm.exe" set "QEMU_ARM_DIR=%ProgramFiles%\qemu"
-if not defined QEMU_ARM_DIR if exist "%ProgramFiles(x86)%\qemu\qemu-system-arm.exe" set "QEMU_ARM_DIR=%ProgramFiles(x86)%\qemu"
-
-if defined QEMU_ARM_DIR (
-  echo     Bundling qemu-system-arm from: !QEMU_ARM_DIR!
-  set QEMU_ARM_ARGS=-DBUNDLE_QEMU_ARM=ON "-DQEMU_ARM_DIR=!QEMU_ARM_DIR!"
-) else (
-  echo     [warning] qemu-system-arm not found - packaging without it.
-  echo               The cortex-m adapter will need QEMU installed separately
-  echo               on the machine this package runs on. Install from
-  echo               https://www.qemu.org/download/ and rerun to bundle it.
-)
-
 REM avr-gcc (the in-app sketch compiler's backend, src/avr_toolchain.cpp)
 REM is fetched by CMake itself (BUNDLE_AVR_TOOLCHAIN, see CMakeLists.txt) -
-REM unlike QEMU/WebView2 above, there's nothing to locate on this machine
-REM first, just a flag to turn on. Still optional (the app runs fine
-REM without it, just without the sketch compiler), same posture as QEMU.
+REM unlike WebView2 above, there's nothing to locate on this machine
+REM first, just a flag to turn on. Still optional - the app runs fine
+REM without it, just without the sketch compiler.
 echo     Bundling avr-gcc toolchain (fetched by CMake)
 
 "%CMAKE_EXE%" -B build ^
@@ -100,8 +82,7 @@ echo     Bundling avr-gcc toolchain (fetched by CMake)
   -DSTATIC_MSVC_RUNTIME_RELEASE=ON ^
   -DBUNDLE_WEBVIEW2_FIXED_RUNTIME=ON ^
   "-DWEBVIEW2_FIXED_RUNTIME_DIR=!FIXED_RUNTIME_DIR_FOR_CMAKE!" ^
-  -DBUNDLE_AVR_TOOLCHAIN=ON ^
-  !QEMU_ARM_ARGS!
+  -DBUNDLE_AVR_TOOLCHAIN=ON
 if errorlevel 1 goto :error
 
 REM --- Build Release target ---------------------------------------------------
@@ -127,10 +108,6 @@ if exist "build\Release\assets" (
 
 if exist "build\Release\WebView2Runtime" (
   xcopy "build\Release\WebView2Runtime" "%OUT_DIR%\WebView2Runtime" /E /I /Y >nul
-)
-
-if exist "build\Release\qemu" (
-  xcopy "build\Release\qemu" "%OUT_DIR%\qemu" /E /I /Y >nul
 )
 
 if exist "build\Release\avr-core" (

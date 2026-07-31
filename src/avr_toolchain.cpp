@@ -26,7 +26,7 @@ namespace avrtoolchain {
 
 namespace {
 
-// ---- Locating things, mirroring qemu_adapter.cpp's own helpers ------------
+// ---- Locating things -------------------------------------------------------
 
 #ifdef _WIN32
 constexpr const char *kGxxName = "avr-g++.exe";
@@ -138,7 +138,7 @@ std::optional<std::filesystem::path> find_well_known_toolchain() {
 std::optional<std::filesystem::path> find_toolchain_bin_dir() {
   // A bundled copy (CMake's BUNDLE_AVR_TOOLCHAIN option) takes priority -
   // packaged builds shouldn't depend on what happens to already be
-  // installed, same reasoning as find_qemu_system_arm().
+  // installed on this dev machine.
   const auto bundled = executable_dir() / "avr-toolchain" / "bin";
   std::error_code ec;
   if (std::filesystem::exists(bundled / kGxxName, ec)) {

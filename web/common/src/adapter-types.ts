@@ -16,16 +16,16 @@ export interface SimulatorAdapter {
   step(n: number): void;
   reset(): void;
   onStateChange(cb: (state: SimState) => void): () => void;
-  // Pin I/O is a MANDATORY capability, not an optional one - every adapter
-  // this project registers (JS-worker or native/QEMU-backed) is required
-  // to give the analog netlist/solver (web/shell's canvas/netlist.ts +
-  // mna-solver.ts, driven by analog-net-chain.ts) a real, working answer
-  // for all five of these, the same way avr8/rp2040 already do. A pin
-  // that genuinely has no ADC hardware still answers writeAnalogPin() (by
-  // cleanly rejecting it, matching avr8/rp2040's own "reject a non-ADC
-  // pin, caught not thrown" posture) rather than the method being absent -
-  // "no such capability" is not a valid response for a registered adapter
-  // any more, only "this particular pin doesn't support it."
+  // Pin I/O is a MANDATORY capability, not an optional one - every
+  // registered adapter (avr8/rp2040/esp32, all JS/TS running in a Worker)
+  // is required to give the analog netlist/solver (web/shell's
+  // canvas/netlist.ts + mna-solver.ts, driven by analog-net-chain.ts) a
+  // real, working answer for all five of these. A pin that genuinely has
+  // no ADC hardware still answers writeAnalogPin() (by cleanly rejecting
+  // it, matching every adapter's own "reject a non-ADC pin, caught not
+  // thrown" posture) rather than the method being absent - "no such
+  // capability" is not a valid response for a registered adapter, only
+  // "this particular pin doesn't support it."
   readPin(pin: string): number | undefined;
   writePin(pin: string, value: number): void;
   onPinChange(pin: string, cb: (value: number) => void): () => void;
@@ -36,7 +36,8 @@ export interface SimulatorAdapter {
   // the circuit it's wired into; an input pin is high-impedance, just
   // another node. Adapter-specific in how it's determined (avr8: the
   // port's real DDR register bit; rp2040: GPIOPin's own outputEnable;
-  // esp32: QEMU's GPIO_ENABLE_REG peeked over QMP) but always answerable.
+  // esp32: esp32js's GPIO_ENABLE register, read directly) but always
+  // answerable.
   readPinDirection(pin: string): PinDirection | undefined;
   // Analog input - separate from readPin()/writePin() (which are always
   // digital 0/1) because an ADC channel is fed a continuous voltage, not
@@ -46,8 +47,8 @@ export interface SimulatorAdapter {
   writeAnalogPin(pin: string, voltage: number): void;
   // Serial (UART TX) output - also optional, and read-only for now: this
   // is Stage 1 of the terminal feature ("show whatever the firmware
-  // transmits"), not Serial.read() support. Only avr8 implements it today
-  // (rp2040/esp32 have no UART peripheral wired up yet).
+  // transmits"), not Serial.read() support. avr8 and esp32 implement it
+  // today (rp2040 has no UART peripheral wired up yet).
   onSerialData?(cb: (byte: number) => void): () => void;
   // Optional - fires with a device-decoder's decoded output whenever it
   // has a new frame to publish (today: SSD1306Device's GDDRAM buffer,

@@ -78,27 +78,6 @@ std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
   return std::nullopt;
 }
 
-// Bundled "esp32-toolchain/esptool" next to the executable (CMakeLists.txt's
-// BUNDLE_ESPTOOL fetches espressif/esptool's own standalone PyInstaller
-// build and copies it there) - a real esptool.exe with Python and every
-// dependency it needs already frozen in, not a script that needs an
-// interpreter to run it. Checked first, same "bundled beats dev-machine"
-// priority find_bundled_xtensa_gcc_bin_dir() above already has; falling
-// back to `python_exe -m esptool` (compile_sketch()'s merge_bin step)
-// when this hasn't been bundled costs nothing extra - just a fresh Python
-// cold-start per compile, same as before this existed.
-std::optional<std::filesystem::path> find_bundled_esptool_exe() {
-  const auto bundled = executable_dir() / "esp32-toolchain" / "esptool";
-  std::error_code ec;
-#ifdef _WIN32
-  const auto exe = bundled / "esptool.exe";
-#else
-  const auto exe = bundled / "esptool";
-#endif
-  if (std::filesystem::exists(exe, ec)) return exe;
-  return std::nullopt;
-}
-
 // Bundled "esp-idf/" next to the executable (CMakeLists.txt's
 // BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds -
 // opt-in given the size, unlike pico-sdk's unconditional copy), then
@@ -497,61 +476,26 @@ CompileResult compile_sketch(const std::string &source) {
     return result;
   }
 
-  // esptool merge_bin: bootloader + partition table + app, at their real
-  // flash offsets, into one image - same shape as the Phase 0/1 spike's
-  // own manual merge_bin invocation, deliberately *without*
-  // --fill-flash-size this time. That flag pads the file out to the full
-  // declared flash size (4MB) with 0xFF filler - fine for a file written
-  // straight to disk, but this result crosses the HTTP bridge as hex text
-  // first (main.cpp's /compile), where 4MB of real image became 8MB+ of
-  // hex - actually hit and had to fix (see the esp32-phase1-adapter memory
-  // note): only ~244KB of this is ever non-filler (confirmed by diffing a
-  // padded vs. unpadded merge_bin run), so the padding is reconstructed
-  // locally instead, in esp32_qemu_adapter.cpp's load_firmware(), right
-  // before writing the file QEMU's -drive actually reads.
-  std::cerr << "[esp32_toolchain] starting esptool merge_bin" << std::endl;
-  const auto merge_start = std::chrono::steady_clock::now();
-  // A bundled standalone esptool.exe (find_bundled_esptool_exe(), see its
-  // own comment) skips a fresh Python interpreter cold-start plus esptool's
-  // own import chain on every single compile - real, measurable overhead
-  // paid once per merge_bin call regardless of how "warm" the ninja build
-  // itself already is (see esp32_toolchain.hpp's toolchain-discovery notes
-  // on why cmake/ninja/python still aren't bundled themselves; esptool is
-  // the one piece of this call that doesn't need any of those three).
-  // Identical arguments either way - only the launcher (a real exe vs.
-  // `python -m esptool`) differs.
-  const auto bundled_esptool = find_bundled_esptool_exe();
-  const std::vector<std::string> merge_args = {"--chip", "esp32", "merge_bin", "-o", "flash_image.bin",
-                                                "@flash_args"};
-  procexec::RunResult merge_run;
-  if (bundled_esptool) {
-    merge_run = procexec::run_and_wait(*bundled_esptool, merge_args, dir / "build", 60);
-  } else {
-    std::vector<std::string> python_args = {"-m", "esptool"};
-    python_args.insert(python_args.end(), merge_args.begin(), merge_args.end());
-    merge_run = procexec::run_and_wait(toolchain->python_exe, python_args, dir / "build", 60);
-  }
-  const auto merge_seconds =
-      std::chrono::duration<double>(std::chrono::steady_clock::now() - merge_start).count();
-  std::cerr << "[esp32_toolchain] esptool merge_bin exit_code=" << merge_run.exit_code << " (" << merge_seconds
-            << "s)" << std::endl;
-  if (merge_run.exit_code != 0) {
-    result.log = "esptool merge_bin failed:\n" + merge_run.output;
+  // The project.cmake-driven build above already produces the app's own
+  // ELF (project(physicalsim_esp32_sketch) in esp32_sketch_template's
+  // CMakeLists.txt names the output) - esp32js's loadElf() reads that
+  // directly (PT_LOAD segments at their real p_vaddr, entry point from
+  // e_entry), so unlike a real flash write there's no esptool merge_bin
+  // step (bootloader + partition table + app, at flash offsets) needed at
+  // all; this just reads the ELF file back out.
+  const auto elf_path = dir / "build" / "physicalsim_esp32_sketch.elf";
+  std::ifstream elf_file(elf_path, std::ios::binary);
+  if (!elf_file) {
+    result.log = "ninja build reported success but " + elf_path.string() + " is missing";
     return result;
   }
+  std::ostringstream elf_ss;
+  elf_ss << elf_file.rdbuf();
 
-  std::ifstream bin_file(dir / "build" / "flash_image.bin", std::ios::binary);
-  if (!bin_file) {
-    result.log = "esptool merge_bin reported success but flash_image.bin is missing";
-    return result;
-  }
-  std::ostringstream bin_ss;
-  bin_ss << bin_file.rdbuf();
-
-  std::cerr << "[esp32_toolchain] compile_sketch returning success, " << bin_ss.str().size() << " bytes"
+  std::cerr << "[esp32_toolchain] compile_sketch returning success, " << elf_ss.str().size() << " bytes"
             << std::endl;
   result.ok = true;
-  result.binary = bin_ss.str();
+  result.binary = elf_ss.str();
   result.log = build_run.output;
   return result;
 }

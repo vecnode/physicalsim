@@ -89,9 +89,8 @@ export const boardTagName: Record<string, string> = {
   // esp32-devkit-v1's own hand-drawn element).
   "esp32-devkit-c-v4": "wokwi-esp32-devkit-c-v4",
   // OV2640 camera + microSD slot are physically present but not emulated
-  // (no camera/SD peripheral in this project's QEMU fork) - GPIO/LED pins
-  // work normally, same "present, not modeled" posture as pi-pico-w's
-  // WiFi chip.
+  // (esp32js has no camera/SD peripheral) - GPIO/LED pins work normally,
+  // same "present, not modeled" posture as pi-pico-w's WiFi chip.
   "esp32-cam": "wokwi-esp32-cam",
 };
 
@@ -134,8 +133,9 @@ export const boardAdapterId: Record<string, AdapterId> = {
   "nano-rp2040-connect": "rp2040",
   "pi-pico": "rp2040",
   "pi-pico-w": "rp2040",
-  // Backed by esp32_qemu_adapter.cpp (a real qemu-system-xtensa process,
-  // not a JS Worker) - see NATIVE_ADAPTER_IDS in adapter-registry.ts.
+  // Backed by @physicalsim/adapter-esp32 (web/adapters/esp32), a JS/TS
+  // Worker adapter over the esp32js emulator core - same shape as
+  // avr8/rp2040's own Worker adapters, no native process involved.
   "esp32-devkit-v1": "esp32",
   // Same chip, same adapter - no new adapter needed for either.
   "esp32-devkit-c-v4": "esp32",

@@ -13,9 +13,7 @@
 // #includes (e.g. LiquidCrystal - simulators/LiquidCrystal,
 // CMakeLists.txt's AVR_LIBRARIES list). No compiler ships inside
 // physicalsim's own binary; this shells out to avr-gcc/avr-g++/
-// avr-objcopy the same way qemu_adapter.cpp shells out to
-// qemu-system-arm - see that file for the process-spawn pattern this
-// mirrors.
+// avr-objcopy via process_exec.hpp's cross-platform spawn helper.
 //
 // The resulting hex text is meant to be fed through the exact same path
 // "Load .hex..." already uses (web/common/src/intel-hex.ts's

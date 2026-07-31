@@ -3,14 +3,9 @@
 //
 // Blocking "run one command, wait for it, capture combined stdout+stderr"
 // helper - extracted from avr_toolchain.cpp (which originated it) once
-// rp2040_toolchain.cpp needed the identical cross-platform spawn logic, to
-// avoid a second ~150-line copy of Windows CreateProcess / POSIX
-// posix_spawn plumbing. A simpler, blocking-wait cousin of qemu_adapter.cpp's
-// own process-spawn pattern (that file keeps its process running long-term
-// and talks to it over sockets; this one just runs a tool to completion and
-// reads back what it printed) - qemu_adapter.cpp's needs are different
-// enough (long-lived process, socket IPC) that it isn't a third user of this
-// header, not an oversight.
+// rp2040_toolchain.cpp and esp32_toolchain.cpp needed the identical
+// cross-platform spawn logic, to avoid repeated copies of Windows
+// CreateProcess / POSIX posix_spawn plumbing.
 // ============================================================================
 #pragma once
 

@@ -16,7 +16,7 @@ Emulators:
   - Raspberry Pi Pico W
   - Arduino Nano RP2040 Connect
 
-- `vecnode/qemu-esp32`
+- `vecnode/esp32js`
   - ESP32 DevKit V1
   - ESP32 DevKit C V4
   - ESP32-CAM
@@ -32,12 +32,12 @@ upstream:
 
 * [vecnode/avr8js](https://github.com/vecnode/avr8js)
 * [vecnode/rp2040js](https://github.com/vecnode/rp2040js)
+* [vecnode/esp32js](https://github.com/vecnode/esp32js)
 * [vecnode/wokwi-elements](https://github.com/vecnode/wokwi-elements)
 * [vecnode/ArduinoCore-avr](https://github.com/vecnode/ArduinoCore-avr)
 * [vecnode/ATTinyCore](https://github.com/vecnode/ATTinyCore)
 * [vecnode/pico-sdk](https://github.com/vecnode/pico-sdk)
 * [vecnode/LiquidCrystal](https://github.com/vecnode/LiquidCrystal)
-* [vecnode/qemu-esp32](https://github.com/vecnode/qemu-esp32)
 * [vecnode/esp-idf](https://github.com/vecnode/esp-idf)
 
 ## Reproduce
@@ -80,9 +80,7 @@ cmake --build build --target physicalsim -j --config Release
 .\build_and_run.bat
 
 # One-command portable package to Desktop\Release
-# (always bundles fixed WebView2 runtime; bundles qemu-system-arm too if
-# it's installed on the build machine, so the packaged app doesn't need
-# QEMU installed wherever it's run)
+# (always bundles fixed WebView2 runtime + avr-gcc toolchain)
 .\package_release.bat
 
 # -----------------------------
@@ -125,8 +123,8 @@ curl -X POST http://127.0.0.1:<port>/bridge/rp2040/stop
 # Last known state (from the adapter's own stateChange events)
 curl http://127.0.0.1:<port>/bridge/rp2040/state
 
-# esp32 works over the exact same surface, backed by a spawned
-# qemu-system-xtensa process instead of a Worker
+# esp32 works over the exact same surface - a Worker running esp32js,
+# same as every other adapter
 curl -X POST http://127.0.0.1:<port>/bridge/esp32/start
 curl http://127.0.0.1:<port>/bridge/esp32/state
 ```

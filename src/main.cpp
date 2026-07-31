@@ -37,8 +37,6 @@
 #include <cpp-embedlib-httplib.h>
 #include "WebAssets.h"
 #include "webview/webview.h"
-#include "esp32_qemu_adapter.hpp"
-#include "qemu_backed_adapter.hpp"
 #include "avr_toolchain.hpp"
 #include "rp2040_toolchain.hpp"
 #include "esp32_toolchain.hpp"
@@ -302,61 +300,9 @@ void install_bridge(webview::webview &w) {
   });
 }
 
-// --- QEMU-backed adapters (e.g. "esp32") -------------------------------------
-// Unlike avr8/rp2040 (JS/TS running in a Worker, reached via eval()/bind()
-// above), a QEMU-backed adapter has no JS side at all — the C++ shell
-// spawns and controls a real qemu-system-* process directly (see
-// esp32_qemu_adapter.hpp/.cpp for "esp32"/qemu-system-xtensa). Every kind
-// implements the same QemuBackedAdapter interface, so this dispatch table
-// doesn't grow a new special case per adapter kind - just a new entry here
-// and a new branch in get_or_create_qemu_instance() below.
-// Writes into the same g_bridge_latest_state map install_bridge()'s
-// JS->C++ handler populates, so GET /bridge/:adapter/state needs no
-// separate code path for any adapter kind.
-bool is_qemu_backed_adapter(const std::string &adapter) {
-  return adapter == "esp32";
-}
-
-// Guards both g_qemu_instances (the lookup/creation map) *and* every call
-// into an already-created instance's methods - not just creation. A
-// QemuInstance/Esp32QemuInstance owns long-lived TCP sockets (QMP/GDB) it
-// talks a stateful request/response protocol over; httplib serves
-// requests from a thread pool, so two concurrent HTTP requests against
-// the same adapter (e.g. the state poll and a subscribed pin's readPin
-// poll, both firing every 200ms - see native-adapter-client.ts) would
-// otherwise interleave writes/reads on the same socket from different
-// threads with nothing serializing them, corrupting the GDB RSP framing
-// and hanging a read forever - found by adding NativeAdapterClient's own
-// pin-change polling (esp32's readPin is the first native adapter method
-// actually worth polling at all), not a pre-existing reported bug.
-// handle_qemu_bridge_call() holds this lock for its *entire* body, not
-// just the lookup, which is why get_or_create_qemu_instance() itself no
-// longer takes it (std::mutex isn't recursive - a second lock from the
-// same thread would deadlock, not queue).
-std::mutex g_qemu_mutex;
-std::unordered_map<std::string, std::unique_ptr<QemuBackedAdapter>> g_qemu_instances;
-
-// Caller must hold g_qemu_mutex.
-QemuBackedAdapter &get_or_create_qemu_instance(const std::string &adapter) {
-  auto it = g_qemu_instances.find(adapter);
-  if (it == g_qemu_instances.end()) {
-    if (adapter != "esp32") {
-      throw std::runtime_error("no QEMU-backed adapter registered for \"" + adapter + "\"");
-    }
-    std::unique_ptr<QemuBackedAdapter> instance = std::make_unique<esp32qemu::Esp32QemuInstance>();
-    instance->start_process();
-    it = g_qemu_instances.emplace(adapter, std::move(instance)).first;
-  }
-  return *it->second;
-}
-
-// Decodes a plain hex-pair-per-byte string (the same "binHex" convention
-// /compile already uses for RP2040's response) into raw bytes - the
-// counterpart encode loop lives in the /compile handler below. Needed
-// because loadFirmware crosses the native HTTP bridge as JSON
-// (native-adapter-client.ts's call()), not a Worker's postMessage
-// structured clone, so a raw Uint8Array can't cross directly the way it
-// does for avr8/rp2040's loadFirmware.
+// Encodes raw bytes as a plain hex-pair-per-byte string (the "binHex"
+// convention /compile uses for RP2040's and ESP32's response, since
+// neither has an Intel-HEX-shaped convention the way AVR does).
 std::string encode_hex_bytes(const std::string &binary) {
   static const char *hex_digits = "0123456789abcdef";
   std::string hex;
@@ -366,97 +312,6 @@ std::string encode_hex_bytes(const std::string &binary) {
     hex.push_back(hex_digits[byte & 0xf]);
   }
   return hex;
-}
-
-std::string decode_hex_bytes(const std::string &hex) {
-  std::string out;
-  out.reserve(hex.size() / 2);
-  auto nibble = [](char c) -> int {
-    if (c >= '0' && c <= '9') return c - '0';
-    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
-    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
-    throw std::runtime_error("invalid hex character in loadFirmware payload");
-  };
-  for (std::size_t i = 0; i + 1 < hex.size(); i += 2) {
-    out.push_back(static_cast<char>((nibble(hex[i]) << 4) | nibble(hex[i + 1])));
-  }
-  return out;
-}
-
-json handle_qemu_bridge_call(const std::string &adapter, const std::string &method,
-                              const json &params) {
-  // Held for the whole call, not just the instance lookup - see
-  // g_qemu_mutex's own comment above on why a per-request-only lock
-  // isn't enough once an instance already exists.
-  std::lock_guard<std::mutex> lock(g_qemu_mutex);
-  try {
-    auto &instance = get_or_create_qemu_instance(adapter);
-
-    // Plain scalar (number, string, or null), matching worker-host.ts's
-    // SimulatorAdapter method shapes (adapter-types.ts) -
-    // native-adapter-client.ts's call() returns this "result" field
-    // straight through to the caller, which expects a bare value, not a
-    // wrapper object.
-    json result_value = nullptr;
-
-    if (method == "start") {
-      instance.start();
-    } else if (method == "stop") {
-      instance.stop();
-    } else if (method == "step") {
-      const int n = params.is_number() ? params.get<int>() : 1;
-      instance.step(n);
-    } else if (method == "reset") {
-      instance.reset();
-    } else if (method == "init") {
-      // Process is already started by get_or_create_qemu_instance() above.
-    } else if (method == "readPin") {
-      const std::string pin = params.is_object() && params.contains("pin")
-                                   ? params.at("pin").get<std::string>()
-                                   : "";
-      // {"value": 0|1} - see esp32_qemu_adapter.hpp's read_pin().
-      result_value = instance.read_pin(pin).value("value", json(nullptr));
-    } else if (method == "readPinDirection") {
-      const std::string pin = params.is_object() && params.contains("pin")
-                                   ? params.at("pin").get<std::string>()
-                                   : "";
-      // {"value": "input"|"output"} - see read_pin_direction().
-      result_value = instance.read_pin_direction(pin).value("value", json(nullptr));
-    } else if (method == "writePin") {
-      const std::string pin = params.is_object() && params.contains("pin")
-                                   ? params.at("pin").get<std::string>()
-                                   : "";
-      const int value = params.is_object() && params.contains("value")
-                             ? params.at("value").get<int>()
-                             : 0;
-      instance.write_pin(pin, value);
-    } else if (method == "writeAnalogPin") {
-      const std::string pin = params.is_object() && params.contains("pin")
-                                   ? params.at("pin").get<std::string>()
-                                   : "";
-      const double voltage = params.is_object() && params.contains("voltage")
-                                  ? params.at("voltage").get<double>()
-                                  : 0.0;
-      instance.write_analog_pin(pin, voltage);
-    } else if (method == "loadFirmware") {
-      // main.ts's compileAndRun() sends a plain hex string here for
-      // native-backed adapters (see decode_hex_bytes() above) - a raw
-      // Uint8Array, the shape avr8/rp2040's Worker-side loadFirmware()
-      // takes, can't cross the JSON HTTP bridge directly.
-      const std::string hex = params.is_string() ? params.get<std::string>() : "";
-      instance.load_firmware(decode_hex_bytes(hex));
-    } else {
-      return json{{"error", "Unknown method: " + method}};
-    }
-
-    {
-      std::lock_guard<std::mutex> lock(g_bridge_state_mutex);
-      g_bridge_latest_state[adapter] = instance.state();
-    }
-    return json{{"result", result_value}};
-  } catch (const std::exception &e) {
-    return json{{"error", e.what()}};
-  }
 }
 
 // Dispatches one adapter command into JS and blocks (with a timeout) for the
@@ -590,9 +445,7 @@ int main(int argc, char **argv) {
           }
         }
 
-        const json result = is_qemu_backed_adapter(adapter)
-                                ? handle_qemu_bridge_call(adapter, method, params)
-                                : dispatch_bridge_call(w, adapter, method, params);
+        const json result = dispatch_bridge_call(w, adapter, method, params);
         res.set_header("Cache-Control", "no-store");
         res.status = result.contains("error") ? 502 : 200;
         res.set_content(result.dump(), "application/json");
@@ -659,7 +512,7 @@ int main(int argc, char **argv) {
       // Real ESP-IDF build via esp32_toolchain.cpp - a genuinely heavier
       // pipeline than avr-gcc's flat per-file compile or pico-sdk's
       // cmake-driven one (a full multi-component CMake project: sdkconfig,
-      // partition table, bootloader, esptool merge_bin), and its toolchain
+      // partition table, bootloader), and its toolchain
       // discovery is dev-machine-only today, not bundled/portable yet -
       // see esp32_toolchain.hpp. toolchain_available() check first so a
       // machine without it gets a clear, immediate error rather than a
@@ -673,6 +526,9 @@ int main(int argc, char **argv) {
             "application/json");
         return;
       }
+      // "binHex" here is the raw compiled ELF (see esp32_toolchain.hpp) -
+      // esp32js's Board.loadFirmware() takes an ELF Uint8Array directly,
+      // same hex-encoding-over-JSON convention rp2040's binHex already uses.
       const auto result = esp32toolchain::compile_sketch(source);
       json out = {{"ok", result.ok}, {"log", result.log}};
       if (result.ok) {

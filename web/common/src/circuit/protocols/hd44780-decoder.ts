@@ -6,9 +6,8 @@ import type { CircuitPin } from "../circuit-pin.js";
 // construction: it only ever talks to CircuitPin (read()/write()/
 // onChange()), the same adapter-agnostic surface Led/Button already use,
 // so this works unmodified against any current or future board/adapter
-// (arduino-uno/avr8 today, anything wired through a BoardPinMap/PinClient
-// tomorrow - an ESP32-over-QEMU board included, once that adapter
-// implements real pin I/O) with zero changes here.
+// (arduino-uno/avr8, esp32-devkit-v1/esp32 today, anything wired through a
+// BoardPinMap/PinClient tomorrow) with zero changes here.
 //
 // Derived directly from simulators/LiquidCrystal/src/LiquidCrystal.cpp
 // (the exact vendored source this project compiles sketches against),

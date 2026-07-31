@@ -140,7 +140,7 @@ export const boardPowerProfile: Record<string, PowerProfile> = {
   // than RP2040's Cortex-M0+ at idle/running, approximate like every
   // other profile here (not measured from this simulation, and WiFi/BT
   // radio current isn't modeled since neither is emulated - see
-  // esp32_qemu_adapter.hpp).
+  // web/adapters/esp32's adapter.ts).
   "esp32-devkit-v1": {
     supplyVoltage: 3.3,
     currentMa: { idle: 30, running: 80 },

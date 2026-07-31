@@ -975,8 +975,7 @@ void loop(void) {
     board: "ESP32 DevKit V1",
     glyph: "🔷",
     // Adapted from espressif/esp-idf's own examples/peripherals/gpio/
-    // generic_gpio - the same firmware the Phase 0/1 spike used to
-    // validate the QEMU fork's GPIO support in the first place.
+    // generic_gpio.
     sketch: `#include "driver/gpio.h"
 
 #define GPIO_OUTPUT_IO_0 18
@@ -999,8 +998,7 @@ void app_main(void) {
     build: async () => {
       const board = await canvas.scene.showBoard("esp32-devkit-v1");
       if (!board) return;
-      // D18/D19 - the two GPIOs the bundled demo firmware actually
-      // toggles (see esp32_qemu_adapter.hpp's header comment), both in
+      // D18/D19 - the two GPIOs this example's sketch toggles, both in
       // lockstep with each other once a second.
       const led1 = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 40);
       if (!led1) return;
@@ -1563,16 +1561,7 @@ async function compileAndRun(): Promise<void> {
       const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
       bytes = parsed.bytes.slice(0, parsed.usedBytes);
     }
-    if (activeAdapterId === "esp32") {
-      // NativeAdapterClient posts params as JSON (native-adapter-client.ts) -
-      // a raw Uint8Array would serialize as a numeric-keyed object, not
-      // bytes, so the native/HTTP bridge takes the same hex string
-      // /compile already returned rather than round-tripping through
-      // parseHexBytes() only to re-encode it.
-      await client.call("loadFirmware", body.binHex ?? "");
-    } else {
-      await client.call("loadFirmware", bytes);
-    }
+    await client.call("loadFirmware", bytes);
     terminal.clear();
     terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);
   } catch (err) {

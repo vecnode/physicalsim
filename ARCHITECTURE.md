@@ -27,15 +27,16 @@ there over HTTP.
 │                    adapter-registry.ts                                                        │
 │                (one AdapterClient per adapter id, shared by UI and bridge)                    │
 │                             │ postMessage RPC (worker-rpc.ts / worker-host.ts)                │
-│              ┌──────────────┴───────────────┐                                                 │
-│      Worker: adapters/rp2040/worker.ts   Worker: adapters/avr8/worker.ts                      │
-│              │ wraps                        │ wraps                                           │
-│      simulators/rp2040js (submodule)     simulators/avr8js (submodule)                        │
+│         ┌──────────────────┼──────────────────────┐                                          │
+│ Worker: adapters/rp2040/worker.ts   adapters/avr8/worker.ts   adapters/esp32/worker.ts         │
+│         │ wraps                    │ wraps                    │ wraps                          │
+│ simulators/rp2040js (submodule) simulators/avr8js (submodule) simulators/esp32js (submodule)   │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Not shown above: a third adapter kind, `cortex-m`, has no JS/TS side at
-all — see "Two adapter kinds" below.
+Every registered adapter is Worker-backed JS/TS - there is no
+native/process-backed adapter kind in this project (see "One adapter
+kind: Worker-backed" below for what used to be there and why it's gone).
 
 ## Why it's split this way
 
@@ -44,14 +45,14 @@ The native shell ([webview](https://github.com/webview/webview) +
 [cpp-embedlib](https://github.com/yhirose/cpp-embedlib)) is a thin,
 deliberately dumb host: open a window (or don't), serve some embedded static
 files, get out of the way. It doesn't know what a simulator is. Every actual
-simulator — rp2040, avr8, and whatever gets added later — is a JS/TS library
-running inside the webview's browser engine, because that's the only runtime
-both simulator projects (rp2040js, avr8js) actually target, and because it
-lets the exact same build serve identically to a plain browser tab pointed at
-`localhost:<port>` or to the native window. See [README.md](README.md) for
-the reasoning behind keeping the native shell as-is instead of moving to
-Ultralight/CEF — this is an intentionally deferred tradeoff, not an
-oversight.
+simulator - rp2040, avr8, esp32, and whatever gets added later - is a JS/TS
+library running inside the webview's browser engine, because that's the
+runtime every simulator project (rp2040js, avr8js, esp32js) actually
+targets, and because it lets the exact same build serve identically to a
+plain browser tab pointed at `localhost:<port>` or to the native window. See
+[README.md](README.md) for the reasoning behind keeping the native shell
+as-is instead of moving to Ultralight/CEF — this is an intentionally
+deferred tradeoff, not an oversight.
 
 ## The three JS/TS layers
 
@@ -67,8 +68,8 @@ interface SimulatorAdapter {
   step(n: number): void;
   reset(): void;
   onStateChange(cb: (state: SimState) => void): () => void;
-  // Optional: not every adapter kind supports pin I/O (see "Pin I/O
-  // pipeline" below for why cortex-m doesn't, today).
+  // Mandatory on every registered adapter today - see "Pin I/O pipeline"
+  // below.
   readPin?(pin: string): number | undefined;
   writePin?(pin: string, value: number): void;
   onPinChange?(pin: string, cb: (value: number) => void): () => void;
@@ -85,13 +86,13 @@ Also home to `worker-host.ts` (`hostAdapter()`, wires any `SimulatorAdapter`
 to the postMessage RPC protocol — every adapter's `worker.ts` is a two-line
 file that just calls this).
 
-**`web/adapters/{rp2040,avr8}`** — one package per simulator. Each
+**`web/adapters/{rp2040,avr8,esp32}`** — one package per simulator. Each
 `adapter.ts` implements `SimulatorAdapter` against its library; each
 `worker.ts` is the Worker entry point (`hostAdapter(new XAdapter())`). The
-libraries themselves aren't npm dependencies — `rp2040js`/`avr8js` are
-resolved via a Vite/tsconfig alias straight to
+libraries themselves aren't npm dependencies — `rp2040js`/`avr8js`/`esp32js`
+are resolved via a Vite/tsconfig alias straight to
 `simulators/<name>/src/index.ts` in the git submodule (see
-`web/shell/vite.config.ts`). Adding a third simulator means: add a
+`web/shell/vite.config.ts`). Adding another simulator means: add a
 submodule, add its alias, add an adapter package. Nothing else changes.
 
 **`web/shell`** — the only page that actually gets served. Three files do
@@ -167,98 +168,23 @@ the native round trip is expensive. See the README's "Known limitation" for
 what this doesn't yet cover (multiple adapters running simultaneously under
 heavy concurrent bridge traffic).
 
-## Two adapter kinds: Worker-backed and native-backed
+## One adapter kind: Worker-backed
 
-`avr8`/`rp2040` are **Worker-backed**: pure JS/TS running in a Web Worker,
-reached by the UI via `postMessage` and by external callers via the bridge
-above. `cortex-m` is **native-backed**: no JS/TS library exists for ARM
-Cortex-M the way `avr8js`/`rp2040js` exist for AVR8/RP2040 (confirmed by
-research — the real, mature option for that architecture is QEMU, a
-native process, not a browser library), so `src/qemu_adapter.{hpp,cpp}`
-spawns and controls a real `qemu-system-arm` process directly from C++.
-There is nothing running in JS for this adapter at all — it's reached
-*only* through the same `/bridge/:adapter/:method` HTTP surface external
-callers already use, including by the shell UI itself
-(`web/shell/src/native-adapter-client.ts`, a `fetch()`-based client
-structurally matching the Worker-backed `AdapterClient` so
-`adapter-registry.ts`'s `getAdapterClient()` can hand either one back to
-`main.ts` without it needing to know which kind it got — see the
-`SimClient` interface in `adapter-registry.ts`).
-
-Concretely, for `cortex-m`:
-
-- `POST /bridge/:adapter/:method` branches in `src/main.cpp`: `cortex-m`
-  routes to `handle_qemu_bridge_call()` instead of `dispatch_bridge_call()`
-  (the JS-eval path), but both write into the same
-  `g_bridge_latest_state` map, so `GET /bridge/:adapter/state` needs no
-  adapter-kind-specific code at all.
-- `start`/`stop`/`reset` go over **QMP** (QEMU Machine Protocol,
-  JSON-over-TCP) — `cont`/`stop`/`system_reset`.
-- `step` goes over a **minimal GDB Remote Serial Protocol client**
-  (`$packet#checksum` framing, just enough for `s` single-step and `g`
-  register read) — QMP has no clean single-instruction-step command,
-  that's what the GDB stub exists for.
-- Because register reads require the target halted, `state()` while
-  `running` reports the last known PC/cycles *frozen* rather than live —
-  documented in `qemu_adapter.hpp`, not a bug. Polling from the UI
-  (`native-adapter-client.ts`, 200ms interval) reflects this honestly:
-  cycles/PC only move again once something actually stops/steps the CPU.
-- `cycles` in `state()` is not a real cycle count — QEMU doesn't expose
-  one over QMP/GDB for this target — it's the number of `step()` calls
-  issued, which is what it actually is, not silently relabeled.
-
-**Why a real vector table stub is baked in.** Unlike `avr8js`/`rp2040js`'s
-simplified CPU models (which happily execute whatever's in empty
-flash/bootrom as inert instructions), real ARM Cortex-M silicon requires
-a valid vector table at address 0 to boot at all — word 0 is the initial
-SP, word 1 is the initial PC. Left at all-zero, the CPU immediately
-double-faults trying to execute from (and then handle a fault from)
-address 0, and QEMU exits with `qemu: fatal: Lockup: can't escalate 3 to
-HardFault`. `minimal_vector_table_stub()` in `qemu_adapter.cpp` writes a
-10-byte image (SP + PC + one `b .` Thumb instruction, an infinite
-self-branch) to a temp file and loads it via `-kernel` — not firmware,
-just enough for the CPU to boot into a real, inert, steppable state,
-matching the other adapters' "runs, executes nothing meaningful yet"
-posture until real firmware loading exists for this adapter too.
-
-**Process lifecycle.** `-nographic` redirects QEMU's "display" to
-stdio/console — spawned with no console and no inherited handles (as a
-GUI-subsystem app would naturally want), it has nowhere valid to
-redirect to and exits almost immediately (this looked like a working
-spawn during development — the QMP handshake and one GDB register read
-completed in the brief window before the process was gone). Fixed by
-redirecting QEMU's stdout/stderr to a log file via `STARTUPINFOA`. On
-Windows, the child is also assigned to a Job Object with
-`JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE` — this, not the `Impl` destructor,
-is what actually guarantees `qemu-system-arm` doesn't outlive
-physicalsim: destructors only run on the normal-exit path, but Windows
-closes every handle a process owns when it terminates for *any* reason
-(crash, or an external `taskkill /F`), and closing the job's last handle
-kills every process assigned to it.
-
-**Distribution: bundled vs. system QEMU.** `find_qemu_system_arm()`
-checks three places in order: a `qemu/` folder next to physicalsim's own
-executable, then PATH, then well-known system install locations. The
-first one exists specifically so packaged builds don't require QEMU
-installed on the machine they run on — `CMakeLists.txt`'s
-`BUNDLE_QEMU_ARM` option (mirroring the pre-existing
-`BUNDLE_WEBVIEW2_FIXED_RUNTIME` pattern) copies `qemu-system-arm.exe` +
-its DLLs into the build output at package time, from wherever it's
-installed on the *build* machine — nothing is committed to git, same as
-the WebView2 runtime. `package_release.bat` auto-detects a local install
-and enables this automatically; it's a warning, not a build failure,
-when QEMU isn't found there, since `avr8`/`rp2040` don't need it.
-Verified directly during development: with both a bundled and a system
-copy present, `Get-Process qemu-system-arm | Select Path` resolved to
-the bundled one.
-
-The DLL set (114 files, ~140 MB) was determined with `dumpbin
-/dependents` rather than guessed — `qemu-system-arm.exe` implicitly
-(not lazily) links GTK/SDL/etc. even though `-nographic` never uses
-them, so the whole top-level DLL set has to travel with it. QEMU's
-`share/` directory (~355 MB of BIOS/UEFI blobs for *other*
-architectures) is not bundled — confirmed unnecessary by actually
-booting `netduinoplus2` with no `-bios` flag.
+Every registered adapter — `avr8`, `rp2040`, `esp32` — is **Worker-backed**:
+pure JS/TS running in a Web Worker, reached by the UI via `postMessage` and
+by external callers via the bridge above. There is no native/process-backed
+adapter kind in this project: an earlier `cortex-m` adapter spawned a real
+`qemu-system-arm` process from C++ (QMP for start/stop/reset, a minimal GDB
+Remote Serial Protocol client for stepping), and ESP32 was originally built
+the same way around a forked `qemu-system-xtensa` (`vecnode/qemu-esp32`).
+Both were removed once `vecnode/esp32js` — a pure TypeScript Xtensa LX6
+CPU+peripheral interpreter, the same shape `avr8js`/`rp2040js` already are
+for their own architectures — made a native process unnecessary for ESP32,
+and no board maps to `cortex-m` at all. `adapter-registry.ts`'s
+`getAdapterClient()` now has exactly one code path: create (or reuse) a
+Worker and wrap it in an `AdapterClient` (`worker-rpc.ts`), whose `SimClient`
+shape `main.ts` drives without needing to know or care which chip's Worker
+it's talking to.
 
 ## Pin I/O pipeline
 
@@ -271,8 +197,8 @@ anywhere above the adapter implementations themselves.
 and `worker-host.ts`:
 
 - `readPin`/`writePin` — regular request/response `AdapterMethod`s, exactly
-  like `step`. Optional on `SimulatorAdapter` (`readPin?`/`writePin?`) since
-  not every adapter kind supports them yet.
+  like `step`. Optional on the `SimulatorAdapter` type (`readPin?`/
+  `writePin?`), but every registered adapter implements them today.
 - `subscribePin` — a request that tells the worker to start forwarding one
   pin's changes as `pinChange` events. Idempotent per pin (a `Map` of
   live unsubscribe functions in `worker-host.ts` keyed by pin id) — calling
@@ -284,10 +210,9 @@ and `worker-host.ts`:
 
 On the browser side, `AdapterClient` (`web/shell/src/worker-rpc.ts`) routes
 `pinChange` messages to a second listener set (`onPinChange`), parallel to
-`onStateChange`. `NativeAdapterClient` deliberately does **not** implement
-`onPinChange` — see "Why cortex-m has no real pin I/O" below.
+`onStateChange`.
 
-**Per-adapter pin semantics.** Both Worker-backed adapters converge on the
+**Per-adapter pin semantics.** Every Worker-backed adapter converges on the
 same shape (`readPin`/`writePin` return/take a single `0`/`1`; `onPinChange`
 fires on any change, whether firmware-driven or externally injected) despite
 their underlying libraries modeling pins very differently:
@@ -311,15 +236,14 @@ their underlying libraries modeling pins very differently:
   external wire being attached (not firmware configuring its own pad),
   it force-enables that bit rather than requiring a `gpio_init()` firmware
   call that doesn't exist yet.
-
-**Why cortex-m has no real pin I/O.** `handle_qemu_bridge_call()` in
-`src/main.cpp` routes `readPin`/`writePin` to `QemuInstance::read_pin()` /
-`write_pin()` (`src/qemu_adapter.{hpp,cpp}`), which unconditionally throw —
-the bridge surface is uniform (the shell never special-cases `cortex-m`),
-but nothing behind it works yet. Real GPIO access would mean reading/writing
-the STM32's IDR/ODR registers over QMP or the existing GDB RSP connection
-against the `netduinoplus2` machine — unscoped, unverified, and explicitly
-left as a future spike rather than guessed at.
+- **esp32** (`web/adapters/esp32/src/adapter.ts`) — pin ids are `"D<n>"`
+  (GPIO numbers 0-39). Wraps `esp32js`'s `Board` class directly: `readPin`/
+  `writePin` are thin passthroughs to `Board.getPin()`/`setPin()`. Unlike
+  avr8js/rp2040js, esp32js's `Gpio` peripheral has no push-based "output
+  changed" listener, so `onPinChange` is served by polling every subscribed
+  pin once per `step()` instead (see the adapter's own `checkSubscribedPins`)
+  — the same "dedupe via `lastPinValues`" posture as avr8/rp2040, just driven
+  by a poll rather than a native listener callback.
 
 **The circuit layer.** `web/common/src/circuit/` is a small,
 adapter-agnostic layer built entirely on the client surface above, not on
@@ -328,10 +252,7 @@ any adapter internals directly:
 - `CircuitPin` wraps one pin id behind `read()`/`write()`/`onChange()`,
   talking only to a `PinClient` (the minimal `call()`/`onPinChange()` shape
   — deliberately not imported from `web/shell`, so `web/common` has no
-  dependency on it; `AdapterClient`/`NativeAdapterClient` satisfy it
-  structurally). `onChange()` throws for a client that doesn't implement
-  `onPinChange` (i.e. `NativeAdapterClient` today) rather than silently
-  never firing.
+  dependency on it; `AdapterClient` satisfies it structurally).
 - `Led`/`Button` (`web/common/src/circuit/components/`) are the first two
   components: `Led` is read-only (tracks a pin via `onChange`, plus one
   `read()` on construction so it reflects reality immediately rather than
@@ -590,7 +511,7 @@ the type against its registry, assign a simple incrementing id, return
 `null` for an unknown type.
 
 **Boards vs. adapters: plugging in, then powering on.** `avr8`/`rp2040`/
-`cortex-m` are still parked out of the `#adapter-select` dropdown
+`esp32` are still parked out of the `#adapter-select` dropdown
 (`index.html`) — not removed from the codebase; `adapter-registry.ts`,
 `worker-rpc.ts`, and both adapter packages are untouched, just unreachable
 from the UI while board work is the focus. `Scene.showBoard()`/
@@ -1032,7 +953,7 @@ fallback chain, and only proceeds if both resolve:
   before that copy step has ever happened.
 
 **Distribution: bundled vs. system avr-gcc.** `BUNDLE_AVR_TOOLCHAIN`
-(`CMakeLists.txt`) mirrors `BUNDLE_QEMU_ARM`'s pattern exactly: off by
+(`CMakeLists.txt`) mirrors `BUNDLE_WEBVIEW2_FIXED_RUNTIME`'s pattern: off by
 default, `FetchContent`-fetches Arduino's own prebuilt `avr-gcc` archive
 per platform when on, `package_release.bat` turns it on automatically for
 every Release package. One real bug found and fixed by actually
@@ -1149,11 +1070,12 @@ Nothing above - `componentProtocols`, `resolveProtocolLinks()`,
 directly; every board-specific lookup goes through the same
 `BoardPinMap`/`CircuitPin.forBoardPin()`/`PinClient` surface
 `SignalChain` and the whole pin I/O pipeline already share. A second
-placeable board type (an ESP32-over-QEMU board, say) needs one new
-`boardPinMaps` entry and a working `readPin`/`writePin`/`onPinChange` on
-its adapter (`cortex-m`'s QEMU bridge doesn't have this yet - see "Why
-cortex-m has no real pin I/O" above, a documented, separate future spike)
-- nothing in this section changes. A second multi-pin component (a relay
+placeable board type on an already-registered adapter (a new AVR variant,
+say) needs one new `boardPinMaps` entry and nothing else - the adapter
+already has a working `readPin`/`writePin`/`onPinChange`. A genuinely new
+adapter needs those three implemented once (esp32 did exactly this, see
+"ESP32 board and toolchain" below) - nothing in this section changes
+either way. A second multi-pin component (a relay
 needing its own vendored library and its own multi-pin decoder, say)
 needs one `componentProtocols` entry, one decoder class, and one
 `PROTOCOL_ATTACHERS` entry - again, nothing else here changes. This
@@ -1251,10 +1173,9 @@ above almost exactly (`web/common/src/adapter-types.ts`,
 `worker-host.ts`):
 
 - `onSerialData?(cb): () => void` — optional on `SimulatorAdapter`, same
-  reasoning as `onPinChange?`: not every adapter kind has a UART wired up
-  (today, only `avr8` does — `rp2040js` isn't given a UART peripheral in
-  `web/adapters/rp2040/src/adapter.ts`, and `cortex-m`'s QEMU bridge has
-  no serial surface at all).
+  reasoning as `onPinChange?`: not every adapter has a UART wired up
+  (`avr8` and `esp32` do; `rp2040js` isn't given a UART peripheral in
+  `web/adapters/rp2040/src/adapter.ts`).
 - `"subscribeSerial"` — a request-shaped `AdapterMethod`, idempotent via
   a single `serialSubscribed` boolean in `worker-host.ts` (simpler than
   `subscribePin`'s per-pin `Map`, since there's only one serial stream
@@ -1264,8 +1185,8 @@ above almost exactly (`web/common/src/adapter-types.ts`,
   `AdapterClient` (`web/shell/src/worker-rpc.ts`) routes it to a third
   listener set (`serialDataListeners`), parallel to `stateListeners`/
   `pinChangeListeners`; `SimClient` (`adapter-registry.ts`) declares
-  `onSerialData?` for the same reason it declares `onPinChange?` —
-  `NativeAdapterClient` doesn't implement either.
+  `onSerialData?` as optional since not every adapter implements it
+  (`rp2040` doesn't, see above).
 
 **Where the byte actually comes from.** `Avr8Adapter.attachPeripherals()`
 already constructed an `AVRUSART` (from `avr8js`) before this feature
@@ -1356,21 +1277,18 @@ below. The bullets below are what's still actually open.)*
   also ships `i2c.ts`, `spi.ts`, `pio.ts`, `dma.ts`, `usb.ts`, `rtc.ts`,
   all live the moment `new RP2040()` runs (it's a monolithic full-chip
   model) but not yet exposed through `Rp2040Adapter`'s own RPC surface.
-- **ESP32 / ESP32-S3 (Xtensa LX6/LX7)** — velxio runs these through a
-  QEMU fork with a custom Xtensa target (`lcgamboa`'s `libqemu-xtensa`),
-  bridged over WebSocket from a Python backend. physicalsim's existing
-  `cortex-m` adapter is architecturally the right shape for this (a
-  native-backed adapter reached only through the bridge, per "Two adapter
-  kinds" above) but targets `qemu-system-arm`, not Xtensa — a genuinely
-  different QEMU build, not a config tweak.
-- **ESP32-C3 (RISC-V RV32IMC)** — velxio has *two* paths: the same
-  QEMU-Xtensa-family pipeline with a RISC-V target, and a from-scratch
-  TypeScript RV32IMC interpreter (`RiscVCore.ts`) used for ISA unit
-  testing, not production. physicalsim has no RISC-V story at all yet.
-- **Raspberry Pi 3 (QEMU, ARM Cortex-A)** — unrelated to Arduino-shaped
-  work, but in velxio's catalog; would be a `cortex-a` adapter kind,
-  architecturally identical in spirit to `cortex-m`'s native-backed QEMU
-  bridge, targeting a different QEMU machine.
+- **ESP32-S3/C3 (Xtensa LX7 / RISC-V RV32IMC)** — velxio runs these
+  through a QEMU fork bridged over WebSocket from a Python backend
+  (ESP32-C3 also has a from-scratch TypeScript RV32IMC interpreter,
+  `RiscVCore.ts`, used for ISA unit testing, not production). Plain
+  ESP32 (Xtensa LX6) has since shipped in physicalsim, Worker-backed via
+  `vecnode/esp32js` (see "ESP32 board and toolchain" below) - S3/C3
+  remain a real gap, since `esp32js` only models plain ESP32 today.
+- **Raspberry Pi 3 (ARM Cortex-A)** — unrelated to Arduino-shaped work,
+  but in velxio's catalog via QEMU; physicalsim has no story for it at
+  all, and would need either a QEMU-backed process (the shape this
+  project has since moved away from for every board it actually ships)
+  or a JS/TS Cortex-A core, neither of which exists yet.
 
 **Other gaps, smaller:**
 
@@ -1402,18 +1320,18 @@ below. The bullets below are what's still actually open.)*
   explicit that ESP32/ESP32-S3/ESP32-C3/RPi3 emulation "requires the
   velxio backend to be running... not in a pure static frontend
   deployment" — those boards don't work in a self-contained build at all.
-  physicalsim's native shell *is* the backend: `qemu-system-arm` is
-  spawned directly by `src/main.cpp`, no separate server process, no
-  network hop, works fully offline in one binary.
-- **One uniform adapter interface across two genuinely different
-  execution models.** velxio bridges its QEMU-backed boards over a
-  bespoke WebSocket protocol per chip family (`Esp32Bridge`, etc.);
-  physicalsim's `SimulatorAdapter`/`SimClient` interface already
-  abstracts Worker-backed (`avr8`, `rp2040`) and native-backed
-  (`cortex-m`) adapters behind one shape (see "Two adapter kinds" above),
-  so `adapter-registry.ts` and the UI don't know or care which kind they
-  got. Adding Xtensa/RISC-V/Cortex-A means new adapter *packages*, not new
-  UI-level plumbing.
+  Every board physicalsim ships (avr8/rp2040/esp32) runs entirely inside
+  the webview's own JS engine — no separate server process, no network
+  hop, no external emulator binary, works fully offline in one binary.
+- **One uniform adapter interface, one execution model.** velxio bridges
+  its QEMU-backed boards over a bespoke WebSocket protocol per chip
+  family (`Esp32Bridge`, etc.); physicalsim's `SimulatorAdapter`/
+  `SimClient` interface is implemented by every registered adapter the
+  same Worker-backed way (see "One adapter kind: Worker-backed" above),
+  so `adapter-registry.ts` and the UI don't know or care which chip
+  they're talking to. Adding a Raspberry Pi 3/RISC-V board means a new
+  adapter *package* (and, unlike ESP32, a JS/TS CPU core that doesn't
+  exist yet for either architecture), not new UI-level plumbing.
 - **An external automation surface velxio doesn't have.** The native
   `POST /bridge/:adapter/:method` HTTP surface (see "The native <-> JS
   bridge" above) lets an outside tool (droidcli) drive any adapter without
@@ -1609,13 +1527,16 @@ zero console/build errors after each stage.
 - **RP2040 board-placement parity** beyond GPIO/UART/ADC/I2C — no SPI
   exposure yet, and no second RP2040-family element exists in the
   vendored fork to place a "real" Pico with (see above).
-- **A `cortex-a` (Raspberry Pi 3, QEMU) or Xtensa/RISC-V (ESP32 family)
-  adapter**, if broader board coverage matters more than the peripheral
-  depth just added. Same shape as `cortex-m` (native-backed, QEMU-driven,
-  no JS/TS library exists for these architectures) — see "Two adapter
-  kinds" above. A bigger lift than everything above (a working QEMU build
-  for a new target architecture, a GDB-stub-based step protocol for it,
-  etc.).
+- **A Raspberry Pi 3 (ARM Cortex-A) adapter**, if broader board coverage
+  matters more than the peripheral depth just added — no JS/TS Cortex-A
+  emulator exists to build one against the way `esp32js` now exists for
+  ESP32, so this would mean either a from-scratch JS/TS core or falling
+  back to a native QEMU-backed process, the shape this project has moved
+  away from for every board it actually ships. A bigger lift than
+  everything above either way.
+- **ESP32-S3/C3** support, on top of the plain ESP32 (Xtensa LX6)
+  `esp32js` already covers — a genuinely different CPU core (LX7 for S3,
+  RISC-V RV32IMC for C3), not a config tweak on the existing adapter.
 - **Wire-level electrical validation** (short-circuit / invalid-connection
   detection) and an **oscilloscope component** are both still open on
   velxio's own roadmap too — real, documented user-facing features either
@@ -1632,16 +1553,16 @@ that used to block both `sleep_ms()` and GPIO input into compiled
 firmware (see "Fixed: the adapter never advanced the simulation clock"
 below) - both now work.
 
-**Not QEMU.** `cortex-m` uses QEMU specifically because *no JS/TS CPU
-emulator exists for generic ARM Cortex-M* (see "Two adapter kinds"
-above). That reasoning doesn't apply to RP2040: `rp2040js` already *is*
-a complete, actively-maintained RP2040 emulator (dual Cortex-M0+, all the
-peripherals this project has been wiring into `Rp2040Adapter`) - it's
-what Wokwi's own real product runs. Standing up a second, separate QEMU
-process specifically for RP2040 would be strictly worse (QEMU's RP2040
-board support is comparatively immature) and would fight the reason
-`rp2040js` was chosen as physicalsim's second board family in the first
-place. The missing piece isn't emulation - it's compilation.
+**Not QEMU.** Every board family physicalsim ships uses a real,
+actively-maintained JS/TS emulator core, not a native QEMU process:
+`rp2040js` for RP2040 (dual Cortex-M0+, all the peripherals this project
+has been wiring into `Rp2040Adapter`, the same engine Wokwi's own real
+product runs) and `esp32js` for ESP32 (see "ESP32 board and toolchain"
+below) - both chosen specifically over standing up a separate QEMU
+process per architecture, which would have meant a GDB-stub-based step
+protocol and a bundled native binary per board family instead of one
+uniform Worker-backed shape. The missing piece for RP2040 isn't
+emulation - it's compilation.
 
 **What's missing is exactly one thing: a compiler.** Confirmed directly
 against `rp2040js`'s own demo code
@@ -1825,51 +1746,23 @@ power profile) with no console/compile errors.
 
 ## ESP32 board and toolchain
 
-A third native-backed adapter kind (2026-07-25), alongside `cortex-m` -
-see "Two adapter kinds" above. `"esp32"` routes through the exact same
-`handle_qemu_bridge_call()`/`g_bridge_latest_state` path `cortex-m`
-already uses; the only C++-side change needed to add a second QEMU-backed
-adapter was extracting a small `QemuBackedAdapter` interface
-(`src/qemu_backed_adapter.hpp`) that both `qemu::QemuInstance` and the new
-`esp32qemu::Esp32QemuInstance` implement, so `main.cpp`'s dispatch grows
-one lookup-table entry per adapter kind, not a special case.
-
-**Not the official Espressif QEMU fork.** `cortex-m`'s `qemu-system-arm`
-is plain upstream QEMU; ESP32 needs a fork, since mainline QEMU's own
-`qemu-system-xtensa` has no `esp32` machine at all (confirmed by running
-`-M help` against it). `espressif/qemu` is the obvious first candidate,
-but its own peripheral-support docs explicitly mark "GPIO matrix / IOMUX"
-unimplemented on ESP32/S3/C3 - exactly the mechanism behind
-`gpio_set_level()`/`digitalWrite()` on arbitrary pins, so an LED wired to
-a GPIO would never toggle under it. `lcgamboa/qemu` (built for the
-PICSimLab simulator, itself a fork of `espressif/qemu`) adds that support
-- confirmed empirically, not from its README alone: a real ESP-IDF GPIO
-example was built and run under it, and `GPIO_OUT_REG` (read via GDB RSP
-memory read, see below) toggled in exact lockstep with the firmware's own
-`gpio_set_level()` calls. Forked to `vecnode/qemu-esp32` (same
-"own the fork, don't depend on someone else's repo" posture as every
-`simulators/` submodule).
-
-**Real bug found and fixed: GDB memory reads don't work while running.**
-`read_pin()` needs `GPIO_OUT_REG` (peripheral address `0x3ff44004`) via
-the GDB Remote Serial Protocol's `m` (read memory) command - the same
-protocol `cortex-m` uses for register reads, extended here to arbitrary
-physical memory. First attempt sent `m` while the vCPU was continuing
-(QMP `cont`) and it just hung forever - reproduced with a bare Python
-script outside physicalsim entirely (not a bug in the C++ client), and
-resolved once QMP `stop` halted the target first: this fork's gdbstub
-only services memory-read packets while halted. Fixed in
-`Esp32QemuInstance::read_pin()` by bracketing the read with a stop/resume
-if the target was running - the same "briefly pause to read, then
-continue" cost `cortex-m`'s own `step()` already accepts for register
-reads, not a new kind of compromise.
-
-**`write_pin()` is not implemented.** Unlike `GPIO_OUT_REG`, driving an
-external input (a simulated button) would need QEMU's internal
-`set_gpio()` IRQ-line handler (`hw/esp32/esp32_gpio.c`) invoked from
-outside the process - there's no memory-mapped or QMP-exposed path to it
-today. Throws a clear error rather than silently no-op'ing, same posture
-as `cortex-m`'s own pin-I/O stubs.
+`"esp32"` is a Worker-backed adapter like `avr8`/`rp2040` - see "One
+adapter kind: Worker-backed" above. `web/adapters/esp32/src/adapter.ts`
+wraps `esp32js`'s `Board` class (a `Cpu`+`SystemBus` pair for the Xtensa
+LX6 ESP32 - GPIO, UART0, TIMG0, the interrupt matrix, and the SAR ADC;
+explicitly not WiFi/Bluetooth, the second CPU core, or crypto
+accelerators): `readPin`/`writePin` are thin passthroughs to
+`Board.getPin()`/`setPin()`, `readPinDirection` reads the real
+`GPIO_ENABLE` register bit, and `writeAnalogPin` scales a voltage into a
+raw ADC1 code against the fixed ESP32 pin<->channel wiring (GPIO32-39).
+An earlier version of this adapter spawned a real `qemu-system-xtensa`
+process (a fork, `vecnode/qemu-esp32`, since mainline QEMU's ESP32
+machine has no GPIO matrix/IOMUX support) and drove it over QMP/GDB RSP
+the same way a since-removed `cortex-m` adapter drove `qemu-system-arm` -
+that native process, and everything it needed (a bundled QEMU binary +
+DLLs + ROM images, `esptool merge_bin`'d flash images), was removed once
+`vecnode/esp32js` existed to run compiled firmware directly in the same
+Worker/JS shape every other adapter here already uses.
 
 **Compile & Run (`src/esp32_toolchain.cpp`).** A real ESP-IDF project -
 genuinely heavier than `avr_toolchain.cpp`'s flat per-file `avr-gcc`
@@ -1898,35 +1791,19 @@ Python venv (all found by inspecting a known-good `idf.py`-produced
 real tools directly" choice `rp2040_toolchain.cpp` already made over a
 hypothetical `arduino-pico`-style CLI.
 
-**Real bug found and fixed: the flash-image padding blew past the HTTP
-bridge's request-size limit.** `esptool merge_bin --fill-flash-size 4MB`
-(the flag the Phase 0 spike's own manual testing used) pads the merged
-image out to the full declared flash size with `0xFF` filler - fine
-written straight to disk, but this image crosses `POST /compile`'s
-response and then `loadFirmware`'s request body as hex text first (the
-same `binHex` convention `rp2040_toolchain.cpp` established, decoded by
-`decode_hex_bytes()` in `main.cpp`), so 4MB of image became 8MB+ of hex
-and blew past `kMaxRequestBodyBytes` (64KB, a deliberate hardening
-default - see `main.cpp`). Fixed at the root, not by raising the limit to
-match: dropped `--fill-flash-size` from the `merge_bin` call (confirmed
-only ~244KB of the image is ever non-filler, by diffing a padded vs.
-unpadded run) and reconstruct the `0xFF` padding locally in
-`Esp32QemuInstance::load_firmware()`, right before writing the file
-QEMU's `-drive` actually reads - the padding itself never crosses the
-network. `kMaxRequestBodyBytes` was still raised, 64KB -> 2MB, to
-comfortably cover the ~500KB hex-encoded unpadded image with headroom -
-a real, still-hardened bound, not "raised until the error went away".
+Compiled output is the app's own ELF (`build/physicalsim_esp32_sketch.elf`
+inside `compile_sketch()`'s persistent work directory) - `esp32js`'s
+`loadElf()` reads `PT_LOAD` segments directly at their real `p_vaddr` and
+takes the entry point from `e_entry`, so unlike a real flash write there
+is no `esptool merge_bin` (bootloader + partition table + app, at flash
+offsets) step at all; `compile_sketch()` just reads the ELF file back out
+and returns it as `POST /compile`'s `binHex` field (the same
+hex-pair-per-byte convention `rp2040_toolchain.cpp` established), which
+the browser feeds straight into `Esp32Adapter.loadFirmware()` the same
+way avr8/rp2040's own compiled output reaches their adapters.
 
-Verified end-to-end, distinctly: compiled a sketch toggling GPIO21 at
-500ms intervals - deliberately different from the bundled demo
-firmware's GPIO18/19 at 1000ms - posted it through `/compile` ->
-`loadFirmware` -> `start`, and watched `readPin D21` track the *new*
-rate. Proves the freshly compiled firmware is what's actually running,
-not the old bundled demo silently still booted underneath.
-
-**Distribution: all three pieces now vendored/bundled, 2026-07-25.** ESP32
-needed **three** things beyond `avr8`/`rp2040`'s own single-toolchain
-shape, and all three now have a real path to a portable, packaged build:
+**Distribution: two pieces vendored/bundled.** ESP32 needs two things
+beyond `avr8`/`rp2040`'s own single-toolchain shape:
 
 1. **`xtensa-esp-elf` (the gcc toolchain)** - not xPack (checked
    directly - `xpack-dev-tools` publishes no xtensa/esp32 toolchain at
@@ -1954,27 +1831,14 @@ shape, and all three now have a real path to a portable, packaged build:
    given the size, unlike `pico-sdk`'s unconditional copy) for a packaged
    one. A `C:\esp-idf` dev-machine fallback (`find_legacy_dev_esp_idf_dir()`)
    is kept for a plain (non-submodule) checkout at that well-known path.
-3. **A `qemu-system-xtensa` binary** - unlike `qemu-system-arm.exe` (a
-   real official QEMU release with installers/packages on every
-   platform), `vecnode/qemu-esp32` had no upstream release artifact of
-   its own. Built from source (MSYS2/mingw64 - see the
-   `esp32-qemu-gpio-spike` memory note for the exact recipe and the
-   Windows-specific issues hit along the way: short-path requirements, a
-   `COMSPEC`/`windres` interaction, a static/import-lib `glib` conflict)
-   and published as a GitHub Release
-   (`vecnode/qemu-esp32`'s `qemu-esp32-win64-v1` tag) bundling the exe,
-   its mingw64 runtime DLLs (confirmed via `ldd`, not guessed), and a
-   trimmed `pc-bios/` (ESP32/C3/S3 ROM images only, not upstream QEMU's
-   full ~355MB-of-other-architectures `pc-bios/`). `BUNDLE_QEMU_XTENSA`
-   (`CMakeLists.txt`) now `FetchContent`-fetches this release by default
-   when `QEMU_XTENSA_DIR` is left empty - the same "well-known URL, no
-   manual local path needed" shape `BUNDLE_ARM_TOOLCHAIN` already has -
-   with `QEMU_XTENSA_DIR` still overridable to point at a local
-   from-source build for testing a fork change before it's released.
 
-The demo flash image (`assets/esp32-demo/flash_image.bin`, ~4MB) is
-small enough to commit directly into the repo, unlike the three pieces
-above - no fetch/bundle step needed for it at all.
+`esptool` and a bundled `qemu-system-xtensa` (previously needed to
+produce and boot a merged, flashable image respectively) are gone -
+`esp32js` runs the ELF directly, so there is nothing left to merge or
+flash. `assets/esp32-demo/flash_image.bin` (the bundled QEMU demo flash
+image) and its `CMakeLists.txt` bundling step are removed for the same
+reason - a placed ESP32 board now only ever runs whatever a real
+"Compile & Run" click produces.
 
 What's still genuinely dev-machine-only, and likely to stay that way for
 a while (a materially different kind of gap than "needs a `FetchContent`
@@ -2000,9 +1864,8 @@ antivirus scanning overhead against thousands of freshly-written object
 files - confirmed by re-running the identical compile immediately after,
 which reused the warm build cache and finished in 24s):
 
-- `process_exec.cpp`'s Windows spawn path never used a Job Object, unlike
-  `qemu_adapter.cpp`/`esp32_qemu_adapter.cpp`'s own pattern - a timed-out
-  `cmake --build` (which spawns `ninja`, which spawns many
+- `process_exec.cpp`'s Windows spawn path never used a Job Object - a
+  timed-out `cmake --build` (which spawns `ninja`, which spawns many
   `xtensa-esp32-elf-gcc`/`cc1.exe` instances) would `TerminateProcess()`
   only the immediate child, leaving the rest of the tree orphaned,
   potentially still writing into the same shared work directory the

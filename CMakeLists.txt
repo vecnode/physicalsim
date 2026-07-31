@@ -17,66 +17,10 @@ option(STATIC_MSVC_RUNTIME_RELEASE "Use static MSVC runtime in non-Debug configs
 option(BUNDLE_WEBVIEW2_FIXED_RUNTIME "Bundle a fixed WebView2 runtime folder into the output" OFF)
 set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime directory")
 
-# Needed above the BUNDLE_QEMU_XTENSA block below, which calls
-# FetchContent_Declare() at option-parsing time when the flag is on - this
-# used to sit further down (after all the option() calls), which was only
-# ever safe because BUNDLE_QEMU_XTENSA defaulted OFF; flipping that default
-# to ON surfaced the ordering bug on the very next fresh configure.
 include(FetchContent)
 
-# Same "copy an already-built copy in, don't build it ourselves" posture
-# for the "esp32" adapter's backend
-# (src/esp32_qemu_adapter.cpp) - qemu-system-xtensa from vecnode/qemu-esp32
-# (a fork of lcgamboa/qemu, itself a fork of espressif/qemu; see that
-# repo's README and the esp32-qemu-gpio-spike notes for why this specific
-# fork, not the official Espressif one). Unlike qemu-system-arm, there's no
-# OS package/installer for this, so by default (QEMU_XTENSA_DIR empty)
-# this FetchContent-fetches a prebuilt Windows x64 release published on
-# vecnode/qemu-esp32's own GitHub Releases (built from source via
-# MSYS2/mingw64 - see the esp32-qemu-gpio-spike memory note for the exact
-# recipe and the Windows-specific issues hit along the way). That release
-# already bundles qemu-system-xtensa.exe, its mingw64 runtime DLLs (a
-# from-source build links against DLLs that live in the toolchain's own
-# bin/, not next to the exe the way an official qemu-system-arm release
-# does - confirmed with `ldd`, not guessed), and pc-bios/ (ESP32/C3/S3 ROM
-# images only, not the ~355MB of other-architecture blobs upstream QEMU's
-# full pc-bios/ ships) all as one archive - QEMU_XTENSA_DIR can still be
-# pointed at a local from-source build's own build/ directory instead, for
-# testing a change to the fork before it's released.
-option(BUNDLE_QEMU_XTENSA "Bundle qemu-system-xtensa + its DLLs, ROMs, and a demo flash image into the output" ON)
-set(QEMU_XTENSA_DIR "" CACHE PATH "Path to a built qemu-esp32 directory containing qemu-system-xtensa.exe (defaults to fetching vecnode/qemu-esp32's published release if empty)")
-set(QEMU_XTENSA_PCBIOS_DIR "" CACHE PATH "Path to qemu-esp32's pc-bios/ directory (defaults to QEMU_XTENSA_DIR/pc-bios if empty)")
-# Vendored directly in-repo (assets/esp32-demo/flash_image.bin, ~4MB) -
-# small enough to commit outright, unlike qemu-esp32/esp-idf above, so
-# BUNDLE_QEMU_XTENSA needs no manual path for this piece at all.
-set(ESP32_DEMO_FLASH_IMAGE "${CMAKE_CURRENT_SOURCE_DIR}/assets/esp32-demo/flash_image.bin" CACHE FILEPATH "Path to a pre-built esp32 demo flash_image.bin")
-set(QEMU_XTENSA_RUNTIME_DIR "" CACHE PATH "Path to qemu-system-xtensa.exe's runtime DLLs (defaults to QEMU_XTENSA_DIR itself if empty - the published release bundles them alongside the exe)")
-
-# On by default (unlike BUNDLE_AVR_TOOLCHAIN/etc. above, which have a
-# dev-machine PATH or well-known-install fallback that makes opt-in
-# reasonable) - ESP32 is a first-class supported board like AVR/
-# RP2040, and src/esp32_qemu_adapter.cpp's find_qemu_system_xtensa() has no
-# equivalent "already installed on this dev machine" fallback beyond PATH,
-# so leaving this OFF meant most fresh clones could compile an ESP32
-# sketch (esp32_toolchain.cpp, separately gated) but never actually run it.
-# Explicitly pass -DBUNDLE_QEMU_XTENSA=OFF to skip the download instead.
-
-if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_DIR)
-    FetchContent_Declare(qemu_esp32_prebuilt
-        URL https://github.com/vecnode/qemu-esp32/releases/download/qemu-esp32-win64-v1/qemu-esp32-win64.zip
-    )
-    FetchContent_MakeAvailable(qemu_esp32_prebuilt)
-    set(QEMU_XTENSA_DIR "${qemu_esp32_prebuilt_SOURCE_DIR}")
-endif()
-if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_RUNTIME_DIR)
-    set(QEMU_XTENSA_RUNTIME_DIR "${QEMU_XTENSA_DIR}")
-endif()
-if(BUNDLE_QEMU_XTENSA AND NOT QEMU_XTENSA_PCBIOS_DIR)
-    set(QEMU_XTENSA_PCBIOS_DIR "${QEMU_XTENSA_DIR}/pc-bios")
-endif()
-
 # The AVR toolchain (avr-gcc/avr-g++/avr-objcopy) backing the in-app
-# Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike QEMU/WebView2
+# Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike WebView2
 # above, this isn't "copy an already-installed directory" - it's fetched
 # as Arduino's own prebuilt, redistributable toolchain archive (the exact
 # one arduino-cli itself downloads) via FetchContent below, the same
@@ -314,64 +258,13 @@ if(BUNDLE_XTENSA_TOOLCHAIN)
     endif()
 endif()
 
-# Prebuilt esptool (src/esp32_toolchain.cpp's merge_bin step) - espressif's
-# own esptool project publishes standalone PyInstaller builds (a real
-# esptool.exe with Python and every dependency it needs already frozen in)
-# on its GitHub releases, alongside the pip-installable package. Bundling
-# this skips a fresh Python interpreter cold-start (plus esptool's own
-# import chain) on every single ESP32 compile's merge_bin call -
-# find_bundled_esptool_exe() in esp32_toolchain.cpp prefers it, falling
-# back to `python -m esptool` (unchanged) when this is OFF or the fetch
-# below fails. NOTE: unlike BUNDLE_XTENSA_TOOLCHAIN's URL above, the exact
-# release-asset filename/layout here has not been confirmed against a real
-# download (no network access at the time this was written) - if
-# FetchContent reports a 404 or the EXISTS check below fails, check
-# https://github.com/espressif/esptool/releases for the current asset name
-# for this platform and either fix _esptool_url or point ESPTOOL_EXE_DIR at
-# an already-downloaded/extracted copy directly (skips fetching entirely).
-option(BUNDLE_ESPTOOL "Fetch and bundle a standalone esptool.exe (skips a Python cold-start on every ESP32 compile's merge_bin step)" OFF)
-set(ESPTOOL_EXE_DIR "" CACHE PATH "Path to an already-extracted standalone esptool build directory (defaults to fetching espressif/esptool's published release if empty)")
-if(BUNDLE_ESPTOOL AND NOT ESPTOOL_EXE_DIR)
-    set(_esptool_version "v4.8.1")
-    set(_esptool_base "https://github.com/espressif/esptool/releases/download/${_esptool_version}/esptool-${_esptool_version}")
-    if(WIN32)
-        set(_esptool_url "${_esptool_base}-windows-amd64.zip")
-    elseif(APPLE)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-            set(_esptool_url "${_esptool_base}-macos-arm64.zip")
-        else()
-            set(_esptool_url "${_esptool_base}-macos-amd64.zip")
-        endif()
-    elseif(UNIX)
-        set(_esptool_url "${_esptool_base}-linux-amd64.zip")
-    endif()
-
-    if(_esptool_url)
-        FetchContent_Declare(esptool_standalone URL ${_esptool_url})
-        FetchContent_MakeAvailable(esptool_standalone)
-        # Unconfirmed nesting (see NOTE above) - tried flat-at-root first,
-        # then one level down inside its own versioned folder, the same
-        # two-shape fallback BUNDLE_AVR_TOOLCHAIN/BUNDLE_XTENSA_TOOLCHAIN
-        # above already need for their own per-platform archive layouts.
-        if(EXISTS "${esptool_standalone_SOURCE_DIR}/esptool.exe" OR EXISTS "${esptool_standalone_SOURCE_DIR}/esptool")
-            set(ESPTOOL_EXE_DIR "${esptool_standalone_SOURCE_DIR}")
-        elseif(EXISTS "${esptool_standalone_SOURCE_DIR}/esptool-${_esptool_version}-windows-amd64/esptool.exe")
-            set(ESPTOOL_EXE_DIR "${esptool_standalone_SOURCE_DIR}/esptool-${_esptool_version}-windows-amd64")
-        else()
-            message(WARNING "[physicalsim] BUNDLE_ESPTOOL fetched ${_esptool_url} but esptool.exe/esptool wasn't found where expected - see this block's NOTE above; skipping bundling, merge_bin will fall back to `python -m esptool`")
-        endif()
-    else()
-        message(WARNING "[physicalsim] BUNDLE_ESPTOOL is ON but this platform has no known prebuilt esptool URL - skipping")
-    endif()
-endif()
-
 cpp_embedlib_add(WebAssets
     FOLDER    ${CMAKE_CURRENT_SOURCE_DIR}/public
     NAMESPACE Web
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp src/esp32_qemu_adapter.cpp
+add_executable(physicalsim src/main.cpp
     src/avr_toolchain.cpp src/rp2040_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
 
 # Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
@@ -519,81 +412,6 @@ if(WIN32)
         target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=0)
     endif()
 
-    if(BUNDLE_QEMU_XTENSA)
-        set(_qemu_xtensa_exe "${QEMU_XTENSA_DIR}/qemu-system-xtensa.exe")
-        if(NOT EXISTS "${_qemu_xtensa_exe}")
-            message(FATAL_ERROR
-                "BUNDLE_QEMU_XTENSA is ON but qemu-system-xtensa.exe was not found under QEMU_XTENSA_DIR: ${QEMU_XTENSA_DIR}"
-            )
-        endif()
-        if(NOT EXISTS "${QEMU_XTENSA_PCBIOS_DIR}/esp32-v3-rom.bin")
-            message(FATAL_ERROR
-                "BUNDLE_QEMU_XTENSA is ON but QEMU_XTENSA_PCBIOS_DIR doesn't look like a pc-bios/ directory: ${QEMU_XTENSA_PCBIOS_DIR}"
-            )
-        endif()
-        if(NOT EXISTS "${ESP32_DEMO_FLASH_IMAGE}")
-            message(FATAL_ERROR
-                "BUNDLE_QEMU_XTENSA is ON but ESP32_DEMO_FLASH_IMAGE doesn't exist: ${ESP32_DEMO_FLASH_IMAGE}"
-            )
-        endif()
-
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                $<TARGET_FILE_DIR:physicalsim>/esp32-qemu
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${_qemu_xtensa_exe}"
-                $<TARGET_FILE_DIR:physicalsim>/esp32-qemu/qemu-system-xtensa.exe
-            COMMENT "Bundling qemu-system-xtensa"
-        )
-
-        # Runtime DLLs live in the mingw64 toolchain's own bin/, not next to
-        # the exe (see QEMU_XTENSA_RUNTIME_DIR's own comment above) - this
-        # exact list is what `ldd qemu-system-xtensa.exe` reported against
-        # the Phase 0 spike's actual build, not a guessed minimal subset.
-        if(QEMU_XTENSA_RUNTIME_DIR)
-            set(_qemu_xtensa_dll_names
-                libbrotlicommon.dll libbrotlidec.dll libbrotlienc.dll libbz2-1.dll
-                libcrypto-3-x64.dll libcurl-4.dll libffi-8.dll libgcc_s_seh-1.dll
-                libgcrypt-20.dll libgio-2.0-0.dll libglib-2.0-0.dll libgmodule-2.0-0.dll
-                libgmp-10.dll libgnutls-30.dll libgobject-2.0-0.dll libgpg-error-0.dll
-                libhogweed-6.dll libiconv-2.dll libidn2-0.dll libintl-8.dll libjpeg-8.dll
-                liblzo2-2.dll libncursesw6.dll libnettle-8.dll libnghttp2-14.dll
-                libnghttp3-9.dll libngtcp2_crypto_ossl-0.dll libngtcp2-16.dll
-                libp11-kit-0.dll libpcre2-8-0.dll libpixman-1-0.dll libpng16-16.dll
-                libpsl-5.dll libssh.dll libssh2-1.dll libssl-3-x64.dll libtasn1-6.dll
-                libunistring-5.dll libusb-1.0.dll libwinpthread-1.dll libzstd.dll
-                SDL2.dll zlib1.dll
-            )
-            set(_qemu_xtensa_dlls "")
-            foreach(_dll_name ${_qemu_xtensa_dll_names})
-                list(APPEND _qemu_xtensa_dlls "${QEMU_XTENSA_RUNTIME_DIR}/${_dll_name}")
-            endforeach()
-            add_custom_command(TARGET physicalsim POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    ${_qemu_xtensa_dlls}
-                    $<TARGET_FILE_DIR:physicalsim>/esp32-qemu/
-                COMMENT "Bundling qemu-system-xtensa's mingw64 runtime DLLs"
-            )
-        endif()
-
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND}
-                -DSRC=${QEMU_XTENSA_PCBIOS_DIR}
-                -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-qemu/pc-bios
-                -DSTAMP=.copied.stamp
-                -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-            COMMENT "Bundling qemu-esp32 ROM images (pc-bios/)"
-        )
-
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E make_directory
-                $<TARGET_FILE_DIR:physicalsim>/esp32-demo
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${ESP32_DEMO_FLASH_IMAGE}"
-                $<TARGET_FILE_DIR:physicalsim>/esp32-demo/flash_image.bin
-            COMMENT "Bundling esp32 demo flash image"
-        )
-    endif()
 endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
@@ -820,33 +638,3 @@ if(BUNDLE_XTENSA_TOOLCHAIN AND XTENSA_TOOLCHAIN_BIN_DIR)
     endif()
 endif()
 
-# The standalone esptool build itself, only when BUNDLE_ESPTOOL actually
-# resolved one (either fetched above, or ESPTOOL_EXE_DIR pointed straight
-# at an existing extracted copy) - same "off unless packaging a release"
-# posture as the other toolchain bundles. Lands at
-# esp32-toolchain/esptool/esptool.exe next to the executable -
-# find_bundled_esptool_exe() in esp32_toolchain.cpp checks there first,
-# before falling back to `python -m esptool`.
-if(BUNDLE_ESPTOOL AND ESPTOOL_EXE_DIR)
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${ESPTOOL_EXE_DIR}
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-toolchain/esptool
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Bundling standalone esptool"
-    )
-
-    file(GLOB _esptool_license_files
-        "${ESPTOOL_EXE_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
-        "${ESPTOOL_EXE_DIR}/*COPYING*"
-    )
-    if(_esptool_license_files)
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_esptool_license_files}
-                $<TARGET_FILE_DIR:physicalsim>/esp32-toolchain/esptool/
-            COMMENT "Bundling esptool license"
-        )
-    endif()
-endif()

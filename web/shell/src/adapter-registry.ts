@@ -4,7 +4,6 @@
 
 import type { AdapterMethod, SimState } from "@physicalsim/common";
 import { AdapterClient } from "./worker-rpc.js";
-import { NativeAdapterClient } from "./native-adapter-client.js";
 import { notifyNative } from "./native-notify.js";
 
 // "avr8-mega" is a second worker entry point for the exact same
@@ -28,35 +27,32 @@ export type AdapterId =
   | "avr8-leonardo"
   | "esp32";
 
-// Structural interface both AdapterClient (Worker-backed) and
-// NativeAdapterClient (native-process-backed, see that file) satisfy.
-// main.ts drives whatever getAdapterClient() hands back through this
-// shape without needing to know which kind it got.
+// Structural interface AdapterClient (Worker-backed) satisfies. main.ts
+// drives whatever getAdapterClient() hands back through this shape.
 export interface SimClient {
   call(method: AdapterMethod, params?: unknown): Promise<unknown>;
   onStateChange(cb: (state: SimState) => void): () => void;
   // Mandatory - every registered adapter's pin I/O is a real, working
-  // capability now (adapter-types.ts), and every SimClient kind actually
-  // implements this: a Worker-backed AdapterClient via real postMessage
-  // push, NativeAdapterClient via polling readPin (the native bridge has
-  // no real push channel from the C++ process, see that file).
+  // capability (adapter-types.ts), delivered via real postMessage push.
   onPinChange(cb: (pin: string, value: number) => void): () => void;
-  // NativeAdapterClient doesn't implement this one - no native adapter
-  // has a Serial/UART peripheral wired up yet.
+  // Optional - only avr8 and esp32 have a Serial/UART peripheral wired up
+  // so far (rp2040 doesn't yet).
   onSerialData?(cb: (byte: number) => void): () => void;
-  // Same story - no native adapter has an I2C bus wired up yet either.
+  // Optional - no adapter has an I2C bus wired up for esp32/rp2040 yet
+  // (only avr8 does, via i2c-bus.ts).
   onI2CFrame?(cb: (device: string, data: Uint8Array) => void): () => void;
 }
-
-// Adapters with no JS/Worker side at all - the C++ shell spawns and
-// controls these directly (see src/esp32_qemu_adapter.hpp). Reached only
-// through the HTTP bridge, never postMessage.
-const NATIVE_ADAPTER_IDS = new Set<AdapterId>(["esp32"]);
 
 function createWorker(id: AdapterId): Worker {
   if (id === "rp2040") {
     return new Worker(
       new URL("../../adapters/rp2040/src/worker.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "esp32") {
+    return new Worker(
+      new URL("../../adapters/esp32/src/worker.ts", import.meta.url),
       { type: "module" },
     );
   }
@@ -96,41 +92,32 @@ const clients = new Map<AdapterId, SimClient>();
 const NATIVE_FORWARD_INTERVAL_MS = 200;
 const lastForwardedAt = new Map<AdapterId, number>();
 
-// Lazily creates (and reuses) a client for an adapter - a Worker+RPC
-// client for JS/TS adapters, or an HTTP-polling client for native
-// (QEMU-backed) ones. Either way it keeps running once created,
-// independent of what the UI happens to have selected — that's what lets
-// the native bridge drive one adapter while the UI is looking at another.
+// Lazily creates (and reuses) a Worker+RPC client for an adapter - keeps
+// running once created, independent of what the UI happens to have
+// selected — that's what lets the native bridge drive one adapter while
+// the UI is looking at another.
 export function getAdapterClient(id: AdapterId): SimClient {
   let client = clients.get(id);
   if (!client) {
-    if (NATIVE_ADAPTER_IDS.has(id)) {
-      // No JS side to forward state from here: src/qemu_adapter.cpp
-      // already writes straight into the same g_bridge_latest_state map
-      // that notifyNative() below exists to populate for Worker
-      // adapters, so there's nothing for this client to forward.
-      client = new NativeAdapterClient(id);
-    } else {
-      const workerClient = new AdapterClient(createWorker(id));
-      // Worker-backed adapters need init() before anything beyond the raw
-      // CPU works - avr8's attachPeripherals() (which sets up the GPIO
-      // ports readPin/writePin/onPinChange depend on) only runs from
-      // there, not from the constructor. Safe to fire without awaiting:
-      // postMessage delivers to the worker in order, so every call queued
-      // after this one is guaranteed to be handled after init() completes
-      // (see worker-host.ts's message handler).
-      void workerClient.call("init", undefined);
-      workerClient.onStateChange((state) => {
-        const now = Date.now();
-        const last = lastForwardedAt.get(id) ?? 0;
-        if (now - last < NATIVE_FORWARD_INTERVAL_MS && state.running) {
-          return;
-        }
-        lastForwardedAt.set(id, now);
-        notifyNative({ event: "stateChange", adapter: id, state });
-      });
-      client = workerClient;
-    }
+    const workerClient = new AdapterClient(createWorker(id));
+    // Worker-backed adapters need init() before anything beyond the raw
+    // CPU works - avr8's attachPeripherals() (which sets up the GPIO
+    // ports readPin/writePin/onPinChange depend on) only runs from
+    // there, not from the constructor. Safe to fire without awaiting:
+    // postMessage delivers to the worker in order, so every call queued
+    // after this one is guaranteed to be handled after init() completes
+    // (see worker-host.ts's message handler).
+    void workerClient.call("init", undefined);
+    workerClient.onStateChange((state) => {
+      const now = Date.now();
+      const last = lastForwardedAt.get(id) ?? 0;
+      if (now - last < NATIVE_FORWARD_INTERVAL_MS && state.running) {
+        return;
+      }
+      lastForwardedAt.set(id, now);
+      notifyNative({ event: "stateChange", adapter: id, state });
+    });
+    client = workerClient;
     clients.set(id, client);
   }
   return client;

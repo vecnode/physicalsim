@@ -24,3 +24,6 @@
 	path = simulators/esp-idf
 	url = https://github.com/vecnode/esp-idf.git
 	branch = v5.3.1
+[submodule "simulators/esp32js"]
+	path = simulators/esp32js
+	url = https://github.com/vecnode/esp32js.git

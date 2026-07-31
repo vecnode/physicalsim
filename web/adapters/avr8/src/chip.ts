@@ -45,6 +45,12 @@ export interface AvrChipConfig {
   // Real EEPROM size, in bytes - 1KB on the atmega328p, 4KB on the
   // atmega2560 (confirmed against both datasheets).
   eepromBytes: number;
+  // avr8js's CPU constructor params (sramBytes, registerSpace) - both
+  // optional, undefined lets avr8js's own defaults apply (correct for
+  // every chip here except ATMEGA2560, see that config's own comment for
+  // why it needs registerSpace set explicitly).
+  sramBytes?: number;
+  registerSpace?: number;
   // Whether attachPeripherals() (adapter.ts) should construct the
   // "shared ATmega-family" peripherals it hardcodes at fixed addresses
   // (Timer1, Timer2, USART0, SPI, TWI) - true for every ATmega chip
@@ -102,9 +108,17 @@ export interface AvrChipConfig {
   // .elf and tracing where the CPU's PC got stuck).
   timer0VectorOverride?: { ovfInterrupt: number; compAInterrupt: number; compBInterrupt: number };
   timer1VectorOverride?: { captureInterrupt: number; compAInterrupt: number; compBInterrupt: number; ovfInterrupt: number };
+  timer2VectorOverride?: { ovfInterrupt: number; compAInterrupt: number; compBInterrupt: number };
   spiVectorOverride?: number;
   twiVectorOverride?: number;
   adcVectorOverride?: number;
+  // Same story as the other *VectorOverride fields above, for USART0's
+  // three vectors (RX complete, data-register-empty, TX complete) - see
+  // the ATMEGA2560 config's own comment for why this one especially
+  // matters (a wrong address here doesn't just misbehave silently, it can
+  // fire a real interrupt into unrelated code the wrong vector slot
+  // happens to contain on a *different* chip's real vector table).
+  usart0VectorOverride?: { rxCompleteInterrupt: number; dataRegisterEmptyInterrupt: number; txCompleteInterrupt: number };
 }
 
 export const ATMEGA328P: AvrChipConfig = {
@@ -117,6 +131,29 @@ export const ATMEGA328P: AvrChipConfig = {
   hasUsbPll: false,
 };
 
+// Real bug found and fixed (confirmed by compiling the "Toggle Switch
+// (Mega)" example with the real avr-gcc/ArduinoCore-avr and running the
+// resulting .hex against Avr8Adapter directly): without the overrides
+// below, this chip used avr8js's default timer0Config/timer1Config/
+// spiConfig/twiConfig/adcConfig unmodified - the atmega328p's own vector
+// positions - exactly the same class of bug ATMEGA32U4's own overrides
+// already document, just never applied here. ATmega2560's real vector
+// table has far more entries before these peripherals' vectors (9 external
+// interrupt lines instead of 2, 3 pin-change interrupts instead of 3 - see
+// avr-libc's <avr/iomxx0_1.h>, confirmed directly against a real avr-gcc-
+// arduino7 install, not estimated) - most critically, TIMER0_OVF drives
+// delay()/millis() in every ArduinoCore-avr variant, and its real vector
+// (23, word address 0x2e) is nowhere near atmega328p's own (16, 0x22):
+// firing the interrupt at the wrong address meant the real TIMER0_OVF ISR
+// (which increments the millis() counter) never actually ran, so any
+// sketch calling delay() - including "Toggle Switch (Mega)"'s own
+// 50ms debounce - spun inside it forever, the CPU cycling through
+// unrelated code the wrong vector happened to jump into rather than ever
+// returning to loop(). Values below are word addresses (real vector
+// number * 2, matching every ATmega chip's 4-byte JMP vector entries),
+// computed directly from avr-libc's own _VECTOR() numbering: TIMER1_CAPT=16,
+// TIMER1_COMPA=17, TIMER1_COMPB=18, TIMER1_OVF=20, TIMER0_COMPA=21,
+// TIMER0_COMPB=22, TIMER0_OVF=23, SPI_STC=24, TWI=39, ADC=29.
 export const ATMEGA2560: AvrChipConfig = {
   flashWords: 0x20000, // 256KB
   ports: {
@@ -137,6 +174,37 @@ export const ATMEGA2560: AvrChipConfig = {
   eepromBytes: 4096,
   hasAtmegaSharedPeripherals: true,
   hasUsbPll: false,
+  timer0VectorOverride: { ovfInterrupt: 0x2e, compAInterrupt: 0x2a, compBInterrupt: 0x2c },
+  timer1VectorOverride: { captureInterrupt: 0x20, compAInterrupt: 0x22, compBInterrupt: 0x24, ovfInterrupt: 0x28 },
+  spiVectorOverride: 0x30,
+  twiVectorOverride: 0x4e,
+  adcVectorOverride: 0x3a,
+  usart0VectorOverride: { rxCompleteInterrupt: 0x32, dataRegisterEmptyInterrupt: 0x34, txCompleteInterrupt: 0x36 },
+  timer2VectorOverride: { compAInterrupt: 0x1a, compBInterrupt: 0x1c, ovfInterrupt: 0x1e },
+  // A second, deeper real bug found and fixed (same repro method as the
+  // vector overrides above): even with those in place, a compiled Mega
+  // sketch still never reached setup()/loop() at all - stepping the CPU
+  // by hand showed it wandering through valid-looking but unrelated code
+  // within a few thousand cycles of boot, never recovering. Root cause
+  // was avr8js's own `registerSpace` (cpu.ts) - a hardcoded 0x100,
+  // correct for atmega328p-class chips (RAMSTART=0x100, <avr/iom328p.h>)
+  // but not atmega2560 (RAMSTART=0x200, <avr/iom2560.h> - twice as much
+  // register/extended-I/O space for its many extra ports/timers/USARTs).
+  // With the default `sramBytes` (8192, exactly this chip's real *SRAM*
+  // size) plus the wrong 0x100, avr8js's `data` buffer came out 256 bytes
+  // short of atmega2560's real RAMEND+1 (0x2200) - and the compiled
+  // startup code's own SP init (a literal RAMEND baked into its linker
+  // script, not anything avr8js computes) pointed 256 bytes past the end
+  // of that buffer. Every PUSH/CALL there silently landed out of bounds
+  // (a JS Uint8Array write past the end is a silent no-op; a read comes
+  // back as 0), corrupting the stack from the very first few instructions
+  // and explaining the "never reaches user code" symptom completely -
+  // confirmed by patching in a correctly-sized CPU by hand and watching
+  // the exact same compiled sketch boot and toggle its LED normally.
+  // Fixed upstream in avr8js itself (cpu.ts's `registerSpace` is now a
+  // constructor parameter, not a hardcoded constant) - this just supplies
+  // the correct value for this chip.
+  registerSpace: 0x200,
 };
 
 // ATtiny85 (Franzininho, boards/franzininho.ts) - genuinely the

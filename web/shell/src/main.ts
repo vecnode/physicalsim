@@ -600,70 +600,6 @@ void loop() {
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
-  "traffic-light": {
-    label: "Traffic Light",
-    description: "Classic red/yellow/green sequence on three LEDs.",
-    level: "beginner",
-    board: "Arduino Uno",
-    glyph: "🚦",
-    sketch: `const int redPin = 11;
-const int yellowPin = 12;
-const int greenPin = 13;
-
-void setup() {
-  pinMode(redPin, OUTPUT);
-  pinMode(yellowPin, OUTPUT);
-  pinMode(greenPin, OUTPUT);
-}
-
-void loop() {
-  digitalWrite(redPin, HIGH);
-  delay(2000);
-  digitalWrite(yellowPin, HIGH);
-  delay(500);
-  digitalWrite(redPin, LOW);
-  digitalWrite(yellowPin, LOW);
-
-  digitalWrite(greenPin, HIGH);
-  delay(2000);
-  digitalWrite(greenPin, LOW);
-  digitalWrite(yellowPin, HIGH);
-  delay(500);
-  digitalWrite(yellowPin, LOW);
-}`,
-    build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
-      if (!board) return;
-      // Same "led" component three times, told apart with its own
-      // "color" attribute (a plain wokwi-led @property, set via
-      // addComponentAt()'s attrs param - see scene.ts's placeElement())
-      // rather than needing a distinct component-registry.ts entry per
-      // color.
-      const red = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 10, { color: "red" });
-      const yellow = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 90, {
-        color: "yellow",
-      });
-      const green = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 170, {
-        color: "green",
-      });
-      if (!red || !yellow || !green) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "11" }, { entityId: red.id, pin: "A" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "12" }, { entityId: yellow.id, pin: "A" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: green.id, pin: "A" });
-      // Same real closed loop as "led-blink"'s own LED, one resistor per
-      // LED - see that example's comment.
-      const redResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 10);
-      const yellowResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 90);
-      const greenResistor = await canvas.scene.addComponentAt("resistor", board.x + 780, board.y + 170);
-      if (!redResistor || !yellowResistor || !greenResistor) return;
-      canvas.scene.wiring.connect({ entityId: red.id, pin: "C" }, { entityId: redResistor.id, pin: "1" });
-      canvas.scene.wiring.connect({ entityId: redResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-      canvas.scene.wiring.connect({ entityId: yellow.id, pin: "C" }, { entityId: yellowResistor.id, pin: "1" });
-      canvas.scene.wiring.connect({ entityId: yellowResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-      canvas.scene.wiring.connect({ entityId: green.id, pin: "C" }, { entityId: greenResistor.id, pin: "1" });
-      canvas.scene.wiring.connect({ entityId: greenResistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-    },
-  },
   "toggle-switch": {
     label: "Toggle Switch (Mega)",
     description: "Press the button once to turn the LED on, press again to turn it off - on an Arduino Mega.",
@@ -837,48 +773,6 @@ void loop(void) {
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
-  "rp2040-button-control": {
-    label: "Button Control (RP2040)",
-    description: "Control an LED with a pushbutton - on the Arduino Nano RP2040 Connect.",
-    level: "beginner",
-    board: "Arduino Nano RP2040 Connect",
-    glyph: "🔘",
-    // Second RP2040 example, same shape as "Button Control" (Uno) - a
-    // pushbutton write-role pin driving an LED read-role pin - but
-    // through pico-sdk's own C API (gpio_get()/gpio_put()), not
-    // Arduino's (digitalRead()/digitalWrite()), same reasoning as
-    // "rp2040-blink" above.
-    sketch: `void setup(void) {
-  gpio_init(15);
-  gpio_set_dir(15, GPIO_IN);
-  gpio_init(6);
-  gpio_set_dir(6, GPIO_OUT);
-}
-
-void loop(void) {
-  gpio_put(6, gpio_get(15));
-}`,
-    build: async () => {
-      const board = await canvas.scene.showBoard("nano-rp2040-connect");
-      if (!board) return;
-      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
-      if (!button) return;
-      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 160);
-      if (!led) return;
-      // "D3"/"D13" resolve through boards/nano-rp2040-connect.ts to
-      // "GP15"/"GP6" - matching gpio_init(15)/gpio_init(6) above.
-      // Different pins from "rp2040-blink"'s GP25 on purpose, so the two
-      // RP2040 examples don't collide if ever placed side by side.
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "D3" }, { entityId: button.id, pin: "1.l" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "D13" }, { entityId: led.id, pin: "A" });
-      // Same real closed loop as "rp2040-blink"'s own LED - see that
-      // example's comment.
-      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
-      if (!resistor) return;
-      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
-      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-    },
-  },
   "pico-led-chase": {
     label: "LED Chase (Pico)",
     description: "Five LEDs lit one at a time in sequence, driven by real compiled RP2040 firmware.",
@@ -935,7 +829,10 @@ void loop(void) {
     description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware - on the Raspberry Pi Pico W.",
     level: "beginner",
     board: "Raspberry Pi Pico W",
-    glyph: "📶",
+    // Not a WiFi-signal glyph - the Pico W's CYW43439 WiFi/Bluetooth chip
+    // isn't emulated at all (see the comment below), so this is a plain
+    // GPIO blink like every other board's, nothing wireless about it.
+    glyph: "💡",
     // Same pico-sdk C API and identity GP<n> pin map as "pico-led-chase"
     // (see boards/board-registry.ts's "pi-pico-w" entry - it shares the
     // plain Pico's map byte-for-byte). The Pico W's CYW43439 WiFi/
@@ -1263,79 +1160,55 @@ void loop() {
     label: "Joystick Button + LED",
     description: "The joystick's click button (SEL) controls an LED - its X/Y axes aren't wired up.",
     level: "beginner",
-    board: "Arduino Uno",
+    board: "ESP32 DevKit V1",
     glyph: "🕹️",
     // analog-joystick's SEL pin dispatches the exact same button-press/
     // button-release DOM events wokwi-pushbutton does (see
-    // component-signal-pin.ts's own comment) - same sketch as "Button
-    // Control", a joystick's click button instead of a standalone
-    // pushbutton. VERT/HORZ (X/Y) are deliberately left unwired - see
-    // the I2C/SPI/ADC note in ARCHITECTURE.md for why analog axes aren't
-    // reachable yet.
-    sketch: `const int buttonPin = 2;
-const int ledPin = 13;
+    // component-signal-pin.ts's own comment) - a joystick's click button
+    // instead of a standalone pushbutton, same shape as the other ESP32
+    // examples' plain ESP-IDF gpio_config()/gpio_get_level()/
+    // gpio_set_level() calls. VERT/HORZ (X/Y) are deliberately left
+    // unwired - this is a digital on/off demo, not an ADC one.
+    sketch: `#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
-void setup() {
-  pinMode(buttonPin, INPUT);
-  pinMode(ledPin, OUTPUT);
-}
+#define BUTTON_PIN 4
+#define LED_PIN 5
 
-void loop() {
-  digitalWrite(ledPin, digitalRead(buttonPin));
+void app_main(void) {
+  gpio_config_t input_conf = {};
+  input_conf.mode = GPIO_MODE_INPUT;
+  input_conf.pin_bit_mask = (1ULL << BUTTON_PIN);
+  gpio_config(&input_conf);
+
+  gpio_config_t output_conf = {};
+  output_conf.mode = GPIO_MODE_OUTPUT;
+  output_conf.pin_bit_mask = (1ULL << LED_PIN);
+  gpio_config(&output_conf);
+
+  while (1) {
+    gpio_set_level(LED_PIN, gpio_get_level(BUTTON_PIN));
+    vTaskDelay(1);
+  }
 }`,
     build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
+      const board = await canvas.scene.showBoard("esp32-devkit-v1");
       if (!board) return;
       const joystick = await canvas.scene.addComponentAt("analog-joystick", board.x + 620, board.y + 10);
       if (!joystick) return;
       const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 160);
       if (!led) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: joystick.id, pin: "SEL" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
+      // "D4"/"D5" match BUTTON_PIN/LED_PIN above via esp32-devkit-v1.ts's
+      // identity D<n> pin map.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D4" }, { entityId: joystick.id, pin: "SEL" });
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "D5" }, { entityId: led.id, pin: "A" });
       // Same real closed loop as "led-blink"'s own LED - see that
       // example's comment.
       const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 240);
       if (!resistor) return;
       canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-    },
-  },
-  "mpu6050-indicator": {
-    label: "MPU6050 Indicator",
-    description:
-      "Button toggles the MPU6050's indicator LED - not real motion data (I2C isn't emulated yet).",
-    level: "beginner",
-    board: "Arduino Uno",
-    glyph: "🧭",
-    // Deliberately NOT a "gyro" example - the MPU6050's actual job
-    // (accelerometer/gyro readings) is entirely over I2C (SDA/SCL),
-    // which no adapter emulates (see ARCHITECTURE.md/the memory note on
-    // this). Its `value` property (renamed from the original led1 in
-    // vecnode/wokwi-elements) was never tied to real motion data either
-    // way - this just demos the same read-role indicator pattern as
-    // "Relay Control"/"Joystick Button + LED", with an honest
-    // description saying so, rather than a misleading "gyro sensor"
-    // example that doesn't actually read anything.
-    sketch: `const int buttonPin = 2;
-const int indicatorPin = 13;
-
-void setup() {
-  pinMode(buttonPin, INPUT);
-  pinMode(indicatorPin, OUTPUT);
-}
-
-void loop() {
-  digitalWrite(indicatorPin, digitalRead(buttonPin));
-}`,
-    build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
-      if (!board) return;
-      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
-      if (!button) return;
-      const mpu = await canvas.scene.addComponentAt("mpu6050", board.x + 600, board.y + 160);
-      if (!mpu) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: mpu.id, pin: "INT" });
     },
   },
 };

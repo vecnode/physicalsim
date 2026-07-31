@@ -104,7 +104,7 @@ export class Avr8Adapter implements SimulatorAdapter {
   // once ports/flash size come from `chip` instead of being hardcoded.
   constructor(private readonly chip: AvrChipConfig = ATMEGA328P) {
     this.program = new Uint16Array(chip.flashWords);
-    this.cpu = new CPU(this.program);
+    this.cpu = new CPU(this.program, this.chip.sramBytes, this.chip.registerSpace);
     this.eepromBackend = new EEPROMMemoryBackend(chip.eepromBytes);
   }
 
@@ -141,7 +141,7 @@ export class Avr8Adapter implements SimulatorAdapter {
 
   reset(): void {
     this.stop();
-    this.cpu = new CPU(this.program);
+    this.cpu = new CPU(this.program, this.chip.sramBytes, this.chip.registerSpace);
     this.attachPeripherals();
     this.emitState();
   }
@@ -304,7 +304,13 @@ export class Avr8Adapter implements SimulatorAdapter {
       // hasTimer2 defaults to true (every chip here has one except
       // ATmega32u4, see chip.ts) - undefined must mean "yes", not
       // "falsy therefore no".
-      this.timer2 = this.chip.hasTimer2 !== false ? new AVRTimer(this.cpu, timer2Config) : undefined;
+      this.timer2 =
+        this.chip.hasTimer2 !== false
+          ? new AVRTimer(
+              this.cpu,
+              this.chip.timer2VectorOverride ? { ...timer2Config, ...this.chip.timer2VectorOverride } : timer2Config,
+            )
+          : undefined;
     } else {
       this.timer0 = undefined;
       this.timer1 = undefined;
@@ -349,7 +355,13 @@ export class Avr8Adapter implements SimulatorAdapter {
       // so far. spi/twiVectorOverride, same ATmega32u4-only story as above.
       // hasUsart0 defaults to true the same way hasTimer2 does.
       this.usart =
-        this.chip.hasUsart0 !== false ? new AVRUSART(this.cpu, usart0Config, CLOCK_HZ) : undefined;
+        this.chip.hasUsart0 !== false
+          ? new AVRUSART(
+              this.cpu,
+              this.chip.usart0VectorOverride ? { ...usart0Config, ...this.chip.usart0VectorOverride } : usart0Config,
+              CLOCK_HZ,
+            )
+          : undefined;
       this.spi = new AVRSPI(
         this.cpu,
         this.chip.spiVectorOverride ? { ...spiConfig, spiInterrupt: this.chip.spiVectorOverride } : spiConfig,

@@ -23,11 +23,11 @@ include(FetchContent)
 # Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike WebView2
 # above, this isn't "copy an already-installed directory" - it's fetched
 # as Arduino's own prebuilt, redistributable toolchain archive (the exact
-# one arduino-cli itself downloads) via FetchContent below, the same
-# "download a URL tarball, don't build from source" shape already used for
-# Boost's official release tarball. Off by default: it's a ~150MB
-# download, only needed to actually compile sketches - src/avr_toolchain.cpp
-# falls back to PATH/an existing Arduino IDE install when unbundled.
+# one arduino-cli itself downloads) via FetchContent below - a plain
+# "download a URL tarball, don't build from source" shape. Off by default:
+# it's a ~150MB download, only needed to actually compile sketches -
+# src/avr_toolchain.cpp falls back to PATH/an existing Arduino IDE install
+# when unbundled.
 option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for the in-app sketch compiler" OFF)
 # Same shape and reasoning as BUNDLE_AVR_TOOLCHAIN above, for the RP2040
 # sketch compiler (src/rp2040_toolchain.cpp) - a ~330MB xPack arm-none-eabi-
@@ -101,15 +101,6 @@ FetchContent_Declare(webview
     GIT_SHALLOW    TRUE
 )
 FetchContent_MakeAvailable(webview)
-
-# Boost — fetched as the official CMake-aware source tarball.
-# Only the listed component libraries are configured/built; everything else is skipped.
-set(BOOST_INCLUDE_LIBRARIES asio system)
-set(BOOST_ENABLE_CMAKE ON)
-FetchContent_Declare(Boost
-    URL https://github.com/boostorg/boost/releases/download/boost-1.87.0/boost-1.87.0-cmake.tar.gz
-)
-FetchContent_MakeAvailable(Boost)
 
 # Embed static frontend files into the binary.
 FetchContent_Declare(cpp-embedlib
@@ -314,8 +305,6 @@ target_link_libraries(physicalsim PRIVATE
     webview::core
     WebAssets
     cpp-embedlib-httplib
-    Boost::asio
-    Boost::system
     nlohmann_json::nlohmann_json
 )
 
@@ -328,9 +317,9 @@ endif()
 
 # ---- Windows compile/link configuration ------------------------------------
 if(WIN32)
-    # Boost.Asio on Windows requires Winsock and the correct API-level define.
+    # httplib's own sockets need Winsock and the correct API-level define.
     # _WIN32_WINNT=0x0A00 targets Windows 10 and enables modern async I/O APIs.
-    # WIN32_LEAN_AND_MEAN keeps windows.h slim so it doesn't clash with Boost/STL.
+    # WIN32_LEAN_AND_MEAN keeps windows.h slim so it doesn't clash with the STL.
     # NOMINMAX prevents the windows.h min/max macros from conflicting with std::min/max.
     target_compile_definitions(physicalsim PRIVATE
         _WIN32_WINNT=0x0A00

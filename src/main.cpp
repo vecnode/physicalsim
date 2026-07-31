@@ -42,8 +42,6 @@
 #include "esp32_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
-#include <boost/asio.hpp>
-
 #ifdef __GNUC__
 #  pragma GCC diagnostic pop
 #endif
@@ -205,17 +203,6 @@ void hide_window(webview::webview &w) {
 #endif
 }
 
-// Schedules a recurring Boost.Asio steady_timer that fires every `interval`.
-// Automatically reschedules itself until the io_context is stopped.
-void schedule_heartbeat(boost::asio::steady_timer &timer,
-                        std::chrono::seconds interval) {
-  timer.expires_after(interval);
-  timer.async_wait([&timer, interval](const boost::system::error_code &ec) {
-    if (ec) return; // cancelled or destroyed
-    schedule_heartbeat(timer, interval);
-  });
-}
-
 // 64KB was enough for every request this bridge took until ESP32's
 // loadFirmware: its merged flash image (bootloader + partition table +
 // app, unpadded - see esp32_toolchain.cpp's own comment on why it isn't
@@ -374,20 +361,6 @@ int main(int argc, char **argv) {
   }
 #endif
 #endif
-
-
-  // -----------------------------
-  // Boost.Asio io_context — owns all async operations.
-  // -----------------------------
-  boost::asio::io_context ioc;
-  auto work_guard = boost::asio::make_work_guard(ioc);
-
-  // Periodic timer: fires every 5 seconds and logs a heartbeat.
-  boost::asio::steady_timer heartbeat_timer{ioc};
-  schedule_heartbeat(heartbeat_timer, std::chrono::seconds{5});
-
-  // Run the io_context on a dedicated thread so it never blocks the UI thread.
-  std::thread asio_thread([&ioc]() { ioc.run(); });
 
 
   // -----------------------------
@@ -638,10 +611,6 @@ int main(int argc, char **argv) {
   // -----------------------------
   server.stop();
   server_thread.join();
-  work_guard.reset();
-  heartbeat_timer.cancel();
-  ioc.stop();
-  asio_thread.join();
 
   return 0;
 }

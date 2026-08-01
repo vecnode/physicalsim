@@ -484,6 +484,20 @@ void loop() {
   delay(1000);
 }`;
 
+// Same shape as LED_BLINK_SKETCH above, written for the arduino-uno-js
+// board: JS/TS, interpreted directly by avr8js/arduino's ArduinoRuntime,
+// no compiler involved at all (see compileAndRun()'s jsModeBoard branch).
+const LED_BLINK_SKETCH_JS = `function setup() {
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+function loop() {
+  digitalWrite(LED_BUILTIN, HIGH);
+  delay(1000);
+  digitalWrite(LED_BUILTIN, LOW);
+  delay(1000);
+}`;
+
 const sketchEditor = new SketchEditor(
   document.getElementById("sketch-editor") as HTMLElement,
   LED_BLINK_SKETCH,
@@ -546,6 +560,25 @@ const EXAMPLES: Record<string, Example> = {
       // (see that example's own comment), so this one gets a genuine MNA
       // solve too instead of only ever showing SignalChain's raw digital
       // bit.
+      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 140);
+      if (!resistor) return;
+      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
+      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
+    },
+  },
+  "led-blink-js": {
+    label: "Blink LED (JS, no compiler)",
+    description: "Same blink example as above, but the sketch is JS/TS - interpreted directly, no C/C++ toolchain.",
+    level: "beginner",
+    board: "Arduino Uno (JS, no compiler)",
+    glyph: "🟨",
+    sketch: LED_BLINK_SKETCH_JS,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno-js");
+      if (!board) return;
+      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
+      if (!led) return;
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
       const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 140);
       if (!resistor) return;
       canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
@@ -1338,6 +1371,30 @@ async function compileAndRun(): Promise<void> {
   const source = sketchEditor.getValue();
   if (!source.trim()) {
     terminal.writeLine("sketch is empty");
+    return;
+  }
+
+  // arduino-uno-js sketches are JS/TS, interpreted directly by the avr8-js
+  // adapter's own avr8js/arduino runtime - no C/C++ toolchain, no /compile
+  // round-trip at all. "bytes" for loadFirmware() here is just the sketch
+  // source's own UTF-8 text (see Avr8JsAdapter.loadFirmware()'s own doc
+  // comment for why that's a valid, adapter-specific interpretation of
+  // SimulatorAdapter.loadFirmware()'s "bytes" parameter).
+  const jsModeBoard = canvas.scene.findBoardByAdapter(activeAdapterId ?? "")?.type;
+  if (jsModeBoard === "arduino-uno-js") {
+    railCompileBtn.disabled = true;
+    try {
+      const bytes = new TextEncoder().encode(source);
+      await client.call("loadFirmware", bytes);
+      sketchEditor.setDiagnostics([]);
+      terminal.clear();
+      terminal.writeLine(`sketch loaded (${bytes.length} bytes) - no compiler involved`);
+    } catch (err) {
+      terminal.clear();
+      terminal.writeLine(err instanceof Error ? `sketch error: ${err.message}` : "sketch failed to load");
+    } finally {
+      railCompileBtn.disabled = false;
+    }
     return;
   }
 

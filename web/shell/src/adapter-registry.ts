@@ -22,6 +22,7 @@ import { notifyNative } from "./native-notify.js";
 export type AdapterId =
   | "rp2040"
   | "avr8"
+  | "avr8-js"
   | "avr8-mega"
   | "avr8-attiny85"
   | "avr8-leonardo"
@@ -53,6 +54,12 @@ function createWorker(id: AdapterId): Worker {
   if (id === "esp32") {
     return new Worker(
       new URL("../../adapters/esp32/src/worker.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-js") {
+    return new Worker(
+      new URL("../../adapters/avr8-js/src/worker.ts", import.meta.url),
       { type: "module" },
     );
   }

@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2022", "WebWorker"],
+    "strict": false,
+    "useDefineForClassFields": false,
+    "paths": {
+      "avr8js/arduino": ["../../../simulators/avr8js/src/arduino/index.ts"],
+      "@physicalsim/common": ["../../common/src/index.ts"]
+    }
+  },
+  "include": ["src"]
+}

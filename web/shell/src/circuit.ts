@@ -71,6 +71,10 @@ export interface Circuit {
 // that menu generically from this table.
 export const boardTagName: Record<string, string> = {
   "arduino-uno": "wokwi-arduino-uno",
+  // Same wokwi-arduino-uno element as "arduino-uno" above - only the
+  // backing adapter differs (avr8-js: JS-interpreted sketches, no C/C++
+  // compiler - see boardAdapterId below), not the board artwork.
+  "arduino-uno-js": "wokwi-arduino-uno",
   "arduino-nano": "wokwi-arduino-nano",
   "arduino-mega": "wokwi-arduino-mega",
   "arduino-leonardo": "wokwi-arduino-leonardo",
@@ -100,6 +104,7 @@ export const boardTagName: Record<string, string> = {
 // board types needs its own label lookup, not to reach into the DOM.
 export const boardDisplayName: Record<string, string> = {
   "arduino-uno": "Arduino Uno",
+  "arduino-uno-js": "Arduino Uno (JS, no compiler)",
   "arduino-nano": "Arduino Nano",
   "arduino-mega": "Arduino Mega",
   "arduino-leonardo": "Arduino Leonardo",
@@ -117,6 +122,12 @@ export const boardDisplayName: Record<string, string> = {
 // which calls apply(boardAdapterId[type]) right after placing a board.
 export const boardAdapterId: Record<string, AdapterId> = {
   "arduino-uno": "avr8",
+  // Its own adapter id - @physicalsim/adapter-avr8-js interprets a JS/TS
+  // sketch directly via avr8js's ArduinoRuntime (no compiler, no CPU
+  // emulation), a fundamentally different execution model from "avr8"'s
+  // real-compile-then-emulate one, even though both back the same
+  // wokwi-arduino-uno element.
+  "arduino-uno-js": "avr8-js",
   "arduino-nano": "avr8",
   // Its own adapter id, not "avr8" - the atmega2560 needs a different
   // chip config (chip.ts's ATMEGA2560), and clients are cached one per
@@ -150,6 +161,9 @@ export const boardAdapterId: Record<string, AdapterId> = {
 // wokwi-arduino-nano happens to expose the identical property name.
 export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => void> = {
   "arduino-uno": (el, on) => {
+    (el as ArduinoUnoElement).ledPower = on;
+  },
+  "arduino-uno-js": (el, on) => {
     (el as ArduinoUnoElement).ledPower = on;
   },
   "arduino-nano": (el, on) => {

@@ -11,6 +11,9 @@ export default defineConfig({
   root: __dirname,
   resolve: {
     alias: {
+      // More specific key first - see the "avr8js/arduino" entry below for
+      // why (prefix-match aliasing, replacement is a specific file).
+      "rp2040js/pico": resolve("../../simulators/rp2040js/src/pico/index.ts"),
       rp2040js: resolve("../../simulators/rp2040js/src/index.ts"),
       // More specific key first - Vite's object-form alias matching checks
       // entries in order and treats a key as a prefix match

@@ -9,6 +9,7 @@ const resolve = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
+      "rp2040js/pico": resolve("../simulators/rp2040js/src/pico/index.ts"),
       rp2040js: resolve("../simulators/rp2040js/src/index.ts"),
       // More specific key first - Vite/Vitest's object-form alias matching
       // checks entries in order and treats a key as a prefix match

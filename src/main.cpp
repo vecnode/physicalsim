@@ -38,7 +38,6 @@
 #include "WebAssets.h"
 #include "webview/webview.h"
 #include "avr_toolchain.hpp"
-#include "rp2040_toolchain.hpp"
 #include "esp32_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
@@ -452,16 +451,10 @@ int main(int argc, char **argv) {
   // "board" selects the -mmcu=/variant target (see avr_toolchain.hpp's
   // resolve_board_target()) - omitted or unrecognized falls back to
   // Arduino Uno, matching this endpoint's original single-board behavior.
-  // "nano-rp2040-connect" routes to rp2040_toolchain.cpp instead (a
-  // genuinely different toolchain - arm-none-eabi-gcc + pico-sdk, driven
-  // through cmake rather than avr_toolchain.cpp's flat per-file gcc
-  // invocations - see rp2040_toolchain.hpp and ARCHITECTURE.md's "RP2040
-  // firmware pipeline" section). Its output is a raw flash binary, not
-  // Intel HEX (RP2040 has no such convention), so it comes back as
-  // "binHex" (plain hex-pair-per-byte, no Intel HEX record framing) rather
-  // than reusing "hexText" - the two boards' compile outputs are shaped
-  // differently enough that overloading one field name would be
-  // misleading, not simplifying.
+  // RP2040 boards (nano-rp2040-connect, pi-pico, pi-pico-w) are JS-native
+  // (web/adapters/rp2040-js) and never reach this endpoint - see the
+  // early-return comment below. ESP32's "binHex" convention (below) is
+  // what a future non-AVR real-compile board would still reuse.
   server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
     json body;
     try {
@@ -483,9 +476,9 @@ int main(int argc, char **argv) {
 
     if (board == "esp32-devkit-v1" || board == "esp32-devkit-c-v4" || board == "esp32-cam") {
       // Real ESP-IDF build via esp32_toolchain.cpp - a genuinely heavier
-      // pipeline than avr-gcc's flat per-file compile or pico-sdk's
-      // cmake-driven one (a full multi-component CMake project: sdkconfig,
-      // partition table, bootloader), and its toolchain
+      // pipeline than avr-gcc's flat per-file compile (a full
+      // multi-component CMake project: sdkconfig, partition table,
+      // bootloader), and its toolchain
       // discovery is dev-machine-only today, not bundled/portable yet -
       // see esp32_toolchain.hpp. toolchain_available() check first so a
       // machine without it gets a clear, immediate error rather than a
@@ -513,17 +506,11 @@ int main(int argc, char **argv) {
       return;
     }
 
-    if (board == "nano-rp2040-connect" || board == "pi-pico" || board == "pi-pico-w") {
-      const auto result = rp2040toolchain::compile_sketch(source);
-      json out = {{"ok", result.ok}, {"log", result.log}};
-      if (result.ok) {
-        out["binHex"] = encode_hex_bytes(result.binary);
-      }
-      res.set_header("Cache-Control", "no-store");
-      res.status = result.ok ? 200 : 422;
-      res.set_content(out.dump(), "application/json");
-      return;
-    }
+    // RP2040 boards (nano-rp2040-connect, pi-pico, pi-pico-w) no longer
+    // route here at all - they're JS-native now (web/adapters/rp2040-js,
+    // interpreting pico-sdk-shaped sketches directly via rp2040js/pico,
+    // no C/C++ toolchain), the same direction ArduinoCore-avr/
+    // LiquidCrystal were removed for. See circuit.ts's boardAdapterId.
 
     const auto result = avrtoolchain::compile_sketch(source, board);
     json out = {{"ok", result.ok}, {"log", result.log}};

@@ -29,22 +29,16 @@ include(FetchContent)
 # src/avr_toolchain.cpp falls back to PATH/an existing Arduino IDE install
 # when unbundled.
 option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for the in-app sketch compiler" OFF)
-# Same shape and reasoning as BUNDLE_AVR_TOOLCHAIN above, for the RP2040
-# sketch compiler (src/rp2040_toolchain.cpp) - a ~330MB xPack arm-none-eabi-
-# gcc release rather than Arduino's own avr-gcc mirror, since Arduino
-# doesn't publish a prebuilt arm-none-eabi-gcc at the same well-known URL
-# pattern BUNDLE_AVR_TOOLCHAIN's avr-gcc lives at (confirmed by trying).
-option(BUNDLE_ARM_TOOLCHAIN "Fetch and bundle a prebuilt arm-none-eabi-gcc toolchain for the in-app RP2040 sketch compiler" OFF)
 
 # simulators/esp-idf (vendored, see below) is genuinely too big to always
-# ship the way pico-sdk's ~9MB unconditionally does - a real ESP-IDF
-# checkout with its own submodules runs to hundreds of MB, with no clean
-# per-file trim boundary (same reasoning BUNDLE_XTENSA_TOOLCHAIN's own
-# comment gives for why pico-sdk's own "just always ship it" precedent
-# doesn't apply here). Off by default; a dev build without this still
-# works via esp32_toolchain.cpp's PHYSICALSIM_SOURCE_DIR fallback straight
-# to simulators/esp-idf, the same way avr-core/pico-sdk fall back to their
-# own source trees before their own copy steps have run.
+# ship the way ArduinoCore-avr's ~1MB (trimmed) unconditionally does - a
+# real ESP-IDF checkout with its own submodules runs to hundreds of MB,
+# with no clean per-file trim boundary (same reasoning
+# BUNDLE_XTENSA_TOOLCHAIN's own comment gives). Off by default; a dev
+# build without this still works via esp32_toolchain.cpp's
+# PHYSICALSIM_SOURCE_DIR fallback straight to simulators/esp-idf, the
+# same way avr-core falls back to its own source tree before its own
+# copy step has run.
 option(BUNDLE_ESP_IDF "Bundle vendored esp-idf next to the executable for a packaged ESP32 Compile & Run" OFF)
 
 if(POLICY CMP0135)
@@ -165,51 +159,18 @@ if(BUNDLE_AVR_TOOLCHAIN)
     endif()
 endif()
 
-# Prebuilt arm-none-eabi-gcc toolchain (see BUNDLE_ARM_TOOLCHAIN above) - the
-# xPack release archive is flat (bin/, lib/, etc. at its root, confirmed by
-# extracting one), unlike the AVR archive's per-platform layout quirks above,
-# so this doesn't need the same nested-vs-flat detection.
-set(ARM_TOOLCHAIN_BIN_DIR "")
-if(BUNDLE_ARM_TOOLCHAIN)
-    set(_arm_toolchain_version "v15.2.1-1.1")
-    set(_arm_toolchain_base "https://github.com/xpack-dev-tools/arm-none-eabi-gcc-xpack/releases/download/${_arm_toolchain_version}/xpack-arm-none-eabi-gcc-15.2.1-1.1")
-    if(WIN32)
-        set(_arm_toolchain_url "${_arm_toolchain_base}-win32-x64.zip")
-    elseif(APPLE)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-            set(_arm_toolchain_url "${_arm_toolchain_base}-darwin-arm64.tar.gz")
-        else()
-            set(_arm_toolchain_url "${_arm_toolchain_base}-darwin-x64.tar.gz")
-        endif()
-    elseif(UNIX)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-            set(_arm_toolchain_url "${_arm_toolchain_base}-linux-arm64.tar.gz")
-        else()
-            set(_arm_toolchain_url "${_arm_toolchain_base}-linux-x64.tar.gz")
-        endif()
-    endif()
-
-    if(_arm_toolchain_url)
-        FetchContent_Declare(arm_gcc_toolchain URL ${_arm_toolchain_url})
-        FetchContent_MakeAvailable(arm_gcc_toolchain)
-        set(ARM_TOOLCHAIN_BIN_DIR "${arm_gcc_toolchain_SOURCE_DIR}")
-    else()
-        message(WARNING "[physicalsim] BUNDLE_ARM_TOOLCHAIN is ON but this platform has no known prebuilt arm-none-eabi-gcc URL - skipping")
-    endif()
-endif()
-
 # Prebuilt xtensa-esp-elf-gcc toolchain (the "esp32" adapter's Compile & Run
 # pipeline, src/esp32_toolchain.cpp) - same "copy an already-published
-# archive in, don't build it ourselves" posture as BUNDLE_AVR_TOOLCHAIN/
-# BUNDLE_ARM_TOOLCHAIN above. Not xPack this time (checked directly -
-# xpack-dev-tools publishes no xtensa/esp32 toolchain at all): Espressif
+# archive in, don't build it ourselves" posture as BUNDLE_AVR_TOOLCHAIN
+# above. Not xPack (checked directly - xpack-dev-tools publishes no
+# xtensa/esp32 toolchain at all): Espressif
 # publishes it themselves on espressif/crosstool-NG's GitHub releases -
 # these are the exact URLs esp-idf's own installer (install.ps1/
 # idf_tools.py) downloads, read straight out of a real esp-idf checkout's
 # tools/tools.json rather than guessed. The Windows archive nests
 # everything one level down inside its own "xtensa-esp-elf/" directory
-# (confirmed by actually extracting it) - unlike BUNDLE_ARM_TOOLCHAIN's
-# xPack archive, which is flat at its root. Not yet confirmed whether
+# (confirmed by actually extracting it), unlike BUNDLE_AVR_TOOLCHAIN's
+# flatter Windows archive. Not yet confirmed whether
 # macOS/Linux releases nest the same way (this project's ESP32 work so
 # far has only run on Windows), so the same EXISTS-based detection
 # BUNDLE_AVR_TOOLCHAIN uses for its own per-platform nesting difference is
@@ -256,7 +217,7 @@ cpp_embedlib_add(WebAssets
 
 # ---- Application target and hardening --------------------------------------
 add_executable(physicalsim src/main.cpp
-    src/avr_toolchain.cpp src/rp2040_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
+    src/avr_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
 
 # Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
 # straight from the source tree before the POST_BUILD copy below has ever
@@ -524,31 +485,10 @@ if(BUNDLE_AVR_TOOLCHAIN AND AVR_TOOLCHAIN_BIN_DIR)
     endif()
 endif()
 
-# ---- RP2040 sketch-compiler assets (cross-platform, not gated on WIN32) ----
-# simulators/pico-sdk is vendored *untrimmed* (unlike ArduinoCore-avr) -
-# ~9MB, small enough to always ship, and its CMake build reaches into many
-# more of its own subdirectories dynamically than ArduinoCore-avr's flat
-# cores/arduino ever did, so there's no clean per-file trim boundary the way
-# there was there (see ARCHITECTURE.md's "RP2040 firmware pipeline" section
-# for how this was confirmed, not assumed).
-add_custom_command(TARGET physicalsim POST_BUILD
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/pico-sdk
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/pico-sdk
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/rp2040_sketch_template
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/rp2040-sketch-template
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMENT "Copying vendored pico-sdk + RP2040 sketch template"
-)
-
 # ---- ESP32 sketch-compiler assets (cross-platform, not gated on WIN32) -----
 # src/esp32_sketch_template is tiny (two CMakeLists.txt files) - always
-# copied, same "small enough to always ship" posture as the RP2040 sketch
-# template above. simulators/esp-idf itself is the opposite case (see
+# copied, same "small enough to always ship" posture as avr-core's own
+# copy step above. simulators/esp-idf itself is the opposite case (see
 # BUNDLE_ESP_IDF's own comment above) - only copied when explicitly
 # requested.
 add_custom_command(TARGET physicalsim POST_BUILD
@@ -571,35 +511,9 @@ if(BUNDLE_ESP_IDF)
     )
 endif()
 
-# The toolchain itself, only when BUNDLE_ARM_TOOLCHAIN actually fetched one -
-# same "off unless packaging a release" posture as BUNDLE_AVR_TOOLCHAIN.
-if(BUNDLE_ARM_TOOLCHAIN AND ARM_TOOLCHAIN_BIN_DIR)
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${ARM_TOOLCHAIN_BIN_DIR}
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/arm-toolchain
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Bundling arm-none-eabi-gcc toolchain"
-    )
-
-    file(GLOB _arm_toolchain_license_files
-        "${ARM_TOOLCHAIN_BIN_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
-        "${ARM_TOOLCHAIN_BIN_DIR}/*COPYING*"
-    )
-    if(_arm_toolchain_license_files)
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_arm_toolchain_license_files}
-                $<TARGET_FILE_DIR:physicalsim>/arm-toolchain/
-            COMMENT "Bundling arm-none-eabi-gcc toolchain license"
-        )
-    endif()
-endif()
-
 # The xtensa-esp-elf toolchain itself, only when BUNDLE_XTENSA_TOOLCHAIN
 # actually fetched one - same "off unless packaging a release" posture as
-# BUNDLE_AVR_TOOLCHAIN/BUNDLE_ARM_TOOLCHAIN. Lands at
+# BUNDLE_AVR_TOOLCHAIN. Lands at
 # esp32-toolchain/bin/xtensa-esp32-elf-gcc.exe next to the executable -
 # src/esp32_toolchain.cpp's find_toolchain() checks there first, before
 # falling back to this dev machine's fixed C:\esp-idf/.espressif paths.

@@ -33,15 +33,14 @@ namespace {
 // espressif/esp-idf, added as a git submodule pinned to v5.3.1 the same
 // "own the fork" way every other simulators/ dependency is) - a dev build
 // finds it there via PHYSICALSIM_SOURCE_DIR, the same fallback
-// avr_toolchain.cpp/rp2040_toolchain.cpp already use for their own vendored
-// trees, and a packaged build finds a bundled copy next to the executable
-// (CMakeLists.txt's BUNDLE_ESP_IDF, opt-in given the size - unlike
-// pico-sdk's ~9MB, esp-idf has no clean trim boundary and runs to hundreds
-// of MB). The xtensa-esp-elf-gcc toolchain itself is bundled via
+// avr_toolchain.cpp already uses for its own vendored ArduinoCore-avr
+// tree, and a packaged build finds a bundled copy next to the executable
+// (CMakeLists.txt's BUNDLE_ESP_IDF, opt-in given the size - esp-idf has
+// no clean trim boundary and runs to hundreds of MB). The
+// xtensa-esp-elf-gcc toolchain itself is bundled via
 // BUNDLE_XTENSA_TOOLCHAIN (fetched from espressif/crosstool-NG's own
 // releases - see CMakeLists.txt). What's still genuinely dev-machine-only:
-// cmake/ninja (falls back to PATH, same gap rp2040_toolchain.cpp already
-// has and accepts) and a Python environment with esp-idf's own dependencies
+// cmake/ninja (falls back to PATH) and a Python environment with esp-idf's own dependencies
 // installed (kconfiglib etc. - a bare system Python won't work) - see
 // esp32_toolchain.hpp's header comment.
 std::filesystem::path executable_dir() {
@@ -61,9 +60,9 @@ std::filesystem::path executable_dir() {
 
 // Bundled "esp32-toolchain/bin" next to the executable (CMakeLists.txt's
 // BUNDLE_XTENSA_TOOLCHAIN copies one there, mirroring
-// BUNDLE_ARM_TOOLCHAIN's "arm-toolchain/bin") - checked first, same
-// "bundled beats dev-machine" priority find_toolchain_bin_dir() already
-// has in rp2040_toolchain.cpp. Only the compiler itself is bundled this
+// BUNDLE_AVR_TOOLCHAIN's "avr-toolchain/bin") - checked first, same
+// "bundled beats dev-machine" priority avr_toolchain.cpp's own
+// find_toolchain_bin_dir() uses. Only the compiler itself is bundled this
 // way today - esp-idf/cmake/ninja/python still resolve from this dev
 // machine's fixed paths below (see esp32_toolchain.hpp's header comment
 // on why those three aren't bundled yet).
@@ -79,13 +78,12 @@ std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
 }
 
 // Bundled "esp-idf/" next to the executable (CMakeLists.txt's
-// BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds -
-// opt-in given the size, unlike pico-sdk's unconditional copy), then
-// simulators/esp-idf straight from the source tree (PHYSICALSIM_SOURCE_DIR)
-// for a dev build run before that copy step has ever happened - the same
-// two-step fallback avr_toolchain.cpp's find_core_dir()/
-// rp2040_toolchain.cpp's find_pico_sdk_dir() already use for their own
-// vendored trees.
+// BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds,
+// opt-in given the size), then simulators/esp-idf straight from the
+// source tree (PHYSICALSIM_SOURCE_DIR) for a dev build run before that
+// copy step has ever happened - the same two-step fallback
+// avr_toolchain.cpp's own find_core_dir() already uses for its vendored
+// tree.
 std::optional<std::filesystem::path> find_vendored_esp_idf_dir() {
   const auto bundled = executable_dir() / "esp-idf";
   std::error_code ec;
@@ -214,11 +212,11 @@ std::optional<std::filesystem::path> find_sketch_template_dir() {
 }
 
 // One persistent work directory for the whole process lifetime, reused
-// across compiles - same "let ninja's incremental rebuild do its job"
-// reasoning as rp2040_toolchain.cpp's work_dir(), even more valuable here
-// since a from-scratch ESP-IDF component-tree configure is real work (the
-// Phase 0/1 spike's own first build took noticeably longer than pico-sdk's
-// ~70-file one).
+// across compiles - "let ninja's incremental rebuild do its job" instead
+// of reconfiguring from scratch every time, valuable here since a
+// from-scratch ESP-IDF component-tree configure is real work (the
+// Phase 0/1 spike's own first build took noticeably longer than a
+// smaller CMake project's would).
 std::filesystem::path work_dir() {
   return std::filesystem::temp_directory_path() / "physicalsim-esp32-sketch";
 }
@@ -373,10 +371,9 @@ CompileResult compile_sketch(const std::string &source) {
 
   // main.c: the user's app_main() body, wrapped the same "just the body,
   // not a full translation unit" way avr_toolchain.cpp's Arduino sketches
-  // and rp2040_toolchain.cpp's sketch.c are - except this API surface is
-  // ESP-IDF's own (gpio_set_level(), vTaskDelay()), not Arduino's, since no
-  // Arduino-compatible core is vendored for ESP32 either (same reasoning
-  // as RP2040 - see ARCHITECTURE.md).
+  // are - except this API surface is ESP-IDF's own (gpio_set_level(),
+  // vTaskDelay()), not Arduino's, since no Arduino-compatible core is
+  // vendored for ESP32.
   {
     std::ofstream main_file(dir / "main" / "main.c");
     main_file << "#include \"driver/gpio.h\"\n"

@@ -141,9 +141,18 @@ export const boardAdapterId: Record<string, AdapterId> = {
   // Its own adapter id too - genuinely a different chip (ATtiny85, not
   // an ATmega at all), see chip.ts's ATTINY85 config.
   franzininho: "avr8-attiny85",
-  "nano-rp2040-connect": "rp2040",
-  "pi-pico": "rp2040",
-  "pi-pico-w": "rp2040",
+  // "rp2040-js" (JS/TS-interpreted pico-sdk sketches, no C/C++ toolchain -
+  // @physicalsim/adapter-rp2040-js) rather than "rp2040" (the real-compile,
+  // cycle-accurate ARM Cortex-M0+ adapter) - real compilation for RP2040
+  // needed a vendored pico-sdk (arm-none-eabi-gcc + real pico-sdk C
+  // headers/CMake), removed per the same "no C/C++ dependency" direction
+  // ArduinoCore-avr/LiquidCrystal were removed for. The "rp2040" adapter
+  // class itself is untouched (still real JS/TS, no C++) - it's just
+  // unreachable from any board now, with nothing left that produces a
+  // real ARM binary for it to execute.
+  "nano-rp2040-connect": "rp2040-js",
+  "pi-pico": "rp2040-js",
+  "pi-pico-w": "rp2040-js",
   // Backed by @physicalsim/adapter-esp32 (web/adapters/esp32), a JS/TS
   // Worker adapter over the esp32js emulator core - same shape as
   // avr8/rp2040's own Worker adapters, no native process involved.

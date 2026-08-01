@@ -760,24 +760,22 @@ void loop() {
   },
   "rp2040-blink": {
     label: "Blink LED (RP2040)",
-    description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware.",
+    description: "LED + current-limiting resistor, blinked by a JS-interpreted pico-sdk sketch - no C/C++ toolchain.",
     level: "beginner",
     board: "Arduino Nano RP2040 Connect",
     glyph: "💡",
-    // pico-sdk's own C API (gpio_init/gpio_put/sleep_ms), not Arduino's
-    // (digitalWrite/delay) - no Arduino-compatible core is vendored for
-    // RP2040 yet (see ARCHITECTURE.md's "RP2040 firmware pipeline"
-    // section for why, and what a future arduino-pico integration would
-    // change here). Compiled by src/rp2040_toolchain.cpp - a genuinely
-    // different toolchain from the AVR boards' avr-gcc (arm-none-eabi-gcc
-    // + a vendored pico-sdk, driven through cmake), routed by board type
-    // in main.cpp's /compile handler.
-    sketch: `void setup(void) {
+    // Real pico-sdk C API names/constants (gpio_init/gpio_set_dir/
+    // gpio_put/sleep_ms/GPIO_OUT), not Arduino's (pinMode/digitalWrite) -
+    // this board has no Arduino-compatible core, real or simulated. JS
+    // syntax (function, not "void setup(void)"), interpreted directly by
+    // rp2040js/pico's PicoRuntime (adapters/rp2040-js) - no compiler
+    // involved at all, see circuit.ts's boardAdapterId comment for why.
+    sketch: `function setup() {
   gpio_init(25);
   gpio_set_dir(25, GPIO_OUT);
 }
 
-void loop(void) {
+function loop() {
   gpio_put(25, 1);
   sleep_ms(500);
   gpio_put(25, 0);
@@ -808,29 +806,26 @@ void loop(void) {
   },
   "pico-led-chase": {
     label: "LED Chase (Pico)",
-    description: "Five LEDs lit one at a time in sequence, driven by real compiled RP2040 firmware.",
+    description: "Five LEDs lit one at a time in sequence, driven by a JS-interpreted pico-sdk sketch.",
     level: "beginner",
     board: "Raspberry Pi Pico",
     glyph: "🚥",
     // Digital-only, five-pin counterpart to "rp2040-blink"'s single GP25 -
     // GP2-GP6 (the Pico's left-header GPIOs, see boards/rp2040-board.ts's
     // identity map) each drive one LED in a simple Larson-scanner-style
-    // loop. No pico-sdk Arduino-compatible core is vendored yet, so this
-    // is pico-sdk's own C API (gpio_init()/gpio_put()), not
-    // pinMode()/digitalWrite() - same reasoning as every other RP2040
-    // example.
-    sketch: `const int ledPins[] = {2, 3, 4, 5, 6};
-const int ledCount = 5;
+    // loop. Real pico-sdk API (gpio_init()/gpio_put()), JS syntax,
+    // interpreted directly - same as "rp2040-blink" above.
+    sketch: `const ledPins = [2, 3, 4, 5, 6];
 
-void setup(void) {
-  for (int i = 0; i < ledCount; i++) {
+function setup() {
+  for (let i = 0; i < ledPins.length; i++) {
     gpio_init(ledPins[i]);
     gpio_set_dir(ledPins[i], GPIO_OUT);
   }
 }
 
-void loop(void) {
-  for (int i = 0; i < ledCount; i++) {
+function loop() {
+  for (let i = 0; i < ledPins.length; i++) {
     gpio_put(ledPins[i], 1);
     sleep_ms(150);
     gpio_put(ledPins[i], 0);
@@ -859,14 +854,14 @@ void loop(void) {
   },
   "pico-w-blink": {
     label: "Blink LED (Pico W)",
-    description: "LED + current-limiting resistor, blinked by real compiled RP2040 firmware - on the Raspberry Pi Pico W.",
+    description: "LED + current-limiting resistor, blinked by a JS-interpreted pico-sdk sketch - on the Raspberry Pi Pico W.",
     level: "beginner",
     board: "Raspberry Pi Pico W",
     // Not a WiFi-signal glyph - the Pico W's CYW43439 WiFi/Bluetooth chip
     // isn't emulated at all (see the comment below), so this is a plain
     // GPIO blink like every other board's, nothing wireless about it.
     glyph: "💡",
-    // Same pico-sdk C API and identity GP<n> pin map as "pico-led-chase"
+    // Same pico-sdk API and identity GP<n> pin map as "pico-led-chase"
     // (see boards/board-registry.ts's "pi-pico-w" entry - it shares the
     // plain Pico's map byte-for-byte). The Pico W's CYW43439 WiFi/
     // Bluetooth chip isn't emulated (an explicit 2026-07-25 decision, see
@@ -875,12 +870,12 @@ void loop(void) {
     // external LED instead, same as "rp2040-blink" does for the Nano
     // RP2040 Connect. GP10 is otherwise unused by any other example, so
     // it can sit next to "pico-led-chase" (GP2-GP6) without pin overlap.
-    sketch: `void setup(void) {
+    sketch: `function setup() {
   gpio_init(10);
   gpio_set_dir(10, GPIO_OUT);
 }
 
-void loop(void) {
+function loop() {
   gpio_put(10, 1);
   sleep_ms(500);
   gpio_put(10, 0);
@@ -1362,6 +1357,11 @@ function parseHexBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+// Adapter ids that interpret the sketch source directly (no compiler) -
+// compileAndRun() below skips the /compile HTTP round-trip entirely for
+// these, calling loadFirmware() with the sketch's own UTF-8 bytes.
+const NO_COMPILER_ADAPTER_IDS = new Set<AdapterId>(["avr8-js", "rp2040-js"]);
+
 async function compileAndRun(): Promise<void> {
   const client = activeClient();
   if (!client) {
@@ -1374,14 +1374,14 @@ async function compileAndRun(): Promise<void> {
     return;
   }
 
-  // arduino-uno-js sketches are JS/TS, interpreted directly by the avr8-js
-  // adapter's own avr8js/arduino runtime - no C/C++ toolchain, no /compile
-  // round-trip at all. "bytes" for loadFirmware() here is just the sketch
-  // source's own UTF-8 text (see Avr8JsAdapter.loadFirmware()'s own doc
-  // comment for why that's a valid, adapter-specific interpretation of
+  // JS-native adapters (avr8-js, rp2040-js, ...) interpret the sketch
+  // source directly via their own runtime (avr8js/arduino,
+  // rp2040js/pico) - no C/C++ toolchain, no /compile round-trip at all.
+  // "bytes" for loadFirmware() here is just the sketch source's own
+  // UTF-8 text (see Avr8JsAdapter.loadFirmware()'s own doc comment for
+  // why that's a valid, adapter-specific interpretation of
   // SimulatorAdapter.loadFirmware()'s "bytes" parameter).
-  const jsModeBoard = canvas.scene.findBoardByAdapter(activeAdapterId ?? "")?.type;
-  if (jsModeBoard === "arduino-uno-js") {
+  if (activeAdapterId && NO_COMPILER_ADAPTER_IDS.has(activeAdapterId)) {
     railCompileBtn.disabled = true;
     try {
       const bytes = new TextEncoder().encode(source);
@@ -1477,15 +1477,11 @@ async function compileAndRun(): Promise<void> {
     // now-fixed (or since-edited-away) lines.
     sketchEditor.setDiagnostics([]);
 
+    // RP2040 boards no longer reach this far - they're JS-native now (see
+    // NO_COMPILER_ADAPTER_IDS above) and return before this fetch ever
+    // fires. Only ESP32's real esp-idf compile still lands here.
     let bytes: Uint8Array;
-    if (
-      board === "nano-rp2040-connect" ||
-      board === "pi-pico" ||
-      board === "pi-pico-w" ||
-      board === "esp32-devkit-v1" ||
-      board === "esp32-devkit-c-v4" ||
-      board === "esp32-cam"
-    ) {
+    if (board === "esp32-devkit-v1" || board === "esp32-devkit-c-v4" || board === "esp32-cam") {
       bytes = parseHexBytes(body.binHex ?? "");
     } else {
       const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);

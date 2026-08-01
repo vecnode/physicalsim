@@ -21,6 +21,7 @@ import { notifyNative } from "./native-notify.js";
 // a parameter on "avr8".
 export type AdapterId =
   | "rp2040"
+  | "rp2040-js"
   | "avr8"
   | "avr8-js"
   | "avr8-mega"
@@ -48,6 +49,12 @@ function createWorker(id: AdapterId): Worker {
   if (id === "rp2040") {
     return new Worker(
       new URL("../../adapters/rp2040/src/worker.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "rp2040-js") {
+    return new Worker(
+      new URL("../../adapters/rp2040-js/src/worker.ts", import.meta.url),
       { type: "module" },
     );
   }

@@ -3,9 +3,9 @@
 //
 // Blocking "run one command, wait for it, capture combined stdout+stderr"
 // helper - extracted from avr_toolchain.cpp (which originated it) once
-// rp2040_toolchain.cpp and esp32_toolchain.cpp needed the identical
-// cross-platform spawn logic, to avoid repeated copies of Windows
-// CreateProcess / POSIX posix_spawn plumbing.
+// esp32_toolchain.cpp needed the identical cross-platform spawn logic,
+// to avoid repeated copies of Windows CreateProcess / POSIX posix_spawn
+// plumbing.
 // ============================================================================
 #pragma once
 
@@ -25,7 +25,7 @@ struct RunResult {
 // reentrant-safe to call from multiple threads with the same `cwd` (each
 // call writes a transient log file there, cleaned up before returning) -
 // callers sharing a cwd across threads need their own external
-// serialization (see rp2040_toolchain.cpp's compile mutex).
+// serialization (see esp32_toolchain.cpp's g_compile_mutex).
 RunResult run_and_wait(const std::filesystem::path &exe, const std::vector<std::string> &args,
                         const std::filesystem::path &cwd, int timeout_seconds = 30);
 

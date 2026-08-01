@@ -110,14 +110,6 @@ body {
   margin: 0;
 }
 
-/* A visual gap between icon-rail groups (run controls / Load .hex… /
-   Save+Load .psim…) - extra top margin on the spacer itself rather than a
-   border, since every button already draws its own border-bottom and a
-   second border here would double up right against the previous button's. */
-.icon-rail-sep {
-  height: 10px;
-}
-
 /* 480px = 384px + 25% - the code editor's column, widened on request. */
 .sidebar {
   flex: none;

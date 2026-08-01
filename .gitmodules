@@ -10,3 +10,6 @@
 [submodule "simulators/esp32js"]
 	path = simulators/esp32js
 	url = https://github.com/vecnode/esp32js.git
+[submodule "simulators/iot-elements"]
+	path = simulators/iot-elements
+	url = https://github.com/vecnode/iot-elements.git

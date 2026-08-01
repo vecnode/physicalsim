@@ -49,6 +49,7 @@ state - purely placed and wireable (see [ARCHITECTURE.md](ARCHITECTURE.md)'s
 | Small Sound Sensor | `wokwi-small-sound-sensor` |
 | Big Sound Sensor | `wokwi-big-sound-sensor` |
 | Tilt Switch | `wokwi-tilt-switch` |
+| HX711 (Load Cell Amp) | `wokwi-hx711` |
 | LED | `wokwi-led` |
 | RGB LED | `wokwi-rgb-led` |
 | LED Ring | `wokwi-led-ring` |

@@ -64,6 +64,7 @@ export const componentRegistry: Record<string, ComponentDef> = {
     category: "sensors",
   },
   "tilt-switch": { tagName: "wokwi-tilt-switch", displayName: "Tilt Switch", category: "sensors" },
+  hx711: { tagName: "wokwi-hx711", displayName: "HX711 (Load Cell Amp)", category: "sensors" },
 
   // --- Connections: displays, actuators, passives, inputs, modules ---
   led: { tagName: "wokwi-led", displayName: "LED", category: "connections" },

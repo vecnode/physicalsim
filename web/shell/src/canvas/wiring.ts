@@ -104,28 +104,6 @@ const WIRE_ISSUE_COLOR: Record<WireIssue["severity"], string> = {
   "voltage-mismatch": "#e0a634",
 };
 
-// A fixed 0-5V reference scale for coloring a wire by its solved voltage
-// (analog-net-chain.ts's setWireVoltages()) - not a per-board supply
-// voltage, since this file has no idea which board a given wire's node
-// traces back to (a resistor divider's own node isn't "owned" by any one
-// board at all). 5V covers every board this app models today (see
-// energy.ts's boardPowerProfile - even the 3.3V ones read comfortably
-// inside it), so a wire simply saturates at the "hot" end past it rather
-// than needing a second, board-aware scale.
-const VOLTAGE_COLOR_MAX_V = 5;
-
-// Blue (0V) -> red (>=VOLTAGE_COLOR_MAX_V), the same low-to-high hue
-// sweep a thermal/voltage readout conventionally uses - lets a solved
-// wire be told apart from the palette's chosen color (and from another
-// wire at a different solved voltage) at a glance, without needing to
-// hover for the tooltip mna-solver.ts's answer already has (see render()
-// below).
-export function voltageColor(voltage: number): string {
-  const t = Math.max(0, Math.min(1, voltage / VOLTAGE_COLOR_MAX_V));
-  const hue = 220 - t * 220;
-  return `hsl(${hue}, 85%, 55%)`;
-}
-
 export class WiringLayer {
   private readonly svg: SVGSVGElement;
   private wires: Wire[] = [];
@@ -558,17 +536,15 @@ export class WiringLayer {
       // .wire-line-short/-voltage-mismatch CSS classes, for the same
       // "must win over an inline style" reason) - an electrical warning
       // should read the same regardless of which cable color the palette
-      // happens to be set to. A solved voltage (voltageColor()) comes
-      // after issue but before the palette color - real, useful
-      // information, but a validation warning is still more urgent (the
-      // hover tooltip below uses this exact same "issue first" ordering).
+      // happens to be set to. The solved voltage is still shown in the
+      // hover tooltip below, but no longer recolors the wire itself - a
+      // wire keeps whatever color the palette set it to (or the default)
+      // until the user changes it, independent of the energy model.
       visible.style.stroke = selected
         ? "#ffffff"
         : issue
           ? WIRE_ISSUE_COLOR[issue.severity]
-          : voltage !== undefined
-            ? voltageColor(voltage)
-            : this.color;
+          : this.color;
 
       if (issue || voltage !== undefined) {
         // A native SVG tooltip - hovering the wire shows the validation

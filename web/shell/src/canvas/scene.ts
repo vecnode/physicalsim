@@ -11,7 +11,7 @@ import {
 import { componentRegistry } from "../component-registry.js";
 import { componentElectricalParams, getElectricalValue } from "@physicalsim/common";
 import type { Viewport } from "./viewport.js";
-import { WiringLayer, voltageColor, type Wire } from "./wiring.js";
+import { WiringLayer, type Wire } from "./wiring.js";
 
 type PlacedEntity = CircuitBoard | PlacedComponent;
 
@@ -411,32 +411,19 @@ export class Scene {
     }
   }
 
-  // Colors every currently-rendered pin marker by its own solved node
-  // voltage, using the exact same blue->red scale (voltageColor(),
-  // wiring.ts) a wire is already colored by - so "what voltage is this
-  // pin at" reads the same way whether you're looking at the wire or the
-  // pin it terminates at, instead of the wire being the only place this
-  // app expresses voltage visually. `voltages` is keyed "entityId::pin",
-  // matching the marker's own dataset.entityId/dataset.pin (set in
-  // overlayPinMarkers() above) - called by AnalogNetChain after every
-  // solve, with an empty map on reset()/a fresh example.
-  //
-  // A box-shadow glow rather than touching border-color/background
-  // directly: those two properties are exactly what .pin-marker:hover/
-  // .selected/.connecting (style.css) already use for interaction state,
-  // and inline styles would otherwise permanently win over those classes'
-  // rules (same specificity family, later/inline wins) - a hovered or
-  // selected pin would stop looking hovered/selected the moment it also
-  // had a solved voltage. box-shadow is untouched by any of those three
-  // states, so the voltage glow and the interaction-state look coexist
-  // instead of one clobbering the other.
+  // Updates every currently-rendered pin marker's tooltip with its own
+  // solved node voltage (no longer a visual glow on the marker itself -
+  // voltage no longer recolors anything, see wiring.ts's render()).
+  // `voltages` is keyed "entityId::pin", matching the marker's own
+  // dataset.entityId/dataset.pin (set in overlayPinMarkers() above) -
+  // called by AnalogNetChain after every solve, with an empty map on
+  // reset()/a fresh example.
   setPinVoltages(voltages: ReadonlyMap<string, number>): void {
     for (const { wrapper } of this.dom.values()) {
       for (const marker of wrapper.querySelectorAll<HTMLElement>(".pin-marker")) {
         const entityId = marker.dataset.entityId;
         const pin = marker.dataset.pin;
         const voltage = entityId && pin ? voltages.get(`${entityId}::${pin}`) : undefined;
-        marker.style.boxShadow = voltage !== undefined ? `0 0 0 3px ${voltageColor(voltage)}` : "";
         marker.title = voltage !== undefined ? `${pin} - ${voltage.toFixed(2)} V` : (pin ?? "");
       }
     }

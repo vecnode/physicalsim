@@ -12,6 +12,16 @@ export default defineConfig({
   resolve: {
     alias: {
       rp2040js: resolve("../../simulators/rp2040js/src/index.ts"),
+      // More specific key first - Vite's object-form alias matching checks
+      // entries in order and treats a key as a prefix match
+      // (`id === key || id.startsWith(key + "/")`, the same mechanism the
+      // "lit" alias below relies on to also match "lit/decorators.js"), so
+      // "avr8js" would otherwise shadow "avr8js/arduino" first and mangle
+      // it into an invalid path (its own replacement is a specific file,
+      // not a directory, unlike "lit"'s). The JS-interpreted sketch
+      // runtime (no compiler, no CPU emulation - see adapters/avr8-js)
+      // needs this subpath resolvable on its own.
+      "avr8js/arduino": resolve("../../simulators/avr8js/src/arduino/index.ts"),
       avr8js: resolve("../../simulators/avr8js/src/index.ts"),
       esp32js: resolve("../../simulators/esp32js/src/index.ts"),
       "@wokwi/elements": resolve("../../simulators/wokwi-elements/src/index.ts"),

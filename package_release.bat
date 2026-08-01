@@ -70,11 +70,9 @@ if not defined FIXED_RUNTIME_DIR_FOR_CMAKE set "FIXED_RUNTIME_DIR_FOR_CMAKE=!FIX
 
 echo     Using fixed runtime from: !FIXED_RUNTIME_DIR!
 
-REM No AVR/RP2040 toolchain to bundle anymore - every AVR and RP2040
-REM board runs a JS-native sketch runtime (avr8js/arduino, rp2040js/pico),
-REM no C/C++ compiler involved. ESP32 still real-compiles via esp-idf
-REM (src/esp32_toolchain.cpp) - see BUNDLE_XTENSA_TOOLCHAIN/BUNDLE_ESP_IDF
-REM in CMakeLists.txt if a packaged ESP32 Compile & Run is needed too.
+REM No AVR/RP2040/ESP32 toolchain to bundle anymore - every board runs a
+REM JS-native sketch runtime (avr8js/arduino, rp2040js/pico, esp32js/espidf),
+REM no C/C++ compiler involved.
 
 "%CMAKE_EXE%" -B build ^
   -DINCLUDE_TERMINAL_ON_RELEASE=OFF ^

@@ -12,9 +12,9 @@ each shown at its own smaller side's size so proportions stay honest.
 
 Backed by a `SimulatorAdapter` (CPU emulation - see
 [ARCHITECTURE.md](ARCHITECTURE.md)) and powered by Start/Pause/Stop.
-Registered in `web/shell/src/circuit.ts`. Every AVR/RP2040 board runs a
-JS-native sketch runtime now (no C/C++ toolchain) - only ESP32 still
-compiles for real, via the vendored `esp-idf`.
+Registered in `web/shell/src/circuit.ts`. Every board runs a JS-native
+sketch runtime now (no C/C++ toolchain, no vendored Arduino/pico-sdk/
+ESP-IDF core).
 
 | Board | Custom element | Adapter | Fork | Preview |
 |---|---|---|---|---|
@@ -26,9 +26,9 @@ compiles for real, via the vendored `esp-idf`.
 | Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-nano-rp2040-connect.svg" height="17"> |
 | Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-pi-pico.svg" height="20"> |
 | Raspberry Pi Pico W | `wokwi-pi-pico-w` | `rp2040-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-pi-pico-w.svg" height="20"> |
-| ESP32 DevKit V1 | `wokwi-esp32-devkit-v1` | `esp32` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-v1.svg" height="28"> |
-| ESP32 DevKit C V4 | `wokwi-esp32-devkit-c-v4` | `esp32` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-c-v4.svg" height="27"> |
-| ESP32-CAM | `wokwi-esp32-cam` | `esp32` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-cam.svg" height="27"> |
+| ESP32 DevKit V1 | `wokwi-esp32-devkit-v1` | `esp32-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-v1.svg" height="28"> |
+| ESP32 DevKit C V4 | `wokwi-esp32-devkit-c-v4` | `esp32-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-c-v4.svg" height="27"> |
+| ESP32-CAM | `wokwi-esp32-cam` | `esp32-js` | `vecnode/wokwi-elements` | <img src="assets/component-previews/wokwi-esp32-cam.svg" height="27"> |
 
 
 ## Components

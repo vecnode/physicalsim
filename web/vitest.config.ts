@@ -18,6 +18,7 @@ export default defineConfig({
       // path (its own replacement is a specific file, not a directory).
       "avr8js/arduino": resolve("../simulators/avr8js/src/arduino/index.ts"),
       avr8js: resolve("../simulators/avr8js/src/index.ts"),
+      "esp32js/espidf": resolve("../simulators/esp32js/src/espidf/index.ts"),
     },
   },
   esbuild: {

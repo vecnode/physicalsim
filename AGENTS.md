@@ -65,9 +65,10 @@ there is no native/process-backed adapter kind in this project. An earlier
 ESP32 was originally built the same way around a forked
 `qemu-system-xtensa`; both were removed (`cortex-m` because no board ever
 mapped to it, ESP32 once `vecnode/esp32js` made a native process
-unnecessary — see ARCHITECTURE.md's "ESP32 board and toolchain"). Don't
-reintroduce a QEMU-backed adapter kind unless the target architecture
-genuinely has no JS/TS emulator to build against at all.
+unnecessary — see ARCHITECTURE.md's "ESP32 sketch runtime (JS-native, no
+compiler)"). Don't reintroduce a QEMU-backed adapter kind unless the
+target architecture genuinely has no JS/TS emulator to build against at
+all.
 
 ## UI: dropdown selection requires clicking Apply
 

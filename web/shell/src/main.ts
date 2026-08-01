@@ -10,7 +10,6 @@ import { AnalogNetChain } from "./analog-net-chain.js";
 import { CanvasController, DEFAULT_WIRE_COLOR } from "./canvas/index.js";
 import { Terminal } from "./terminal.js";
 import { SketchEditor } from "./sketch-editor.js";
-import { parseCompilerLog } from "./diagnostics.js";
 import { paintSsd1306Frame } from "./i2c-display.js";
 import { buildPsimFile, downloadPsimFile, parsePsimFile, applyPsimFile, sanitizeFileName, PsimParseError } from "./psim-file.js";
 import "./native-bridge.js";
@@ -83,13 +82,6 @@ let unsubscribeI2CFrame: (() => void) | null = null;
 // dropdown - see index.html - so there's no running adapter to attach to
 // until Arduino Uno gets wired to one.
 let activeAdapterId: AdapterId | null = null;
-
-// Tracks the in-flight /compile request (if any) so switching examples can
-// cancel a stale compile rather than let it land after a different board's
-// sketch/adapter is already active - without this, an in-flight compile for
-// the example the user just left could still resolve and flash firmware
-// into whatever example they switched to.
-let activeCompileAbort: AbortController | null = null;
 
 // A second, separate model from the circuit itself - see energy.ts.
 // Keyed by CircuitBoard.id, same reasoning as circuit.ts's own
@@ -474,7 +466,8 @@ async function loadPsimFile(file: File): Promise<void> {
 // gets wired to, so it blinks in lockstep with the board's own onboard
 // LED rather than needing a separate pin number kept in sync by hand.
 // JS/TS, interpreted directly by avr8js/arduino's ArduinoRuntime - no
-// C/C++ compiler involved at all (see NO_COMPILER_ADAPTER_IDS below).
+// C/C++ compiler involved at all (every board is JS-native now - see
+// compileAndRun()'s own doc comment).
 const LED_BLINK_SKETCH = `function setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 }
@@ -870,24 +863,22 @@ function loop() {
     glyph: "🔷",
     // Adapted from espressif/esp-idf's own examples/peripherals/gpio/
     // generic_gpio.
-    sketch: `#include "driver/gpio.h"
+    sketch: `const GPIO_OUTPUT_IO_0 = 18;
+const GPIO_OUTPUT_IO_1 = 19;
 
-#define GPIO_OUTPUT_IO_0 18
-#define GPIO_OUTPUT_IO_1 19
-
-void app_main(void) {
-  gpio_config_t io_conf = {};
+function setup() {
+  const io_conf = {};
   io_conf.mode = GPIO_MODE_OUTPUT;
-  io_conf.pin_bit_mask = (1ULL << GPIO_OUTPUT_IO_0) | (1ULL << GPIO_OUTPUT_IO_1);
-  gpio_config(&io_conf);
+  io_conf.pin_bit_mask = (1 << GPIO_OUTPUT_IO_0) | (1 << GPIO_OUTPUT_IO_1);
+  gpio_config(io_conf);
+}
 
-  int cnt = 0;
-  while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
-    gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
-    cnt++;
-  }
+let cnt = 0;
+function loop() {
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
+  gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
+  cnt++;
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("esp32-devkit-v1");
@@ -919,24 +910,22 @@ void app_main(void) {
     // Same ESP32-WROOM-32 chip and firmware as "esp32-gpio-blink" - this
     // board's own real silkscreen just uses bare GPIO numbers ("18"/"19"),
     // not esp32-devkit-v1's hand-picked "D18"/"D19" convention.
-    sketch: `#include "driver/gpio.h"
+    sketch: `const GPIO_OUTPUT_IO_0 = 18;
+const GPIO_OUTPUT_IO_1 = 19;
 
-#define GPIO_OUTPUT_IO_0 18
-#define GPIO_OUTPUT_IO_1 19
-
-void app_main(void) {
-  gpio_config_t io_conf = {};
+function setup() {
+  const io_conf = {};
   io_conf.mode = GPIO_MODE_OUTPUT;
-  io_conf.pin_bit_mask = (1ULL << GPIO_OUTPUT_IO_0) | (1ULL << GPIO_OUTPUT_IO_1);
-  gpio_config(&io_conf);
+  io_conf.pin_bit_mask = (1 << GPIO_OUTPUT_IO_0) | (1 << GPIO_OUTPUT_IO_1);
+  gpio_config(io_conf);
+}
 
-  int cnt = 0;
-  while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
-    gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
-    cnt++;
-  }
+let cnt = 0;
+function loop() {
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
+  gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
+  cnt++;
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("esp32-devkit-c-v4");
@@ -967,24 +956,22 @@ void app_main(void) {
     // free header pins that avoid GPIO0 (boot-mode strap) and GPIO2/GPIO4
     // (already wired to this board's own onboard status/flash LEDs on real
     // hardware, per esp32-cam-element.ts's own comment).
-    sketch: `#include "driver/gpio.h"
+    sketch: `const GPIO_OUTPUT_IO_0 = 12;
+const GPIO_OUTPUT_IO_1 = 13;
 
-#define GPIO_OUTPUT_IO_0 12
-#define GPIO_OUTPUT_IO_1 13
-
-void app_main(void) {
-  gpio_config_t io_conf = {};
+function setup() {
+  const io_conf = {};
   io_conf.mode = GPIO_MODE_OUTPUT;
-  io_conf.pin_bit_mask = (1ULL << GPIO_OUTPUT_IO_0) | (1ULL << GPIO_OUTPUT_IO_1);
-  gpio_config(&io_conf);
+  io_conf.pin_bit_mask = (1 << GPIO_OUTPUT_IO_0) | (1 << GPIO_OUTPUT_IO_1);
+  gpio_config(io_conf);
+}
 
-  int cnt = 0;
-  while (1) {
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
-    gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
-    cnt++;
-  }
+let cnt = 0;
+function loop() {
+  vTaskDelay(1000 / portTICK_PERIOD_MS);
+  gpio_set_level(GPIO_OUTPUT_IO_0, cnt % 2);
+  gpio_set_level(GPIO_OUTPUT_IO_1, cnt % 2);
+  cnt++;
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("esp32-cam");
@@ -1052,58 +1039,6 @@ function loop() {
       canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: lcd.id, pin: "D7" });
     },
   },
-  "relay-control": {
-    label: "Relay Control",
-    description: "Press the button once to energize the relay, press again to release it.",
-    level: "beginner",
-    board: "Arduino Uno",
-    glyph: "🧲",
-    // Same toggle logic as "Toggle Switch", a relay instead of an LED -
-    // both directions here are the real, honest ones (a pushbutton is
-    // genuinely a write-role input, a relay coil is genuinely something
-    // firmware drives), unlike the sensor glow entries in
-    // componentSignalPins.ts, which are read-role for lack of any
-    // interactive alternative today. Prints to Serial on every toggle -
-    // the relay's own glow (added to the vecnode/wokwi-elements fork) is
-    // real but small/easy to miss at a glance, so this gives an
-    // unambiguous, always-visible confirmation that a press actually
-    // reached the board (confirmed separately, directly: relayState does
-    // flip and the glow does render - this is about visibility, not a
-    // bug in the underlying wiring).
-    sketch: `const buttonPin = 2;
-const relayPin = 13;
-
-let relayState = LOW;
-let lastButtonState = LOW;
-
-function setup() {
-  pinMode(buttonPin, INPUT);
-  pinMode(relayPin, OUTPUT);
-  Serial.begin(9600);
-  Serial.println("Relay Control ready - press the button to toggle");
-}
-
-function loop() {
-  const buttonState = digitalRead(buttonPin);
-  if (buttonState === HIGH && lastButtonState === LOW) {
-    relayState = relayState ? LOW : HIGH;
-    digitalWrite(relayPin, relayState);
-    Serial.println(relayState ? "Relay ON" : "Relay OFF");
-    delay(50); // simple debounce
-  }
-  lastButtonState = buttonState;
-}`,
-    build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno");
-      if (!board) return;
-      const button = await canvas.scene.addComponentAt("pushbutton", board.x + 620, board.y + 20);
-      if (!button) return;
-      const relay = await canvas.scene.addComponentAt("ks2e-m-dc5", board.x + 600, board.y + 160);
-      if (!relay) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "2" }, { entityId: button.id, pin: "1.l" });
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: relay.id, pin: "COIL1" });
-    },
-  },
   "lcd2004-dashboard": {
     label: "LCD2004 Dashboard",
     description: "A JS-interpreted LiquidCrystal sketch filling all 4 rows of a 20x4 LCD, on an Arduino Nano.",
@@ -1161,28 +1096,24 @@ function loop() {
     // examples' plain ESP-IDF gpio_config()/gpio_get_level()/
     // gpio_set_level() calls. VERT/HORZ (X/Y) are deliberately left
     // unwired - this is a digital on/off demo, not an ADC one.
-    sketch: `#include "driver/gpio.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+    sketch: `const BUTTON_PIN = 4;
+const LED_PIN = 5;
 
-#define BUTTON_PIN 4
-#define LED_PIN 5
-
-void app_main(void) {
-  gpio_config_t input_conf = {};
+function setup() {
+  const input_conf = {};
   input_conf.mode = GPIO_MODE_INPUT;
-  input_conf.pin_bit_mask = (1ULL << BUTTON_PIN);
-  gpio_config(&input_conf);
+  input_conf.pin_bit_mask = (1 << BUTTON_PIN);
+  gpio_config(input_conf);
 
-  gpio_config_t output_conf = {};
+  const output_conf = {};
   output_conf.mode = GPIO_MODE_OUTPUT;
-  output_conf.pin_bit_mask = (1ULL << LED_PIN);
-  gpio_config(&output_conf);
+  output_conf.pin_bit_mask = (1 << LED_PIN);
+  gpio_config(output_conf);
+}
 
-  while (1) {
-    gpio_set_level(LED_PIN, gpio_get_level(BUTTON_PIN));
-    vTaskDelay(1);
-  }
+function loop() {
+  gpio_set_level(LED_PIN, gpio_get_level(BUTTON_PIN));
+  vTaskDelay(1);
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("esp32-devkit-v1");
@@ -1223,8 +1154,6 @@ async function loadExample(id: string): Promise<void> {
   // reusing it here, before the old board disappears, so a fresh example
   // always starts from a genuinely stopped simulation, not a stale one
   // still running underneath it.
-  activeCompileAbort?.abort();
-  activeCompileAbort = null;
   stopBtn.click();
   // Drops the previous example's solved-voltage history before the new
   // one builds - see AnalogNetChain.reset()'s own doc comment for why a
@@ -1298,34 +1227,15 @@ window.addEventListener("keydown", (ev) => {
 // an empty canvas.
 void loadExample(DEFAULT_EXAMPLE_ID).then(showExampleGallery);
 
-interface CompileResponse {
-  ok: boolean;
-  hexText?: string;
-  // Set instead of hexText for RP2040 boards - a raw flash binary
-  // (rp2040_toolchain.cpp's output, hex-pair-per-byte, no Intel HEX record
-  // framing, since RP2040 has no such convention) rather than AVR's Intel
-  // HEX text. Two response shapes, not one overloaded field, since the two
-  // toolchains' outputs are genuinely different things.
-  binHex?: string;
-  log: string;
-}
-
-// Decodes CompileResponse.binHex ("a1b2c3..." - two hex chars per byte, no
-// framing) into raw bytes - the RP2040 counterpart to parseIntelHex() for
-// AVR, much simpler since there's no Intel HEX record structure to parse.
-function parseHexBytes(hex: string): Uint8Array {
-  const bytes = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
-}
-
-// Adapter ids that interpret the sketch source directly (no compiler) -
-// compileAndRun() below skips the /compile HTTP round-trip entirely for
-// these, calling loadFirmware() with the sketch's own UTF-8 bytes.
-const NO_COMPILER_ADAPTER_IDS = new Set<AdapterId>(["avr8-js", "avr8-js-mega", "avr8-js-attiny85", "rp2040-js"]);
-
+// Every board is JS-native now (AVR via avr8js/arduino, RP2040 via
+// rp2040js/pico, ESP32 via esp32js/espidf) - a real-compile fallback
+// path (POST /compile to avr-gcc/arm-none-eabi-gcc/xtensa-esp-elf-gcc,
+// with its own "compiling… (Ns)" progress UI, CompileResponse type,
+// hex/binHex parsing, and compiler-log diagnostics) used to exist here
+// for boards that hadn't moved to a JS-native runtime yet; now that
+// every registered AdapterId has, it was removed entirely - see git
+// history if a genuinely new real-compile board family is ever added
+// back.
 async function compileAndRun(): Promise<void> {
   const client = activeClient();
   if (!client) {
@@ -1338,137 +1248,24 @@ async function compileAndRun(): Promise<void> {
     return;
   }
 
-  // JS-native adapters (avr8-js, rp2040-js, ...) interpret the sketch
-  // source directly via their own runtime (avr8js/arduino,
-  // rp2040js/pico) - no C/C++ toolchain, no /compile round-trip at all.
-  // "bytes" for loadFirmware() here is just the sketch source's own
-  // UTF-8 text (see Avr8JsAdapter.loadFirmware()'s own doc comment for
-  // why that's a valid, adapter-specific interpretation of
+  // Interprets the sketch source directly via the active adapter's own
+  // runtime (avr8js/arduino, rp2040js/pico, esp32js/espidf) - no C/C++
+  // toolchain, no /compile round-trip at all. "bytes" for loadFirmware()
+  // here is just the sketch source's own UTF-8 text (see
+  // Avr8JsAdapter.loadFirmware()'s own doc comment for why that's a
+  // valid, adapter-specific interpretation of
   // SimulatorAdapter.loadFirmware()'s "bytes" parameter).
-  if (activeAdapterId && NO_COMPILER_ADAPTER_IDS.has(activeAdapterId)) {
-    railCompileBtn.disabled = true;
-    try {
-      const bytes = new TextEncoder().encode(source);
-      await client.call("loadFirmware", bytes);
-      sketchEditor.setDiagnostics([]);
-      terminal.clear();
-      terminal.writeLine(`sketch loaded (${bytes.length} bytes) - no compiler involved`);
-    } catch (err) {
-      terminal.clear();
-      terminal.writeLine(err instanceof Error ? `sketch error: ${err.message}` : "sketch failed to load");
-    } finally {
-      railCompileBtn.disabled = false;
-    }
-    return;
-  }
-
   railCompileBtn.disabled = true;
-
-  // Cancels whatever compile was still in flight for a previous example -
-  // Compile & Run twice in a row (or a slow compile the user gives up on)
-  // should not race a fresh one.
-  activeCompileAbort?.abort();
-  const abortController = new AbortController();
-  activeCompileAbort = abortController;
-
-  // Compiling the sketch + the whole Arduino core (avr_toolchain.cpp
-  // shells out to a real avr-gcc, one process per source file - see
-  // ARCHITECTURE.md's "The compiler" section) can take a few seconds,
-  // with nothing to show for it until the single POST /compile resolves.
-  // A live "compiling… (Ns)" line (Terminal.writeUpdatingLine(), updated
-  // in place rather than spamming one line per tick) means Compile & Run
-  // reads as "working", not "hung", the whole time it's blocked on that
-  // fetch.
-  const COMPILE_PROGRESS_KEY = "compile-progress";
-  const startedAt = performance.now();
-  const elapsedSeconds = () => ((performance.now() - startedAt) / 1000).toFixed(1);
-  terminal.writeUpdatingLine(COMPILE_PROGRESS_KEY, `compiling… (${elapsedSeconds()}s)`);
-  const progressTimer = window.setInterval(() => {
-    terminal.writeUpdatingLine(COMPILE_PROGRESS_KEY, `compiling… (${elapsedSeconds()}s)`);
-  }, 250);
-
   try {
-    // Which board is actually placed, not just which adapter is active -
-    // "avr8" backs both arduino-uno and arduino-nano (same chip, same
-    // compile target), but the C++ side's resolve_board_target()
-    // (avr_toolchain.cpp) needs the specific board string to know which
-    // ARDUINO_AVR_* define/variant to use, and "avr8-mega" needs it to
-    // pick -mmcu=atmega2560 + variants/mega over the default Uno target.
-    // Falls back to undefined (server-side default: Arduino Uno) if no
-    // board is placed yet - matches this endpoint's original behavior.
-    const board = canvas.scene.findBoardByAdapter(activeAdapterId ?? "")?.type;
-    const res = await fetch("/compile", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source, board }),
-      signal: abortController.signal,
-    });
-    const body = (await res.json()) as CompileResponse;
-    // Done ticking before the final message is written below - the ticks
-    // above and the final line share the same key, so leaving the timer
-    // running even one tick longer would immediately overwrite whatever
-    // gets written next.
-    window.clearInterval(progressTimer);
-    terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
-
-    // The example was switched (or another Compile & Run started) while
-    // this fetch was in flight - the response landed too late to matter,
-    // and applying it now would flash firmware for the wrong sketch/board
-    // onto whatever is active now.
-    if (abortController.signal.aborted) return;
-
-    if (!body.ok) {
-      terminal.clear();
-      terminal.writeLine(`compile failed after ${elapsedSeconds()}s`);
-      const diagnostics = parseCompilerLog(body.log || "", board);
-      terminal.writeDiagnostics(diagnostics, body.log || "(no compiler output)", (line) =>
-        sketchEditor.revealLine(line),
-      );
-      sketchEditor.setDiagnostics(
-        diagnostics
-          .filter((d) => d.isSketchLine && d.severity !== "note")
-          .map((d) => ({
-            line: d.line,
-            column: d.column,
-            severity: d.severity,
-            message: d.explanation ?? d.rawMessage,
-          })),
-      );
-      return;
-    }
-    // A successful compile means whatever was flagged last time no longer
-    // applies - clear stale squiggles rather than leaving them pointing at
-    // now-fixed (or since-edited-away) lines.
-    sketchEditor.setDiagnostics([]);
-
-    // RP2040 boards no longer reach this far - they're JS-native now (see
-    // NO_COMPILER_ADAPTER_IDS above) and return before this fetch ever
-    // fires. Only ESP32's real esp-idf compile still lands here.
-    let bytes: Uint8Array;
-    if (board === "esp32-devkit-v1" || board === "esp32-devkit-c-v4" || board === "esp32-cam") {
-      bytes = parseHexBytes(body.binHex ?? "");
-    } else {
-      const parsed = parseIntelHex(body.hexText ?? "", FIRMWARE_PARSE_SANITY_LIMIT_BYTES);
-      bytes = parsed.bytes.slice(0, parsed.usedBytes);
-    }
+    const bytes = new TextEncoder().encode(source);
     await client.call("loadFirmware", bytes);
+    sketchEditor.setDiagnostics([]);
     terminal.clear();
-    terminal.writeLine(`sketch compiled and loaded (${bytes.length} bytes) in ${elapsedSeconds()}s`);
+    terminal.writeLine(`sketch loaded (${bytes.length} bytes) - no compiler involved`);
   } catch (err) {
-    window.clearInterval(progressTimer);
-    terminal.finishUpdatingLine(COMPILE_PROGRESS_KEY);
-    // AbortError means the user switched examples (or re-clicked Compile &
-    // Run) - that's an intentional cancellation, not a failure worth
-    // reporting as "compile error".
-    if (err instanceof DOMException && err.name === "AbortError") return;
     terminal.clear();
-    terminal.writeLine(
-      err instanceof Error
-        ? `compile error after ${elapsedSeconds()}s: ${err.message}`
-        : "compile failed",
-    );
+    terminal.writeLine(err instanceof Error ? `sketch error: ${err.message}` : "sketch failed to load");
   } finally {
-    if (activeCompileAbort === abortController) activeCompileAbort = null;
     railCompileBtn.disabled = false;
   }
 }

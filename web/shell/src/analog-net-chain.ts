@@ -97,6 +97,32 @@ export class AnalogNetChain {
   // repeated recomputes.
   private readonly pinSubscriptions = new Map<string, () => void>();
 
+  // Last level pushed by onPinChange, per wired pin (key: "entityId::pin")
+  // - readPinStates() below prefers this over a fresh readPin() RPC call.
+  // Necessary, not just an optimization: every JS-native adapter's
+  // delay()/sleep_ms()/vTaskDelay() (avr8js/arduino, rp2040js/pico,
+  // esp32js/espidf) is a real synchronous busy-wait that blocks the
+  // Worker's own message queue for the call's whole duration - a
+  // "readPin" request queued while a pin is genuinely HIGH only gets
+  // serviced once that blocking call returns, by which point a typical
+  // blink sketch (digitalWrite(HIGH); delay(500); digitalWrite(LOW);
+  // delay(500);) has usually already written the pin back LOW in the
+  // same, uninterruptible loop() iteration - so a poll-based read can
+  // observe the HIGH half of a blink cycle only by sheer luck, in
+  // practice close to never (confirmed: 25 consecutive 100ms-spaced
+  // polls against a running "LED Chase (Pico)"/"Blink LED (RP2040)"
+  // example never once caught a non-zero source voltage, while the LED's
+  // own onPinChange-driven glow was genuinely blinking the whole time).
+  // onPinChange itself doesn't have this problem - postMessage() out of
+  // the Worker happens synchronously at the exact moment gpio_put()/
+  // digitalWrite() sets the value, before the blocking delay call even
+  // starts, so the main thread receives it promptly regardless of how
+  // long the Worker then blocks for. Caching that pushed value and
+  // reading it here instead of re-polling is what makes the solved
+  // voltage/wire color/energy readout actually reflect a running blink
+  // sketch rather than reading back its own tail-end LOW state forever.
+  private readonly pinLevels = new Map<string, number>();
+
   // Every solved wireVoltages map, pushed out after each recompute - lets
   // a UI (main.ts's persistent voltage readout) show real solved node
   // voltages without reaching into this class's own private solve state.
@@ -134,6 +160,7 @@ export class AnalogNetChain {
   reset(): void {
     for (const unsubscribe of this.pinSubscriptions.values()) unsubscribe();
     this.pinSubscriptions.clear();
+    this.pinLevels.clear();
     this.previousVoltages = new Map();
     this.lastSolveAt = null;
     this.scene.wiring.setWireVoltages(new Map());
@@ -237,8 +264,14 @@ export class AnalogNetChain {
       const key = `${wired.entityId}::${wired.pin}`;
       if (this.pinSubscriptions.has(key)) continue;
       const client = this.getAdapterClient(wired.board.adapterId);
-      const unsubscribe = client.onPinChange((changedPin) => {
-        if (changedPin === wired.rawPin) this.scheduleRecompute();
+      const unsubscribe = client.onPinChange((changedPin, value) => {
+        if (changedPin !== wired.rawPin) return;
+        // pinLevels' own doc comment explains why this push, not a
+        // subsequent readPin() poll, is what actually keeps up with a
+        // pin whose HIGH phase lives entirely inside a blocking
+        // delay()/sleep_ms()/vTaskDelay() call.
+        this.pinLevels.set(key, value);
+        this.scheduleRecompute();
       });
       void client.call("subscribePin", { pin: wired.rawPin }).catch(() => {});
       this.pinSubscriptions.set(key, unsubscribe);
@@ -257,9 +290,25 @@ export class AnalogNetChain {
       wiredPins.map(async (wired) => {
         const client = this.getAdapterClient(wired.board.adapterId);
         const key = `${wired.entityId}::${wired.pin}`;
+        // Snapshotted synchronously, before any await below - pinLevels'
+        // own doc comment covers why the level itself has to come from
+        // here, not a readPin() poll. Just as important: capturing it
+        // has to happen *before* readPinDirection's own await, not after
+        // - that RPC can itself sit blocked behind the same worker-side
+        // busy-wait for however long the sketch's current delay() call
+        // lasts, and pinLevels can easily receive a *later* pinChange
+        // push (e.g. the matching LOW half of this same blink cycle)
+        // during that wait. Reading the cache only after awaiting would
+        // silently pick up that newer, wrong value instead of the one
+        // that was actually current when this recompute started.
+        const cachedLevel = this.pinLevels.get(key);
         try {
           const direction = await client.call("readPinDirection", { pin: wired.rawPin });
-          const level = await client.call("readPin", { pin: wired.rawPin });
+          // Only a pin whose very first recompute hasn't seen a
+          // pinChange event yet (nothing pushed to cache it with) falls
+          // back to a fresh poll - the one case where polling is still
+          // the only source of truth available.
+          const level = cachedLevel !== undefined ? cachedLevel : await client.call("readPin", { pin: wired.rawPin });
           result.set(key, { direction, level });
         } catch {
           // A real RPC failure (e.g. a native adapter's gdbstub round-trip

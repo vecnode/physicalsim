@@ -7,10 +7,6 @@
 [submodule "simulators/wokwi-elements"]
 	path = simulators/wokwi-elements
 	url = https://github.com/vecnode/wokwi-elements.git
-[submodule "simulators/esp-idf"]
-	path = simulators/esp-idf
-	url = https://github.com/vecnode/esp-idf.git
-	branch = v5.3.1
 [submodule "simulators/esp32js"]
 	path = simulators/esp32js
 	url = https://github.com/vecnode/esp32js.git

@@ -19,15 +19,6 @@ set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime dir
 
 include(FetchContent)
 
-# simulators/esp-idf (vendored, see below) is genuinely too big to always
-# ship - a real ESP-IDF checkout with its own submodules runs to hundreds
-# of MB, with no clean per-file trim boundary (same reasoning
-# BUNDLE_XTENSA_TOOLCHAIN's own comment gives). Off by default; a dev
-# build without this still works via esp32_toolchain.cpp's
-# PHYSICALSIM_SOURCE_DIR fallback straight to simulators/esp-idf before
-# a packaged build's own copy step has run.
-option(BUNDLE_ESP_IDF "Bundle vendored esp-idf next to the executable for a packaged ESP32 Compile & Run" OFF)
-
 if(POLICY CMP0135)
     cmake_policy(SET CMP0135 NEW)
 endif()
@@ -97,71 +88,13 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# Prebuilt xtensa-esp-elf-gcc toolchain (the "esp32" adapter's Compile & Run
-# pipeline, src/esp32_toolchain.cpp) - a "copy an already-published
-# archive in, don't build it ourselves" posture. Not xPack (checked
-# directly - xpack-dev-tools publishes no
-# xtensa/esp32 toolchain at all): Espressif
-# publishes it themselves on espressif/crosstool-NG's GitHub releases -
-# these are the exact URLs esp-idf's own installer (install.ps1/
-# idf_tools.py) downloads, read straight out of a real esp-idf checkout's
-# tools/tools.json rather than guessed. The Windows archive nests
-# everything one level down inside its own "xtensa-esp-elf/" directory
-# (confirmed by actually extracting it). Not yet confirmed whether
-# macOS/Linux releases nest the same way (this project's ESP32 work so
-# far has only run on Windows), so an EXISTS-based detection is applied
-# here rather than assuming.
-option(BUNDLE_XTENSA_TOOLCHAIN "Fetch and bundle a prebuilt xtensa-esp-elf-gcc toolchain for the in-app ESP32 sketch compiler" OFF)
-set(XTENSA_TOOLCHAIN_BIN_DIR "")
-if(BUNDLE_XTENSA_TOOLCHAIN)
-    set(_xtensa_toolchain_version "esp-13.2.0_20240530")
-    set(_xtensa_toolchain_base "https://github.com/espressif/crosstool-NG/releases/download/${_xtensa_toolchain_version}/xtensa-esp-elf-13.2.0_20240530")
-    if(WIN32)
-        set(_xtensa_toolchain_url "${_xtensa_toolchain_base}-x86_64-w64-mingw32_hotfix.zip")
-    elseif(APPLE)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
-            set(_xtensa_toolchain_url "${_xtensa_toolchain_base}-aarch64-apple-darwin.tar.xz")
-        else()
-            set(_xtensa_toolchain_url "${_xtensa_toolchain_base}-x86_64-apple-darwin.tar.xz")
-        endif()
-    elseif(UNIX)
-        if(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64")
-            set(_xtensa_toolchain_url "${_xtensa_toolchain_base}-aarch64-linux-gnu.tar.xz")
-        else()
-            set(_xtensa_toolchain_url "${_xtensa_toolchain_base}-x86_64-linux-gnu.tar.xz")
-        endif()
-    endif()
-
-    if(_xtensa_toolchain_url)
-        FetchContent_Declare(xtensa_esp_toolchain URL ${_xtensa_toolchain_url})
-        FetchContent_MakeAvailable(xtensa_esp_toolchain)
-        if(EXISTS "${xtensa_esp_toolchain_SOURCE_DIR}/bin/xtensa-esp32-elf-gcc.exe" OR
-           EXISTS "${xtensa_esp_toolchain_SOURCE_DIR}/bin/xtensa-esp32-elf-gcc")
-            set(XTENSA_TOOLCHAIN_BIN_DIR "${xtensa_esp_toolchain_SOURCE_DIR}")
-        else()
-            set(XTENSA_TOOLCHAIN_BIN_DIR "${xtensa_esp_toolchain_SOURCE_DIR}/xtensa-esp-elf")
-        endif()
-    else()
-        message(WARNING "[physicalsim] BUNDLE_XTENSA_TOOLCHAIN is ON but this platform has no known prebuilt xtensa-esp-elf-gcc URL - skipping")
-    endif()
-endif()
-
 cpp_embedlib_add(WebAssets
     FOLDER    ${CMAKE_CURRENT_SOURCE_DIR}/public
     NAMESPACE Web
 )
 
 # ---- Application target and hardening --------------------------------------
-add_executable(physicalsim src/main.cpp
-    src/esp32_toolchain.cpp src/process_exec.cpp)
-
-# Dev-build fallback so src/esp32_toolchain.cpp can find simulators/esp-idf
-# straight from the source tree before the POST_BUILD copy below has ever
-# run (e.g. the very first debug build). Packaged builds always have the
-# POST_BUILD-copied esp-idf/ next to the executable and never need this.
-target_compile_definitions(physicalsim PRIVATE
-    PHYSICALSIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
-)
+add_executable(physicalsim src/main.cpp)
 
 function(apply_hardening target_name)
     if(MSVC)
@@ -298,66 +231,5 @@ if(WIN32)
         target_compile_definitions(physicalsim PRIVATE USE_FIXED_WEBVIEW2_RUNTIME=0)
     endif()
 
-endif()
-
-# ---- ESP32 sketch-compiler assets (cross-platform, not gated on WIN32) -----
-# ArduinoCore-avr, ATTinyCore, and LiquidCrystal are all gone - every AVR
-# board (Uno/Nano/Mega/Leonardo/Franzininho) runs through a JS-native
-# runtime now (avr8js/arduino, see that repo), no C/C++ Arduino core
-# needed for any of them. ESP32 is the one board family that still
-# compiles for real.
-#
-# src/esp32_sketch_template is tiny (two CMakeLists.txt files) - always
-# copied, same "small enough to always ship" posture the vendored AVR
-# cores used to have. simulators/esp-idf itself is the opposite case (see
-# BUNDLE_ESP_IDF's own comment above) - only copied when explicitly
-# requested.
-add_custom_command(TARGET physicalsim POST_BUILD
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/src/esp32_sketch_template
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-sketch-template
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMENT "Copying ESP32 sketch template"
-)
-
-if(BUNDLE_ESP_IDF)
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/esp-idf
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp-idf
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Bundling vendored esp-idf (this can take a while - hundreds of MB)"
-    )
-endif()
-
-# The xtensa-esp-elf toolchain itself, only when BUNDLE_XTENSA_TOOLCHAIN
-# actually fetched one - off unless packaging a release. Lands at
-# esp32-toolchain/bin/xtensa-esp32-elf-gcc.exe next to the executable -
-# src/esp32_toolchain.cpp's find_toolchain() checks there first, before
-# falling back to this dev machine's fixed C:\esp-idf/.espressif paths.
-if(BUNDLE_XTENSA_TOOLCHAIN AND XTENSA_TOOLCHAIN_BIN_DIR)
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${XTENSA_TOOLCHAIN_BIN_DIR}
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/esp32-toolchain
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Bundling xtensa-esp-elf-gcc toolchain"
-    )
-
-    file(GLOB _xtensa_toolchain_license_files
-        "${XTENSA_TOOLCHAIN_BIN_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
-        "${XTENSA_TOOLCHAIN_BIN_DIR}/*COPYING*"
-    )
-    if(_xtensa_toolchain_license_files)
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_xtensa_toolchain_license_files}
-                $<TARGET_FILE_DIR:physicalsim>/esp32-toolchain/
-            COMMENT "Bundling xtensa-esp-elf-gcc toolchain license"
-        )
-    endif()
 endif()
 

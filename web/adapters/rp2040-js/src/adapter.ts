@@ -1,5 +1,6 @@
-import { compileSketch, createSketchGlobals, PicoRuntime, type CompiledSketch } from "rp2040js/pico";
-import type { SimState, SimulatorAdapter } from "@physicalsim/common";
+import { compileSketch, createSketchGlobals, PicoRuntime, i2c0, type CompiledSketch } from "rp2040js/pico";
+import { MPU6050Device, SSD1306Device, type SimState, type SimulatorAdapter } from "@physicalsim/common";
+import { I2CBus } from "./i2c-bus.js";
 
 // A JS/TS-native RP2040 adapter: instead of compiling a real pico-sdk C
 // sketch with arm-none-eabi-gcc and running the resulting ARM Cortex-M0+
@@ -27,6 +28,22 @@ export class Rp2040JsAdapter implements SimulatorAdapter {
 
   private listeners = new Set<(state: SimState) => void>();
   private pinListeners = new Map<string, Set<(value: number) => void>>();
+  private serialListeners = new Set<(byte: number) => void>();
+  private i2cFrameListeners = new Set<(device: string, data: Uint8Array) => void>();
+
+  // Two devices behind i2c0 (see wireRuntimeListeners() below) - the same
+  // adapter-agnostic I2CSubDevice classes web/adapters/avr8/src/adapter.ts
+  // already reuses. Built once, not per-reset/per-loadFirmware: neither
+  // device has any state that needs to survive a sketch reload any
+  // differently than the runtime pins themselves do, and re-wiring only
+  // the SSD1306Device's frame callback (see wireRuntimeListeners()) would
+  // otherwise leave stale closures accumulating.
+  private readonly i2cBus = new I2CBus([
+    new MPU6050Device(),
+    new SSD1306Device((data) => {
+      for (const cb of this.i2cFrameListeners) cb("ssd1306", data);
+    }),
+  ]);
 
   async init(_config: unknown): Promise<void> {
     this.wireRuntimeListeners();
@@ -107,13 +124,30 @@ export class Rp2040JsAdapter implements SimulatorAdapter {
     return () => listeners.delete(cb);
   }
 
-  // RP2040 has no dedicated ADC-only pins the way the Uno does (GP26-29
-  // are ADC-capable, the rest aren't) - same "reject a non-ADC pin,
-  // caught not thrown" posture SimulatorAdapter's own doc comment
-  // requires of every adapter, matching the real rp2040 adapter's own
-  // ADC-channel gating.
-  writeAnalogPin(_pin: string, _voltage: number): void {
-    throw new Error("rp2040-js: analog input is not modeled yet");
+  // GP26-29 are the RP2040's real ADC-capable pins (see PicoRuntime's own
+  // ADC_BASE_PIN doc comment) - every other pin rejects, same "reject a
+  // non-ADC pin, caught not thrown" posture SimulatorAdapter's own doc
+  // comment requires of every adapter, matching Avr8JsAdapter's identical
+  // digitalPinCount-based gate.
+  writeAnalogPin(pin: string, voltage: number): void {
+    const numericPin = parsePinName(pin);
+    if (numericPin < ADC_BASE_PIN || numericPin >= ADC_BASE_PIN + ADC_CHANNEL_COUNT) {
+      throw new Error(`Pin "${pin}" is not an ADC-capable pin`);
+    }
+    // 0-3.3V, matching the RP2040's real ADC reference range (its logic
+    // level, see energy.ts's "pi-pico"/"nano-rp2040-connect" supplyVoltage).
+    const clampedVoltage = Math.min(3.3, Math.max(0, voltage));
+    this.runtime.setAnalogInput(numericPin, Math.round((clampedVoltage / 3.3) * ADC_MAX));
+  }
+
+  onSerialData(cb: (byte: number) => void): () => void {
+    this.serialListeners.add(cb);
+    return () => this.serialListeners.delete(cb);
+  }
+
+  onI2CFrame(cb: (device: string, data: Uint8Array) => void): () => void {
+    this.i2cFrameListeners.add(cb);
+    return () => this.i2cFrameListeners.delete(cb);
   }
 
   // The sketch source's own JS/TS text, UTF-8 encoded - see
@@ -141,6 +175,15 @@ export class Rp2040JsAdapter implements SimulatorAdapter {
         for (const cb of this.pinListeners.get(name) ?? []) cb(value);
       });
     }
+    this.runtime.onSerialWrite((byte) => {
+      for (const cb of this.serialListeners) cb(byte);
+    });
+    // i2c0 only - GP4/GP5, real hardware's own default I2C pins and the
+    // pin pair every example sketch here actually uses; a sketch calling
+    // i2c_write_blocking(i2c1, ...) instead gets PicoRuntime's own
+    // "no controller installed" fallback (-1/empty), same as an
+    // unaddressed device would.
+    this.runtime.setI2CController(i2c0, this.i2cBus);
   }
 
   // Same "one loop() iteration per scheduled tick, re-check running
@@ -171,6 +214,13 @@ export class Rp2040JsAdapter implements SimulatorAdapter {
     for (const listener of this.listeners) listener(state);
   }
 }
+
+// GP26-29, the RP2040's real ADC-capable pins - mirrors PicoRuntime's own
+// (private) ADC_BASE_PIN/ADC_CHANNEL_COUNT/ADC_MAX, needed here too for
+// writeAnalogPin()'s own range check and voltage-to-code scaling.
+const ADC_BASE_PIN = 26;
+const ADC_CHANNEL_COUNT = 4;
+const ADC_MAX = 4095;
 
 // "GP<n>" -> n. Lives here, not in rp2040js, the same way avr8-js's own
 // parsePinName() lives in its adapter, not avr8js.

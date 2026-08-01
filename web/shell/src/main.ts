@@ -473,21 +473,9 @@ async function loadPsimFile(file: File): Promise<void> {
 // LED_BUILTIN is pin 13 on an Uno - the same pin the canvas LED below
 // gets wired to, so it blinks in lockstep with the board's own onboard
 // LED rather than needing a separate pin number kept in sync by hand.
-const LED_BLINK_SKETCH = `void setup() {
-  pinMode(LED_BUILTIN, OUTPUT);
-}
-
-void loop() {
-  digitalWrite(LED_BUILTIN, HIGH);
-  delay(1000);
-  digitalWrite(LED_BUILTIN, LOW);
-  delay(1000);
-}`;
-
-// Same shape as LED_BLINK_SKETCH above, written for the arduino-uno-js
-// board: JS/TS, interpreted directly by avr8js/arduino's ArduinoRuntime,
-// no compiler involved at all (see compileAndRun()'s jsModeBoard branch).
-const LED_BLINK_SKETCH_JS = `function setup() {
+// JS/TS, interpreted directly by avr8js/arduino's ArduinoRuntime - no
+// C/C++ compiler involved at all (see NO_COMPILER_ADAPTER_IDS below).
+const LED_BLINK_SKETCH = `function setup() {
   pinMode(LED_BUILTIN, OUTPUT);
 }
 
@@ -566,25 +554,6 @@ const EXAMPLES: Record<string, Example> = {
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
-  "led-blink-js": {
-    label: "Blink LED (JS, no compiler)",
-    description: "Same blink example as above, but the sketch is JS/TS - interpreted directly, no C/C++ toolchain.",
-    level: "beginner",
-    board: "Arduino Uno (JS, no compiler)",
-    glyph: "🟨",
-    sketch: LED_BLINK_SKETCH_JS,
-    build: async () => {
-      const board = await canvas.scene.showBoard("arduino-uno-js");
-      if (!board) return;
-      const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
-      if (!led) return;
-      canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
-      const resistor = await canvas.scene.addComponentAt("resistor", board.x + 620, board.y + 140);
-      if (!resistor) return;
-      canvas.scene.wiring.connect({ entityId: led.id, pin: "C" }, { entityId: resistor.id, pin: "1" });
-      canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
-    },
-  },
   "button-led": {
     label: "Button Control (Franzininho)",
     description: "Control an LED with a pushbutton - on the ATtiny85-based Franzininho.",
@@ -646,25 +615,25 @@ void loop() {
     // just mirroring whatever the button currently reads. A real,
     // distinct beginner example, not a second copy of Button Control.
     // Runs on an Arduino Mega rather than an Uno specifically so there's
-    // at least one example proving the board-aware compiler (see
-    // avr_toolchain.cpp's resolve_board_target()) end to end - pins "2"
-    // and "13" resolve through boards/arduino-mega.ts to E4/B7, the real
-    // ATmega2560 pinout, not the Uno's own D2/D13 (D4/B5).
-    sketch: `const int buttonPin = 2;
-const int ledPin = 13;
+    // at least one example proving the Mega-shaped avr8-js-mega adapter
+    // (54 digital + 16 analog pins, see web/adapters/avr8-js/src/
+    // worker-mega.ts) end to end - JS/TS, interpreted directly, no
+    // compiler involved.
+    sketch: `const buttonPin = 2;
+const ledPin = 13;
 
-int ledState = LOW;
-int lastButtonState = LOW;
+let ledState = LOW;
+let lastButtonState = LOW;
 
-void setup() {
+function setup() {
   pinMode(buttonPin, INPUT);
   pinMode(ledPin, OUTPUT);
 }
 
-void loop() {
-  int buttonState = digitalRead(buttonPin);
-  if (buttonState == HIGH && lastButtonState == LOW) {
-    ledState = !ledState;
+function loop() {
+  const buttonState = digitalRead(buttonPin);
+  if (buttonState === HIGH && lastButtonState === LOW) {
+    ledState = ledState ? LOW : HIGH;
     digitalWrite(ledPin, ledState);
     delay(50); // simple debounce
   }
@@ -703,19 +672,19 @@ void loop() {
     // Leonardo's Serial is native USB CDC, not modeled yet (see
     // chip.ts's ATMEGA32U4 comment) - this example only needs digital
     // output, which is fully, correctly modeled.
-    sketch: `const int relay1Pin = 2;
-const int led1Pin = 3;
-const int relay2Pin = 4;
-const int led2Pin = 5;
+    sketch: `const relay1Pin = 2;
+const led1Pin = 3;
+const relay2Pin = 4;
+const led2Pin = 5;
 
-void setup() {
+function setup() {
   pinMode(relay1Pin, OUTPUT);
   pinMode(led1Pin, OUTPUT);
   pinMode(relay2Pin, OUTPUT);
   pinMode(led2Pin, OUTPUT);
 }
 
-void loop() {
+function loop() {
   digitalWrite(relay1Pin, HIGH);
   digitalWrite(led1Pin, HIGH);
   digitalWrite(relay2Pin, LOW);
@@ -1038,38 +1007,35 @@ void app_main(void) {
   },
   "lcd-display": {
     label: "LCD Display",
-    description: "16x2 LCD driven by real LiquidCrystal firmware over its RS/E/D4-D7 bus.",
+    description: "16x2 LCD driven by a JS-interpreted LiquidCrystal sketch over its real RS/E/D4-D7 bus.",
     level: "beginner",
     board: "Arduino Uno",
     glyph: "🖥️",
-    // The exact wiring and sketch from the vendored library's own
-    // examples/HelloWorld/HelloWorld.ino (simulators/LiquidCrystal) -
-    // public domain per that file's own header - not a hand-rolled
-    // approximation. This now genuinely runs: the sketch's own
-    // digitalWrite() calls on pins 12/11/5/4/3/2 are decoded back into
-    // characters by protocol-chain.ts's Hd44780Decoder (web/common/src/
-    // circuit/protocols/hd44780-decoder.ts), not a static preset
-    // property - the first LCD example (removed) only had the latter.
-    sketch: `#include <LiquidCrystal.h>
+    // Same wiring and logic as the vendored library's own
+    // examples/HelloWorld/HelloWorld.ino, ported to JS/TS - avr8js/
+    // arduino's LiquidCrystal class (see that repo's own liquid-
+    // crystal.ts) bit-bangs RS/E/D4-D7 exactly like the real C++ class
+    // does, so this genuinely runs: the sketch's own digitalWrite()
+    // calls on pins 12/11/5/4/3/2 are decoded back into characters by
+    // protocol-chain.ts's Hd44780Decoder (web/common/src/circuit/
+    // protocols/hd44780-decoder.ts), completely unaware whether a real
+    // CPU or this JS class drove those pins.
+    sketch: `const rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+const lcd = new LiquidCrystal(rs, en, d4, d5, d6, d7);
 
-// initialize the library by associating any needed LCD interface pin
-// with the Arduino pin number it is connected to
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-
-void setup() {
+function setup() {
   // set up the LCD's number of columns and rows:
   lcd.begin(16, 2);
   // Print a message to the LCD.
   lcd.print("hello, world!");
 }
 
-void loop() {
+function loop() {
   // set the cursor to column 0, line 1
   // (note: line 1 is the second row, since counting begins with 0):
   lcd.setCursor(0, 1);
   // print the number of seconds since reset:
-  lcd.print(millis() / 1000);
+  lcd.print(Math.floor(millis() / 1000));
 }`,
     build: async () => {
       const board = await canvas.scene.showBoard("arduino-uno");
@@ -1104,23 +1070,23 @@ void loop() {
     // reached the board (confirmed separately, directly: relayState does
     // flip and the glow does render - this is about visibility, not a
     // bug in the underlying wiring).
-    sketch: `const int buttonPin = 2;
-const int relayPin = 13;
+    sketch: `const buttonPin = 2;
+const relayPin = 13;
 
-int relayState = LOW;
-int lastButtonState = LOW;
+let relayState = LOW;
+let lastButtonState = LOW;
 
-void setup() {
+function setup() {
   pinMode(buttonPin, INPUT);
   pinMode(relayPin, OUTPUT);
   Serial.begin(9600);
   Serial.println("Relay Control ready - press the button to toggle");
 }
 
-void loop() {
-  int buttonState = digitalRead(buttonPin);
-  if (buttonState == HIGH && lastButtonState == LOW) {
-    relayState = !relayState;
+function loop() {
+  const buttonState = digitalRead(buttonPin);
+  if (buttonState === HIGH && lastButtonState === LOW) {
+    relayState = relayState ? LOW : HIGH;
     digitalWrite(relayPin, relayState);
     Serial.println(relayState ? "Relay ON" : "Relay OFF");
     delay(50); // simple debounce
@@ -1140,7 +1106,7 @@ void loop() {
   },
   "lcd2004-dashboard": {
     label: "LCD2004 Dashboard",
-    description: "Real LiquidCrystal firmware filling all 4 rows of a 20x4 LCD, on an Arduino Nano.",
+    description: "A JS-interpreted LiquidCrystal sketch filling all 4 rows of a 20x4 LCD, on an Arduino Nano.",
     level: "intermediate",
     board: "Arduino Nano",
     glyph: "📟",
@@ -1149,15 +1115,13 @@ void loop() {
     // 84 here), not a straightforward continuation of rows 0/1 - see
     // ARCHITECTURE.md's "Generalizing to lcd2004" section. Also the
     // second placeable board type (Arduino Nano - see circuit.ts/boards/
-    // arduino-nano.ts): the exact same ATmega328p as the Uno, so nothing
-    // about the sketch/wiring below needed to change, just showBoard()'s
-    // type argument.
-    sketch: `#include <LiquidCrystal.h>
+    // arduino-nano.ts): the exact same ATmega328p as the Uno, and the
+    // same avr8-js adapter/pin scheme, so nothing about the sketch/wiring
+    // below needed to change, just showBoard()'s type argument.
+    sketch: `const rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
+const lcd = new LiquidCrystal(rs, en, d4, d5, d6, d7);
 
-const int rs = 12, en = 11, d4 = 5, d5 = 4, d6 = 3, d7 = 2;
-LiquidCrystal lcd(rs, en, d4, d5, d6, d7);
-
-void setup() {
+function setup() {
   lcd.begin(20, 4);
   lcd.print("physicalsim v0.1");
   lcd.setCursor(0, 1);
@@ -1166,9 +1130,9 @@ void setup() {
   lcd.print("Uptime:");
 }
 
-void loop() {
+function loop() {
   lcd.setCursor(8, 3);
-  lcd.print(millis() / 1000);
+  lcd.print(Math.floor(millis() / 1000));
   lcd.print("s   ");
 }`,
     build: async () => {

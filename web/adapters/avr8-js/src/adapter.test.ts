@@ -107,3 +107,22 @@ describe("Avr8JsAdapter", () => {
     expect(() => adapter.readPin("Z0")).toThrow();
   });
 });
+
+describe("Avr8JsAdapter (Mega pin shape)", () => {
+  it("supports D0-D53/A0-A15 when constructed with Mega's pin shape", async () => {
+    const megaAdapter = new Avr8JsAdapter({ digitalPinCount: 54, analogPinCount: 16 });
+    await megaAdapter.init(undefined);
+    const sketch = `
+      function setup() { pinMode(53, OUTPUT); pinMode(A15, OUTPUT); }
+      function loop() { digitalWrite(53, HIGH); digitalWrite(A15, HIGH); }
+    `;
+    megaAdapter.loadFirmware(new TextEncoder().encode(sketch));
+    megaAdapter.step(1);
+    expect(megaAdapter.readPin("D53")).toBe(1);
+    expect(megaAdapter.readPin("A15")).toBe(1);
+    // D53/A15 don't exist on the default (Uno) shape, confirming this is
+    // genuinely a different pin count, not just a lenient parser.
+    expect(() => megaAdapter.readPin("D54")).toThrow();
+    expect(() => megaAdapter.readPin("A16")).toThrow();
+  });
+});

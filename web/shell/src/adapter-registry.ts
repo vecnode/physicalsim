@@ -24,6 +24,11 @@ export type AdapterId =
   | "rp2040-js"
   | "avr8"
   | "avr8-js"
+  // Own adapter id, not "avr8-js" - Mega's 54 digital + 16 analog pins
+  // need a bigger ArduinoRuntime, and clients are cached one per id (see
+  // getAdapterClient() below), so sharing "avr8-js" would mean an Uno
+  // and a Mega fight over one runtime shaped for neither of them.
+  | "avr8-js-mega"
   | "avr8-mega"
   | "avr8-attiny85"
   | "avr8-leonardo"
@@ -67,6 +72,12 @@ function createWorker(id: AdapterId): Worker {
   if (id === "avr8-js") {
     return new Worker(
       new URL("../../adapters/avr8-js/src/worker.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-js-mega") {
+    return new Worker(
+      new URL("../../adapters/avr8-js/src/worker-mega.ts", import.meta.url),
       { type: "module" },
     );
   }

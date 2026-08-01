@@ -7,13 +7,6 @@
 [submodule "simulators/wokwi-elements"]
 	path = simulators/wokwi-elements
 	url = https://github.com/vecnode/wokwi-elements.git
-[submodule "simulators/ArduinoCore-avr"]
-	path = simulators/ArduinoCore-avr
-	url = https://github.com/vecnode/ArduinoCore-avr.git
-	branch = master
-[submodule "simulators/LiquidCrystal"]
-	path = simulators/LiquidCrystal
-	url = https://github.com/vecnode/LiquidCrystal.git
 [submodule "simulators/ATTinyCore"]
 	path = simulators/ATTinyCore
 	url = https://github.com/vecnode/ATTinyCore.git

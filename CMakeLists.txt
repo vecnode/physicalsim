@@ -219,10 +219,10 @@ cpp_embedlib_add(WebAssets
 add_executable(physicalsim src/main.cpp
     src/avr_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
 
-# Dev-build fallback so src/avr_toolchain.cpp can find simulators/ArduinoCore-avr
+# Dev-build fallback so src/avr_toolchain.cpp can find simulators/ATTinyCore
 # straight from the source tree before the POST_BUILD copy below has ever
 # run (e.g. the very first debug build). Packaged builds always have the
-# POST_BUILD-copied avr-core/ next to the executable and never need this.
+# POST_BUILD-copied attiny-core/ next to the executable and never need this.
 target_compile_definitions(physicalsim PRIVATE
     PHYSICALSIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
@@ -365,58 +365,15 @@ if(WIN32)
 endif()
 
 # ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
-# The vendored core (simulators/ArduinoCore-avr's trimmed cores/arduino +
-# variants/standard + variants/mega + variants/leonardo, LGPL 2.1) is
-# small enough to always copy next to the executable, dev or packaged
-# build alike - src/avr_toolchain.cpp looks for it there first, falling
-# back to the source tree (PHYSICALSIM_SOURCE_DIR above) only if this
-# hasn't run yet. Every variant is copied unconditionally (not just
-# "standard") because avr_toolchain.cpp's resolve_board_target() picks
-# between them per board at compile time, not at CMake configure time -
-# Arduino Mega needs variants/mega's own pins_arduino.h (different port/
-# pin mapping than the atmega328p boards' "standard" variant - see
-# arduino-mega.ts on the JS side for the same D0-D53/A0-A15 mapping this
-# variant's own tables encode), and Arduino Leonardo needs variants/
-# leonardo's own (a genuinely different chip, atmega32u4 - see
-# arduino-leonardo.ts).
-add_custom_command(TARGET physicalsim POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/cores
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/cores/arduino
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/cores/arduino
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:physicalsim>/avr-core/variants
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/standard
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/standard
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/mega
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/mega
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ArduinoCore-avr/variants/leonardo
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-core/variants/leonardo
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMENT "Copying vendored ArduinoCore-avr (cores/arduino + variants/standard + variants/mega + variants/leonardo)"
-)
-
-# ATtiny85 (Franzininho, boards/franzininho.ts) needs a genuinely
-# different core tree, not just a different variant of ArduinoCore-avr's
-# own cores/arduino - ATtiny85 has no USART/SPI/TWI hardware and a much
-# smaller register set, so its Arduino.h/wiring.c are written completely
-# differently (SpenceKonde/ATTinyCore, LGPL 2.1, forked to
-# vecnode/ATTinyCore). Bundled the same small-enough-to-always-ship way
-# as ArduinoCore-avr above, under its own attiny-core/ folder rather than
-# mixing into avr-core/ - avr_toolchain.cpp's resolve_board_target()
-# picks which core tree to use per board, same as it already picks
-# between variants/standard and variants/mega.
+# ArduinoCore-avr and the LiquidCrystal library are gone - Uno/Nano/Mega/
+# Leonardo (and their LCD examples) all run through the JS-native avr8-js
+# runtime now (avr8js/arduino, see that repo), no C/C++ Arduino core
+# needed for them at all. ATtiny85 (Franzininho) is the one board that
+# still needs a real vendored core tree - ATtiny85 has no USART/SPI/TWI
+# hardware and a much smaller register set, so its Arduino.h/wiring.c
+# are written completely differently from any ATmega core, real or JS
+# (SpenceKonde/ATTinyCore, LGPL 2.1, forked to vecnode/ATTinyCore) - a
+# JS-native ATtiny85 runtime is a planned follow-up, not done here.
 add_custom_command(TARGET physicalsim POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E make_directory
         $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores
@@ -434,26 +391,6 @@ add_custom_command(TARGET physicalsim POST_BUILD
         -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
     COMMENT "Copying vendored ATTinyCore (cores/tiny + variants/tinyx5)"
 )
-
-# Vendored Arduino libraries a sketch can #include - same "small enough to
-# always copy, dev or packaged build alike" posture as the core above, and
-# src/avr_toolchain.cpp falls back to the source tree the same way too.
-# Each entry is one git submodule under simulators/ (LiquidCrystal is
-# LGPL 2.1, same license as the core), following the modern Arduino 1.5+
-# library layout (a src/ subfolder holding the real headers/sources) -
-# adding a second library later is one more line here, not a new copying
-# mechanism.
-set(AVR_LIBRARIES LiquidCrystal)
-foreach(_avr_lib ${AVR_LIBRARIES})
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/${_avr_lib}/src
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-libraries/${_avr_lib}/src
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Copying vendored Arduino library: ${_avr_lib}"
-    )
-endforeach()
 
 # The toolchain itself, only when BUNDLE_AVR_TOOLCHAIN actually fetched one
 # (see the FetchContent block above) - large (~150MB), opt-in.

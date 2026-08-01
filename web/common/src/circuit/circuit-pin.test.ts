@@ -72,8 +72,8 @@ describe("CircuitPin", () => {
     const client = new FakePinClient();
     const pin = CircuitPin.forBoardPin(client, arduinoUno, "D13");
 
-    expect(pin.pin).toBe("B5");
+    expect(pin.pin).toBe("D13"); // avr8-js's identity mapping - see arduino-uno.ts
     await pin.write(1);
-    expect(client.values.get("B5")).toBe(1);
+    expect(client.values.get("D13")).toBe(1);
   });
 });

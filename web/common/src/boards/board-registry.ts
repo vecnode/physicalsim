@@ -1,5 +1,4 @@
 import { arduinoUno } from "./arduino-uno.js";
-import { arduinoUnoJs } from "./arduino-uno-js.js";
 import { arduinoNano } from "./arduino-nano.js";
 import { arduinoMega } from "./arduino-mega.js";
 import { arduinoLeonardo } from "./arduino-leonardo.js";
@@ -19,7 +18,6 @@ import type { BoardPinMap } from "./board.js";
 // this table needs to change.
 export const boardPinMaps: Record<string, BoardPinMap> = {
   "arduino-uno": arduinoUno,
-  "arduino-uno-js": arduinoUnoJs,
   "arduino-nano": arduinoNano,
   "arduino-mega": arduinoMega,
   "arduino-leonardo": arduinoLeonardo,
@@ -58,9 +56,6 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
 // exact same bare-digit convention, so it shares the identical resolver.
 export const boardPinNameFromMarker: Record<string, (marker: string) => string> = {
   "arduino-uno": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
-  // Same wokwi-arduino-uno element/markers as "arduino-uno" above - only
-  // the backing adapter differs (avr8-js instead of avr8), not the SVG.
-  "arduino-uno-js": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
   "arduino-nano": (marker) => (/^\d+$/.test(marker) ? `D${marker}` : marker),
   // arduino-mega-element.ts uses the identical bare-digit convention for
   // its digital pins (its A0-A15 markers already say "A0".."A15", same

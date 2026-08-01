@@ -70,19 +70,17 @@ if not defined FIXED_RUNTIME_DIR_FOR_CMAKE set "FIXED_RUNTIME_DIR_FOR_CMAKE=!FIX
 
 echo     Using fixed runtime from: !FIXED_RUNTIME_DIR!
 
-REM avr-gcc (the in-app sketch compiler's backend, src/avr_toolchain.cpp)
-REM is fetched by CMake itself (BUNDLE_AVR_TOOLCHAIN, see CMakeLists.txt) -
-REM unlike WebView2 above, there's nothing to locate on this machine
-REM first, just a flag to turn on. Still optional - the app runs fine
-REM without it, just without the sketch compiler.
-echo     Bundling avr-gcc toolchain (fetched by CMake)
+REM No AVR/RP2040 toolchain to bundle anymore - every AVR and RP2040
+REM board runs a JS-native sketch runtime (avr8js/arduino, rp2040js/pico),
+REM no C/C++ compiler involved. ESP32 still real-compiles via esp-idf
+REM (src/esp32_toolchain.cpp) - see BUNDLE_XTENSA_TOOLCHAIN/BUNDLE_ESP_IDF
+REM in CMakeLists.txt if a packaged ESP32 Compile & Run is needed too.
 
 "%CMAKE_EXE%" -B build ^
   -DINCLUDE_TERMINAL_ON_RELEASE=OFF ^
   -DSTATIC_MSVC_RUNTIME_RELEASE=ON ^
   -DBUNDLE_WEBVIEW2_FIXED_RUNTIME=ON ^
-  "-DWEBVIEW2_FIXED_RUNTIME_DIR=!FIXED_RUNTIME_DIR_FOR_CMAKE!" ^
-  -DBUNDLE_AVR_TOOLCHAIN=ON
+  "-DWEBVIEW2_FIXED_RUNTIME_DIR=!FIXED_RUNTIME_DIR_FOR_CMAKE!"
 if errorlevel 1 goto :error
 
 REM --- Build Release target ---------------------------------------------------

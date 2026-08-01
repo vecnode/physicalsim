@@ -1,0 +1,946 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="27.9mm" height="56.628mm" viewBox="0 0 27.9 56.628">
+        <g transform="scale(1)"><!--?lit$169001558$-->
+  <sodipodi:namedview id="namedview434" pagecolor="#ffffff" bordercolor="#666666" borderopacity="1.0" inkscape:showpageshadow="2" inkscape:pageopacity="0.0" inkscape:pagecheckerboard="0" inkscape:deskcolor="#d1d1d1" inkscape:zoom="9.3256176" inkscape:cx="34.20685" inkscape:cy="64.446134" inkscape:window-width="1920" inkscape:window-height="1045" inkscape:window-x="0" inkscape:window-y="25" inkscape:window-maximized="0" inkscape:current-layer="svg434"></sodipodi:namedview>
+  <defs id="defs1">
+    <path id="d" fill="#333" d="m170.3 2.5 3.2-12.1 5 12.4z"></path>
+    <path id="i" fill="#b3b3b3" d="M199.3 208.5h12v13.4h-12z"></path>
+    <path id="j" fill="#ececec" stroke="#fff" stroke-width="2" d="M203.4 210.7v9.4" filter="url(#a)"></path>
+    <path id="k" fill="#b3b3b3" d="M235 208.5h-12v13.4h12z"></path>
+    <path id="m" d="m228 210.5 1 1.6-1.5-.6zm-20 11.7-1-1.6 1.6.6z"></path>
+    <path id="n" fill="#b3b3b3" d="M209.4 211.5h1.9c1 3.4 1.2 7 0 11.4h-2c-.8 0-1.6-.7-1.6-1.6V213c0-.9.8-1.6 1.7-1.6zm18.6 0h-2c-1 3.4-1.2 7 .1 11.4h1.9c.9 0 1.6-.7 1.6-1.6V213c0-.9-.7-1.6-1.6-1.6z"></path>
+    <path id="o" fill="none" stroke="#fff" d="M209.7 213.3s1.3 2.3 1 4.1c-.2 1.8-.8 4-.8 4" filter="url(#b)" style="mix-blend-mode:normal"></path>
+    <path id="p" fill="none" stroke="#fff" d="M227 213.1s1.3 2.4 1 4.2c-.2 1.8-.8 3.9-.8 3.9" filter="url(#c)"></path>
+    <path id="aw" fill="#b3b3b3" d="M411.1 229.3H433v-22h-21.8z"></path>
+    <path id="ay" fill="#b3b3b3" d="M506 227.8h-21.8v-22H506z"></path>
+    <path id="aA" fill="#4d4d4d" stroke="#000" stroke-width=".3" d="M429.6 199v40.5h62.5v-40.8z"></path>
+    <path id="aB" d="m466.1 207.4-4.2.3 1.5 1zm4.7 22.9-4.2.4 1.5 1z"></path>
+    <path id="aC" fill="#666" d="M204.5 135.4h11.2v14.4h-11.2z"></path>
+  </defs>
+  <defs id="defs84">
+    <filter id="h" width="1.9365854" height="1.6193548" x="-0.46829269" y="-0.30967742" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.6" id="feGaussianBlur1"></feGaussianBlur>
+    </filter>
+    <filter id="g" width="1.9365854" height="1.6193548" x="-0.46829269" y="-0.30967742" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.6" id="feGaussianBlur2"></feGaussianBlur>
+    </filter>
+    <filter id="f" width="1.7609756" height="1.5032258" x="-0.38048779" y="-0.25161289" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.3" id="feGaussianBlur3"></feGaussianBlur>
+    </filter>
+    <filter id="e" width="1.9365854" height="1.6193548" x="-0.46829269" y="-0.30967742" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.6" id="feGaussianBlur4"></feGaussianBlur>
+    </filter>
+    <filter id="a" width="inf" height="30360.891" x="-inf" y="-15180.078" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur5"></feGaussianBlur>
+    </filter>
+    <filter id="l" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur6"></feGaussianBlur>
+    </filter>
+    <filter id="b" width="55666.733" height="7181.1764" x="-27831.202" y="-3590.2747" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur7"></feGaussianBlur>
+    </filter>
+    <filter id="c" width="64936.856" height="8379.8425" x="-32468.823" y="-4189.0399" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur8"></feGaussianBlur>
+    </filter>
+    <filter id="t" width="64888.174" height="8373.5577" x="-32444.482" y="-4185.8975" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur9"></feGaussianBlur>
+    </filter>
+    <filter id="s" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur10"></feGaussianBlur>
+    </filter>
+    <filter id="q" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur11"></feGaussianBlur>
+    </filter>
+    <filter id="r" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur12"></feGaussianBlur>
+    </filter>
+    <filter id="u" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur13"></feGaussianBlur>
+    </filter>
+    <filter id="v" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur14"></feGaussianBlur>
+    </filter>
+    <filter id="x" width="64887.715" height="8373.4984" x="-32444.252" y="-4185.8679" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".5" id="feGaussianBlur15"></feGaussianBlur>
+    </filter>
+    <filter id="w" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur16"></feGaussianBlur>
+    </filter>
+    <filter id="X" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur17"></feGaussianBlur>
+    </filter>
+    <filter id="af" width="inf" height="30335.268" x="-inf" y="-15167.263" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur18"></feGaussianBlur>
+    </filter>
+    <filter id="ab" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur19"></feGaussianBlur>
+    </filter>
+    <filter id="W" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur20"></feGaussianBlur>
+    </filter>
+    <filter id="ae" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur21"></feGaussianBlur>
+    </filter>
+    <filter id="aa" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur22"></feGaussianBlur>
+    </filter>
+    <filter id="Z" width="64889.093" height="8373.6762" x="-32444.941" y="-4185.9568" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur23"></feGaussianBlur>
+    </filter>
+    <filter id="ah" width="64889.552" height="8373.7355" x="-32445.171" y="-4185.9864" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur24"></feGaussianBlur>
+    </filter>
+    <filter id="ad" width="64888.633" height="8373.617" x="-32444.711" y="-4185.9271" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur25"></feGaussianBlur>
+    </filter>
+    <filter id="Y" width="55625.844" height="7175.9036" x="-27810.764" y="-3587.6383" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur26"></feGaussianBlur>
+    </filter>
+    <filter id="ag" width="55626.304" height="7175.9628" x="-27810.994" y="-3587.6679" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur27"></feGaussianBlur>
+    </filter>
+    <filter id="ac" width="55626.763" height="7176.0221" x="-27811.223" y="-3587.6976" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur28"></feGaussianBlur>
+    </filter>
+    <filter id="ai" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur29"></feGaussianBlur>
+    </filter>
+    <filter id="aj" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur30"></feGaussianBlur>
+    </filter>
+    <filter id="al" width="64888.633" height="8373.617" x="-32444.711" y="-4185.9271" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur31"></feGaussianBlur>
+    </filter>
+    <filter id="ak" width="55626.304" height="7175.9628" x="-27810.994" y="-3587.6679" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur32"></feGaussianBlur>
+    </filter>
+    <filter id="am" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur33"></feGaussianBlur>
+    </filter>
+    <filter id="an" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur34"></feGaussianBlur>
+    </filter>
+    <filter id="ap" width="64889.093" height="8373.6762" x="-32444.941" y="-4185.9568" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur35"></feGaussianBlur>
+    </filter>
+    <filter id="ao" width="55626.304" height="7175.9628" x="-27810.994" y="-3587.6679" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur36"></feGaussianBlur>
+    </filter>
+    <filter id="y" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur37"></feGaussianBlur>
+    </filter>
+    <filter id="C" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur38"></feGaussianBlur>
+    </filter>
+    <filter id="G" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur39"></feGaussianBlur>
+    </filter>
+    <filter id="K" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur40"></feGaussianBlur>
+    </filter>
+    <filter id="O" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur41"></feGaussianBlur>
+    </filter>
+    <filter id="S" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur42"></feGaussianBlur>
+    </filter>
+    <filter id="z" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur43"></feGaussianBlur>
+    </filter>
+    <filter id="D" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur44"></feGaussianBlur>
+    </filter>
+    <filter id="H" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur45"></feGaussianBlur>
+    </filter>
+    <filter id="L" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur46"></feGaussianBlur>
+    </filter>
+    <filter id="P" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur47"></feGaussianBlur>
+    </filter>
+    <filter id="T" width="inf" height="30335.268" x="-inf" y="-15167.263" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur48"></feGaussianBlur>
+    </filter>
+    <filter id="V" width="64888.174" height="8373.5577" x="-32444.482" y="-4185.8975" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur49"></feGaussianBlur>
+    </filter>
+    <filter id="U" width="55625.844" height="7175.9036" x="-27810.764" y="-3587.6383" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur50"></feGaussianBlur>
+    </filter>
+    <filter id="Q" width="55625.844" height="7175.9036" x="-27810.764" y="-3587.6383" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur51"></feGaussianBlur>
+    </filter>
+    <filter id="R" width="64888.174" height="8373.5577" x="-32444.482" y="-4185.8975" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur52"></feGaussianBlur>
+    </filter>
+    <filter id="N" width="64888.174" height="8373.5577" x="-32444.482" y="-4185.8975" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur53"></feGaussianBlur>
+    </filter>
+    <filter id="M" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur54"></feGaussianBlur>
+    </filter>
+    <filter id="I" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur55"></feGaussianBlur>
+    </filter>
+    <filter id="J" width="64887.715" height="8373.4984" x="-32444.252" y="-4185.8679" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".5" id="feGaussianBlur56"></feGaussianBlur>
+    </filter>
+    <filter id="F" width="64888.174" height="8373.5577" x="-32444.482" y="-4185.8975" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur57"></feGaussianBlur>
+    </filter>
+    <filter id="E" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur58"></feGaussianBlur>
+    </filter>
+    <filter id="A" width="55625.385" height="7175.8443" x="-27810.534" y="-3587.6087" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".6" id="feGaussianBlur59"></feGaussianBlur>
+    </filter>
+    <filter id="B" width="64888.633" height="8373.617" x="-32444.711" y="-4185.9271" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur60"></feGaussianBlur>
+    </filter>
+    <filter id="aq" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur61"></feGaussianBlur>
+    </filter>
+    <filter id="ar" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur62"></feGaussianBlur>
+    </filter>
+    <filter id="as" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur63"></feGaussianBlur>
+    </filter>
+    <filter id="at" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur64"></feGaussianBlur>
+    </filter>
+    <filter id="au" width="55625.844" height="7175.9036" x="-27810.764" y="-3587.6383" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur65"></feGaussianBlur>
+    </filter>
+    <filter id="av" width="64888.633" height="8373.617" x="-32444.711" y="-4185.9271" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur66"></feGaussianBlur>
+    </filter>
+    <filter id="aI" width="inf" height="30335.268" x="-inf" y="-15167.263" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".8" id="feGaussianBlur67"></feGaussianBlur>
+    </filter>
+    <filter id="aG" width="inf" height="30335.217" x="-inf" y="-15167.237" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".7" id="feGaussianBlur68"></feGaussianBlur>
+    </filter>
+    <filter id="aE" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur69"></feGaussianBlur>
+    </filter>
+    <filter id="aD" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur70"></feGaussianBlur>
+    </filter>
+    <filter id="aF" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur71"></feGaussianBlur>
+    </filter>
+    <filter id="aH" width="inf" height="30335.319" x="-inf" y="-15167.288" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation=".9" id="feGaussianBlur72"></feGaussianBlur>
+    </filter>
+    <filter id="aJ" width="inf" height="30335.574" x="-inf" y="-15167.416" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.4" id="feGaussianBlur73"></feGaussianBlur>
+    </filter>
+    <filter id="aK" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur74"></feGaussianBlur>
+    </filter>
+    <filter id="ax" width="inf" height="30335.421" x="-inf" y="-15167.339" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.1" id="feGaussianBlur75"></feGaussianBlur>
+    </filter>
+    <filter id="az" width="inf" height="30335.37" x="-inf" y="-15167.314" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1" id="feGaussianBlur76"></feGaussianBlur>
+    </filter>
+    <filter id="aN" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur77"></feGaussianBlur>
+    </filter>
+    <filter id="aL" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur78"></feGaussianBlur>
+    </filter>
+    <filter id="aM" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur79"></feGaussianBlur>
+    </filter>
+    <filter id="aO" width="inf" height="30335.472" x="-inf" y="-15167.365" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.2" id="feGaussianBlur80"></feGaussianBlur>
+    </filter>
+    <filter id="aR" width="inf" height="30335.523" x="-inf" y="-15167.391" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.3" id="feGaussianBlur81"></feGaussianBlur>
+    </filter>
+    <filter id="aP" width="inf" height="30335.523" x="-inf" y="-15167.391" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.3" id="feGaussianBlur82"></feGaussianBlur>
+    </filter>
+    <filter id="aQ" width="inf" height="30335.574" x="-inf" y="-15167.416" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.4" id="feGaussianBlur83"></feGaussianBlur>
+    </filter>
+    <filter id="aS" width="inf" height="30335.574" x="-inf" y="-15167.416" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="1.4" id="feGaussianBlur84"></feGaussianBlur>
+    </filter>
+  </defs>
+  <rect width="49" height="27.8" x="6.2" y="-27.9" fill="#1a1a1a" stroke="#000" stroke-width=".1" ry="1.2" transform="rotate(90)" id="rect84"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(9.7 26.8) scale(.05713)" id="rect85"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(8.4 26.8) scale(.05713)" id="rect86"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(7.2 26.8) scale(.05713)" id="rect87"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(6 26.8) scale(.05713)" id="rect88"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(4.7 26.8) scale(.05713)" id="rect89"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(3.4 26.8) scale(.05713)" id="rect90"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(2.1 26.8) scale(.05713)" id="rect91"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(.9 26.8) scale(.05713)" id="rect92"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(-.4 26.8) scale(.05713)" id="rect93"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="translate(-1.7 26.8) scale(.05713)" id="rect94"></rect>
+  <g transform="rotate(90 1.6 20) scale(.07197)" id="g114">
+    <g transform="translate(-303.4)" id="g95">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect95"></rect>
+      <use xlink:href="#d" id="use95"></use>
+    </g>
+    <g transform="translate(-285.5)" id="g96">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect96"></rect>
+      <use xlink:href="#d" id="use96"></use>
+    </g>
+    <g transform="translate(-267.7)" id="g97">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect97"></rect>
+      <use xlink:href="#d" id="use97"></use>
+    </g>
+    <g transform="translate(-249.8)" id="g98">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect98"></rect>
+      <use xlink:href="#d" id="use98"></use>
+    </g>
+    <g transform="translate(-232)" id="g99">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect99"></rect>
+      <use xlink:href="#d" id="use99"></use>
+    </g>
+    <g transform="translate(-214.1)" id="g100">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect100"></rect>
+      <use xlink:href="#d" id="use100"></use>
+    </g>
+    <g transform="translate(-196.3)" id="g101">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect101"></rect>
+      <use xlink:href="#d" id="use101"></use>
+    </g>
+    <g transform="translate(-178.4)" id="g102">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect102"></rect>
+      <use xlink:href="#d" id="use102"></use>
+    </g>
+    <g transform="translate(-160.6)" id="g103">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect103"></rect>
+      <use xlink:href="#d" id="use103"></use>
+    </g>
+    <g transform="translate(-142.8)" id="g104">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect104"></rect>
+      <use xlink:href="#d" id="use104"></use>
+    </g>
+    <g transform="translate(-125)" id="g105">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect105"></rect>
+      <use xlink:href="#d" id="use105"></use>
+    </g>
+    <g transform="translate(-107)" id="g106">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect106"></rect>
+      <use xlink:href="#d" id="use106"></use>
+    </g>
+    <g transform="translate(-89.2)" id="g107">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect107"></rect>
+      <use xlink:href="#d" id="use107"></use>
+    </g>
+    <g transform="translate(-71.4)" id="g108">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect108"></rect>
+      <use xlink:href="#d" id="use108"></use>
+    </g>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-53.5)" id="rect109"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-35.7)" id="rect110"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-17.8)" id="rect111"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect112"></rect>
+    <g transform="translate(-321.2)" id="g113">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect113"></rect>
+      <use xlink:href="#d" id="use113"></use>
+    </g>
+  </g>
+  <g transform="rotate(90 -6.8 11.6) scale(.07197)" id="g133">
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-53.5)" id="rect114"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-35.7)" id="rect115"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" transform="translate(-17.8)" id="rect116"></rect>
+    <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect117"></rect>
+    <g transform="translate(-125)" id="g118">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect118"></rect>
+      <use xlink:href="#d" filter="url(#e)" id="use118"></use>
+    </g>
+    <g transform="translate(-107.1)" id="g119">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect119"></rect>
+      <use xlink:href="#d" filter="url(#f)" id="use119"></use>
+    </g>
+    <g transform="translate(-89.3)" id="g120">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect120"></rect>
+      <use xlink:href="#d" filter="url(#g)" id="use120"></use>
+    </g>
+    <g transform="translate(-71.4)" id="g121">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect121"></rect>
+      <use xlink:href="#d" filter="url(#h)" id="use121"></use>
+    </g>
+    <g transform="translate(-196.4)" id="g122">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect122"></rect>
+      <use xlink:href="#d" filter="url(#e)" id="use122"></use>
+    </g>
+    <g transform="translate(-178.6)" id="g123">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect123"></rect>
+      <use xlink:href="#d" filter="url(#f)" id="use123"></use>
+    </g>
+    <g transform="translate(-160.7)" id="g124">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect124"></rect>
+      <use xlink:href="#d" filter="url(#g)" id="use124"></use>
+    </g>
+    <g transform="translate(-142.9)" id="g125">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect125"></rect>
+      <use xlink:href="#d" filter="url(#h)" id="use125"></use>
+    </g>
+    <g transform="translate(-267.9)" id="g126">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect126"></rect>
+      <use xlink:href="#d" filter="url(#e)" id="use126"></use>
+    </g>
+    <g transform="translate(-250)" id="g127">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect127"></rect>
+      <use xlink:href="#d" filter="url(#f)" id="use127"></use>
+    </g>
+    <g transform="translate(-232.2)" id="g128">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect128"></rect>
+      <use xlink:href="#d" filter="url(#g)" id="use128"></use>
+    </g>
+    <g transform="translate(-214.3)" id="g129">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect129"></rect>
+      <use xlink:href="#d" filter="url(#h)" id="use129"></use>
+    </g>
+    <g transform="translate(-321.8 .5)" id="g130">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect130"></rect>
+      <use xlink:href="#d" filter="url(#e)" id="use130"></use>
+    </g>
+    <g transform="translate(-304 .5)" id="g131">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect131"></rect>
+      <use xlink:href="#d" filter="url(#f)" id="use131"></use>
+    </g>
+    <g transform="translate(-286.1 .5)" id="g132">
+      <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" ry="2.9" id="rect132"></rect>
+      <use xlink:href="#d" filter="url(#g)" id="use132"></use>
+    </g>
+  </g>
+  <path fill="none" stroke="#6a7782" stroke-width=".1" d="M23.9 7v24.9H4V7z" id="path133"></path>
+  <path fill="#4d4d4d" stroke="#000" stroke-width=".1" d="M23 0v26H4.8V0z" id="path134"></path>
+  <rect width="18.5" height="16.4" x="6.6" y="-21.842" fill="#999" stroke="#000" stroke-width=".1" ry=".4" transform="rotate(90)" id="rect134"></rect>
+  <g fill="gray" stroke-width=".265" id="g137">
+    <path d="M12.489 22.43a.478.478 0 1 1-.478-.477.478.478 0 0 1 .478.478m4.171-.498a4.956 4.956 0 0 0-4.2-4.2 3.144 3.144 0 0 0-.695.5v.462a3.935 3.935 0 0 1 3.932 3.929h.462a3.312 3.312 0 0 0 .501-.692" class="cls-1" id="path135"></path>
+    <path d="M17.034 20.482a3.108 3.108 0 0 0-3.124-3.108c-.11 0-.217 0-.324.016l-.07.206a5.347 5.347 0 0 1 3.276 3.273l.206-.074c0-.103.02-.207.02-.323m-3.072 3.687a3.696 3.696 0 0 1-3.697-3.68 3.67 3.67 0 0 1 1.083-2.614l.21.197a3.412 3.412 0 0 0 0 4.846 3.412 3.412 0 0 0 4.846 0l.197.197a3.667 3.667 0 0 1-2.64 1.054" class="cls-1" id="path136"></path>
+    <path d="M13.904 22.837a2.149 2.149 0 0 0-.843-1.91 2.103 2.103 0 0 0-1.083-.439.197.197 0 0 1-.17-.206.19.19 0 0 1 .21-.175 2.536 2.536 0 0 1 2.26 2.772 2.213 2.213 0 0 1-.083.437l.562.158a3.121 3.121 0 0 0 .485-.184 3.438 3.438 0 0 0 .061-.663 3.554 3.554 0 0 0-3.014-3.509 1.564 1.564 0 0 0-.566 0 1.231 1.231 0 0 0-.61.378 1.208 1.208 0 0 0 .54 1.94 2.798 2.798 0 0 0 .303.054 1.134 1.134 0 0 1 .943 1.118 1.121 1.121 0 0 1-.18.61l.387.25a2.879 2.879 0 0 0 .582.096 2.126 2.126 0 0 0 .213-.743" class="cls-1" id="path137"></path>
+  </g>
+  <g transform="rotate(90 1.6 20) scale(.07197)" id="g144">
+    <use xlink:href="#i" id="use137"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#a)" id="use138"></use>
+    <use xlink:href="#k" id="use139"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#l)" transform="matrix(-1 0 0 1 434.3 0)" id="use140"></use>
+    <g fill="#4d4d4d" id="g141">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect140"></rect>
+      <use xlink:href="#m" id="use141"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect141"></rect>
+    <use xlink:href="#n" id="use142"></use>
+    <use xlink:href="#o" filter="url(#b)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use143"></use>
+    <use xlink:href="#p" filter="url(#c)" id="use144"></use>
+  </g>
+  <g transform="rotate(90 2.7 21.1) scale(.07197)" id="g152">
+    <use xlink:href="#i" id="use145"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#q)" id="use146"></use>
+    <use xlink:href="#k" id="use147"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#r)" transform="matrix(-1 0 0 1 434.3 0)" id="use148"></use>
+    <g fill="#4d4d4d" id="g149">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect148"></rect>
+      <use xlink:href="#m" id="use149"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect149"></rect>
+    <use xlink:href="#n" id="use150"></use>
+    <use xlink:href="#o" filter="url(#s)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use151"></use>
+    <use xlink:href="#p" filter="url(#t)" id="use152"></use>
+  </g>
+  <g transform="rotate(90 1 23) scale(.07197)" id="g160">
+    <use xlink:href="#i" id="use153"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#u)" id="use154"></use>
+    <use xlink:href="#k" id="use155"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#v)" transform="matrix(-1 0 0 1 434.3 0)" id="use156"></use>
+    <g fill="#4d4d4d" id="g157">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect156"></rect>
+      <use xlink:href="#m" id="use157"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect157"></rect>
+    <use xlink:href="#n" id="use158"></use>
+    <use xlink:href="#o" filter="url(#w)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use159"></use>
+    <use xlink:href="#p" filter="url(#x)" id="use160"></use>
+  </g>
+  <g transform="translate(-1.3 30) scale(.04788)" id="g168">
+    <use xlink:href="#i" id="use161"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#y)" id="use162"></use>
+    <use xlink:href="#k" id="use163"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#z)" transform="matrix(-1 0 0 1 434.3 0)" id="use164"></use>
+    <g fill="#4d4d4d" id="g165">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect164"></rect>
+      <use xlink:href="#m" id="use165"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect165"></rect>
+    <use xlink:href="#n" id="use166"></use>
+    <use xlink:href="#o" filter="url(#A)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use167"></use>
+    <use xlink:href="#p" filter="url(#B)" id="use168"></use>
+  </g>
+  <g transform="translate(-1.3 31) scale(.04788)" id="g176">
+    <use xlink:href="#i" id="use169"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#C)" id="use170"></use>
+    <use xlink:href="#k" id="use171"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#D)" transform="matrix(-1 0 0 1 434.3 0)" id="use172"></use>
+    <g fill="#4d4d4d" id="g173">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect172"></rect>
+      <use xlink:href="#m" id="use173"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect173"></rect>
+    <use xlink:href="#n" id="use174"></use>
+    <use xlink:href="#o" filter="url(#E)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use175"></use>
+    <use xlink:href="#p" filter="url(#F)" id="use176"></use>
+  </g>
+  <g transform="translate(-1.3 31.9) scale(.04788)" id="g184">
+    <use xlink:href="#i" id="use177"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#G)" id="use178"></use>
+    <use xlink:href="#k" id="use179"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#H)" transform="matrix(-1 0 0 1 434.3 0)" id="use180"></use>
+    <g fill="#4d4d4d" id="g181">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect180"></rect>
+      <use xlink:href="#m" id="use181"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect181"></rect>
+    <use xlink:href="#n" id="use182"></use>
+    <use xlink:href="#o" filter="url(#I)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use183"></use>
+    <use xlink:href="#p" filter="url(#J)" id="use184"></use>
+  </g>
+  <g transform="translate(-1.3 33) scale(.04788)" id="g192">
+    <use xlink:href="#i" id="use185"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#K)" id="use186"></use>
+    <use xlink:href="#k" id="use187"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#L)" transform="matrix(-1 0 0 1 434.3 0)" id="use188"></use>
+    <g fill="#4d4d4d" id="g189">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect188"></rect>
+      <use xlink:href="#m" id="use189"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect189"></rect>
+    <use xlink:href="#n" id="use190"></use>
+    <use xlink:href="#o" filter="url(#M)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use191"></use>
+    <use xlink:href="#p" filter="url(#N)" id="use192"></use>
+  </g>
+  <g transform="translate(-1.3 34) scale(.04788)" id="g200">
+    <use xlink:href="#i" id="use193"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#O)" id="use194"></use>
+    <use xlink:href="#k" id="use195"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#P)" transform="matrix(-1 0 0 1 434.3 0)" id="use196"></use>
+    <g fill="#4d4d4d" id="g197">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect196"></rect>
+      <use xlink:href="#m" id="use197"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect197"></rect>
+    <use xlink:href="#n" id="use198"></use>
+    <use xlink:href="#o" filter="url(#Q)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use199"></use>
+    <use xlink:href="#p" filter="url(#R)" id="use200"></use>
+  </g>
+  <g transform="translate(-1.3 35) scale(.04788)" id="g208">
+    <use xlink:href="#i" id="use201"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#S)" id="use202"></use>
+    <use xlink:href="#k" id="use203"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#T)" transform="matrix(-1 0 0 1 434.3 0)" id="use204"></use>
+    <g fill="#4d4d4d" id="g205">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect204"></rect>
+      <use xlink:href="#m" id="use205"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect205"></rect>
+    <use xlink:href="#n" id="use206"></use>
+    <use xlink:href="#o" filter="url(#U)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use207"></use>
+    <use xlink:href="#p" filter="url(#V)" id="use208"></use>
+  </g>
+  <g transform="translate(-2.7 27.5) scale(.04177)" id="g216">
+    <use xlink:href="#i" id="use209"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#W)" id="use210"></use>
+    <use xlink:href="#k" id="use211"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#X)" transform="matrix(-1 0 0 1 434.3 0)" id="use212"></use>
+    <g fill="#4d4d4d" id="g213">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect212"></rect>
+      <use xlink:href="#m" id="use213"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect213"></rect>
+    <use xlink:href="#n" id="use214"></use>
+    <use xlink:href="#o" filter="url(#Y)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use215"></use>
+    <use xlink:href="#p" filter="url(#Z)" id="use216"></use>
+  </g>
+  <g transform="translate(-2.7 29.6) scale(.04177)" id="g224">
+    <use xlink:href="#i" id="use217"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#aa)" id="use218"></use>
+    <use xlink:href="#k" id="use219"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#ab)" transform="matrix(-1 0 0 1 434.3 0)" id="use220"></use>
+    <g fill="#4d4d4d" id="g221">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect220"></rect>
+      <use xlink:href="#m" id="use221"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect221"></rect>
+    <use xlink:href="#n" id="use222"></use>
+    <use xlink:href="#o" filter="url(#ac)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use223"></use>
+    <use xlink:href="#p" filter="url(#ad)" id="use224"></use>
+  </g>
+  <g transform="translate(-2.8 28.4) scale(.0422)" id="g232">
+    <use xlink:href="#i" id="use225"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#ae)" id="use226"></use>
+    <use xlink:href="#k" id="use227"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#af)" transform="matrix(-1 0 0 1 434.3 0)" id="use228"></use>
+    <g fill="#4d4d4d" id="g229">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect228"></rect>
+      <use xlink:href="#m" id="use229"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect229"></rect>
+    <use xlink:href="#n" id="use230"></use>
+    <use xlink:href="#o" filter="url(#ag)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use231"></use>
+    <use xlink:href="#p" filter="url(#ah)" id="use232"></use>
+  </g>
+  <g transform="rotate(90 -3.5 24) scale(.06638)" id="g240">
+    <use xlink:href="#i" id="use233"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#ai)" id="use234"></use>
+    <use xlink:href="#k" id="use235"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#aj)" transform="matrix(-1 0 0 1 434.3 0)" id="use236"></use>
+    <g fill="#4d4d4d" id="g237">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect236"></rect>
+      <use xlink:href="#m" id="use237"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect237"></rect>
+    <use xlink:href="#n" id="use238"></use>
+    <use xlink:href="#o" filter="url(#ak)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use239"></use>
+    <use xlink:href="#p" filter="url(#al)" id="use240"></use>
+  </g>
+  <g transform="rotate(90 -10.1 25.5) scale(.0423)" id="g248">
+    <use xlink:href="#i" id="use241"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#am)" id="use242"></use>
+    <use xlink:href="#k" id="use243"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#an)" transform="matrix(-1 0 0 1 434.3 0)" id="use244"></use>
+    <g fill="#4d4d4d" id="g245">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect244"></rect>
+      <use xlink:href="#m" id="use245"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect245"></rect>
+    <use xlink:href="#n" id="use246"></use>
+    <use xlink:href="#o" filter="url(#ao)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use247"></use>
+    <use xlink:href="#p" filter="url(#ap)" id="use248"></use>
+  </g>
+  <g transform="translate(-8 29.9) scale(.07933)" id="g252">
+    <path fill="#b3b3b3" d="M201 209.5h8.6v9.6H201z" id="path248"></path>
+    <use xlink:href="#j" stroke-width="2" filter="url(#aq)" transform="translate(57.8 59.7) scale(.71835)" id="use249"></use>
+    <path fill="#b3b3b3" d="M234.4 209.5h-8.3v9.3h8.3z" id="path249"></path>
+    <use xlink:href="#j" stroke-width="2" filter="url(#ar)" transform="matrix(-.69582 0 0 .69582 373 64.4)" id="use250"></use>
+    <g fill="#4d4d4d" id="g251">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect250"></rect>
+      <use xlink:href="#m" id="use251"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect251"></rect>
+  </g>
+  <g transform="rotate(90 -11.6 28.7) scale(.03923)" id="g259">
+    <use xlink:href="#i" id="use252"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#as)" id="use253"></use>
+    <use xlink:href="#k" id="use254"></use>
+    <use xlink:href="#j" stroke-width="2" filter="url(#at)" transform="matrix(-1 0 0 1 434.3 0)" id="use255"></use>
+    <g fill="#4d4d4d" id="g256">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect255"></rect>
+      <use xlink:href="#m" id="use256"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect256"></rect>
+    <use xlink:href="#n" id="use257"></use>
+    <use xlink:href="#o" filter="url(#au)" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use258"></use>
+    <use xlink:href="#p" filter="url(#av)" id="use259"></use>
+  </g>
+  <g transform="rotate(90 1.6 20) scale(.07197)" id="g266">
+    <g opacity=".9" id="g261">
+      <use xlink:href="#aw" id="use260"></use>
+      <use xlink:href="#j" stroke-width="2" filter="url(#ax)" transform="matrix(1.8142 0 0 -1.645 49.6 572.3)" id="use261"></use>
+    </g>
+    <g opacity=".9" id="g263">
+      <use xlink:href="#ay" id="use262"></use>
+      <use xlink:href="#j" stroke-width="2" filter="url(#az)" transform="matrix(-1.8142 0 0 -1.645 867.6 570.7)" id="use263"></use>
+    </g>
+    <use xlink:href="#aA" stroke-width=".3" id="use264"></use>
+    <g fill="#1a1a1a" id="g265">
+      <ellipse cx="462.6" cy="220.4" rx="12" ry="12.7" id="ellipse264"></ellipse>
+      <use xlink:href="#aB" id="use265"></use>
+    </g>
+    <ellipse cx="466.3" cy="219.4" fill="#333" rx="11.2" ry="11.9" id="ellipse265"></ellipse>
+  </g>
+  <g transform="rotate(90 1.6 20) scale(.07197)" id="g272">
+    <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect266"></rect>
+    <use xlink:href="#aC" id="use266"></use>
+    <g transform="translate(32 -.1)" id="g267">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect267"></rect>
+      <use xlink:href="#aC" id="use267"></use>
+    </g>
+    <g transform="translate(64 .4)" id="g268">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect268"></rect>
+      <use xlink:href="#aC" id="use268"></use>
+    </g>
+    <rect width="52.2" height="28.9" x="215.7" y="49" fill="#b3b3b3" ry="0" id="rect269"></rect>
+    <rect width="43.2" height="28.2" x="220.5" y="59" fill="#999" ry="0" id="rect270"></rect>
+    <rect width="87" height="51.1" x="200.5" y="84.4" fill="#1a1a1a" stroke="#666" stroke-width=".6" ry="1.7" id="rect271"></rect>
+    <rect width="82" height="44.3" x="203" y="89.7" fill="#333" stroke="#666" stroke-width=".5" ry="1.5" id="rect272"></rect>
+  </g>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 16.554 45.6)" id="rect273"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 17.054 45.6)" id="rect274"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 17.554 45.6)" id="rect275"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 18.054 45.6)" id="rect276"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 18.554 45.6)" id="rect277"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 19.054 45.6)" id="rect278"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 19.554 45.6)" id="rect279"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 40.346)" id="rect280"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 39.846)" id="rect281"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 39.346)" id="rect282"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 38.846)" id="rect283"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 38.346)" id="rect284"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 37.846)" id="rect285"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 16.488 37.346)" id="rect286"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 16.554 40.757)" id="rect287"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 17.054 40.757)" id="rect288"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 17.554 40.757)" id="rect289"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 18.054 40.757)" id="rect290"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 18.554 40.757)" id="rect291"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 19.054 40.757)" id="rect292"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(-.02356 0 0 .02356 19.554 40.757)" id="rect293"></rect>
+  <path d="M16.4 40.4v5.1h-4.9v-5.1z" id="path293"></path>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 40.346)" id="rect294"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 39.846)" id="rect295"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 39.346)" id="rect296"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 38.846)" id="rect297"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 38.346)" id="rect298"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 37.846)" id="rect299"></rect>
+  <rect width="13.2" height="28" x="167.6" y="-23.9" fill="#4d4d4d" opacity=".9" ry="2.9" transform="matrix(0 .02356 .02356 0 11.858 37.346)" id="rect300"></rect>
+  <path fill="#333" d="M16.4 40.4v5.1h-4.9v-5.1z" id="path300"></path>
+  <path fill="#b3b3b3" d="M15.6 46.4v.5H15v-.5z" id="path301"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aD)" transform="rotate(90 -7.2 31.2) scale(.04026)" id="use301"></use>
+  <path fill="#b3b3b3" d="M15.6 48.3v-.5H15v.5z" id="path302"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aE)" transform="matrix(0 -.039 -.039 0 23.7 56)" id="use302"></use>
+  <g transform="rotate(90 -3.9 31.3) scale(.05605)" id="g304">
+    <g fill="#4d4d4d" id="g303">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect302"></rect>
+      <use xlink:href="#m" id="use303"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect303"></rect>
+  </g>
+  <path fill="#b3b3b3" d="M14.2 46.4v.5h-.6v-.5z" id="path304"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aF)" transform="rotate(90 -7.9 30.5) scale(.04026)" id="use304"></use>
+  <path fill="#b3b3b3" d="M14.2 48.3v-.5h-.6v.5z" id="path305"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aG)" transform="matrix(0 -.039 -.039 0 22.3 56)" id="use305"></use>
+  <g transform="rotate(90 -4.6 30.6) scale(.05605)" id="g307">
+    <g fill="#4d4d4d" id="g306">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect305"></rect>
+      <use xlink:href="#m" id="use306"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect306"></rect>
+  </g>
+  <path fill="#b3b3b3" d="M12.7 46.4v.5h-.5v-.5z" id="path307"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aH)" transform="rotate(90 -8.6 29.8) scale(.04026)" id="use307"></use>
+  <path fill="#b3b3b3" d="M12.7 48.3v-.5h-.5v.5z" id="path308"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aI)" transform="matrix(0 -.039 -.039 0 20.9 56)" id="use308"></use>
+  <g transform="rotate(90 -5.3 29.8) scale(.05605)" id="g310">
+    <g fill="#4d4d4d" id="g309">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect308"></rect>
+      <use xlink:href="#m" id="use309"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect309"></rect>
+  </g>
+  <g transform="rotate(90 9.8 28.2) scale(.07197)" id="g316">
+    <g opacity=".9" id="g311">
+      <use xlink:href="#aw" id="use310"></use>
+      <use xlink:href="#j" stroke-width="2" filter="url(#aJ)" transform="matrix(1.8142 0 0 -1.645 49.6 572.3)" id="use311"></use>
+    </g>
+    <g opacity=".9" id="g313">
+      <use xlink:href="#ay" id="use312"></use>
+      <use xlink:href="#j" stroke-width="2" filter="url(#aK)" transform="matrix(-1.8142 0 0 -1.645 867.6 570.7)" id="use313"></use>
+    </g>
+    <use xlink:href="#aA" stroke-width=".3" id="use314"></use>
+    <g fill="#1a1a1a" id="g315">
+      <ellipse cx="462.6" cy="220.4" rx="12" ry="12.7" id="ellipse314"></ellipse>
+      <use xlink:href="#aB" id="use315"></use>
+    </g>
+    <ellipse cx="466.3" cy="219.4" fill="#333" rx="11.2" ry="11.9" id="ellipse315"></ellipse>
+  </g>
+  <g transform="rotate(90 1.6 20) scale(.07197)" id="g322">
+    <ellipse cx="432.5" cy="60.5" fill="#ccc" fill-opacity=".9" rx="12" ry="11.2" id="ellipse316"></ellipse>
+    <ellipse cx="432.5" cy="156" fill="#ccc" fill-opacity=".9" rx="12" ry="11.2" id="ellipse317"></ellipse>
+    <path d="m530.4 55-89.7 1.1s0 13.2 2.5 15.7 5.7 1.5 5.7 1.5l18 .3-.3 9.8-8.1.5.2 48.8 8 .8-.2 8.5s-20.5.6-22.6 2.7c-2.2 2.2-2.5 3.6-2.5 3.6l.7 12.9 88.5-1.5zm-34.2 13.4h8.1l.1 10.5h-9.6s-1.6-.1-1.6-1.7V70c0-1 .9-1.6 3-1.6zm0 68.2h8.1l.1 10.6h-9.6s-1.6-.1-1.6-1.7v-7.2c0-1.1.9-1.6 3-1.7z" id="path317"></path>
+    <g fill="#ccc" fill-opacity=".9" id="g321">
+      <rect width="28.4" height="3" x="426.3" y="88.6" ry="0" id="rect317"></rect>
+      <rect width="28.4" height="3" x="426.2" y="97.2" ry="0" id="rect318"></rect>
+      <rect width="28.4" height="3" x="426.2" y="106.7" ry="0" id="rect319"></rect>
+      <rect width="28.4" height="3" x="425.7" y="115.2" ry="0" id="rect320"></rect>
+      <rect width="28.4" height="3" x="425.8" y="124.5" ry="0" id="rect321"></rect>
+    </g>
+    <path fill="#333" d="m444.8 73.4 22 .2-.2 9.8-8.1.5.2 48.8 8 .8-.2 8.5-20.2.4-.2-9.7 6.9.2-.2-49-7.4-.2z" id="path321"></path>
+    <path fill="#ccc" d="m530.4 55-89.7 1.1s0 13.2 2.5 15.7 5.7 1.5 5.7 1.5l18 .3-.3 9.8-8.1.5.2 48.8 8 .8-.2 8.5s-20.5.6-22.6 2.7c-2.2 2.2-2.5 3.6-2.5 3.6l.7 12.9 88.5-1.5zm-34.2 13.4h8.1l.1 10.5h-9.6s-1.6-.1-1.6-1.7V70c0-1 .9-1.6 3-1.6zm0 68.2h8.1l.1 10.6h-9.6s-1.6-.1-1.6-1.7v-7.2c0-1.1.9-1.6 3-1.7z" id="path322"></path>
+  </g>
+  <path fill="#b3b3b3" d="M19.1 44.4v.4h-.4v-.4z" id="path323"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aL)" transform="rotate(90 -6 32) scale(.03246)" id="use323"></use>
+  <path fill="#b3b3b3" d="M19.1 46v-.5h-.4v.4z" id="path324"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aM)" transform="matrix(0 -.03144 -.03144 0 25.7 52.2)" id="use324"></use>
+  <g transform="rotate(90 -3.3 32) scale(.04518)" id="g326">
+    <g fill="#4d4d4d" id="g325">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect324"></rect>
+      <use xlink:href="#m" id="use325"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect325"></rect>
+  </g>
+  <path fill="#b3b3b3" d="M18.3 44.4v.4H18v-.4z" id="path326"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aN)" transform="matrix(0 .03246 -.03246 0 25 38)" id="use326"></use>
+  <path fill="#b3b3b3" d="M18.3 46v-.4H18v.3z" id="path327"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aO)" transform="matrix(0 -.03144 -.03144 0 24.9 52.2)" id="use327"></use>
+  <g transform="rotate(90 -3.7 31.6) scale(.04518)" id="g329">
+    <g fill="#4d4d4d" id="g328">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect327"></rect>
+      <use xlink:href="#m" id="use328"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect328"></rect>
+  </g>
+  <g transform="translate(14.2 32.3) scale(.03024)" id="g335">
+    <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect329"></rect>
+    <use xlink:href="#aC" id="use329"></use>
+    <g transform="translate(32 -.1)" id="g330">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect330"></rect>
+      <use xlink:href="#aC" id="use330"></use>
+    </g>
+    <g transform="translate(64 .4)" id="g331">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect331"></rect>
+      <use xlink:href="#aC" id="use331"></use>
+    </g>
+    <rect width="52.2" height="28.9" x="215.7" y="49" fill="#b3b3b3" ry="0" id="rect332"></rect>
+    <rect width="43.2" height="28.2" x="220.5" y="59" fill="#999" ry="0" id="rect333"></rect>
+    <rect width="87" height="51.1" x="200.5" y="84.4" fill="#1a1a1a" stroke="#666" stroke-width=".6" ry="1.7" id="rect334"></rect>
+    <rect width="82" height="44.3" x="203" y="89.7" fill="#333" stroke="#666" stroke-width=".5" ry="1.5" id="rect335"></rect>
+  </g>
+  <g transform="matrix(.03024 0 0 -.03024 14.2 46.9)" id="g342">
+    <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect336"></rect>
+    <use xlink:href="#aC" id="use336"></use>
+    <g transform="translate(32 -.1)" id="g337">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect337"></rect>
+      <use xlink:href="#aC" id="use337"></use>
+    </g>
+    <g transform="translate(64 .4)" id="g338">
+      <rect width="21.4" height="28.1" x="198.7" y="135.7" fill="#999" ry="0" id="rect338"></rect>
+      <use xlink:href="#aC" id="use338"></use>
+    </g>
+    <rect width="52.2" height="28.9" x="215.7" y="49" fill="#b3b3b3" ry="0" id="rect339"></rect>
+    <rect width="43.2" height="28.2" x="220.5" y="59" fill="#999" ry="0" id="rect340"></rect>
+    <rect width="87" height="51.1" x="200.5" y="84.4" fill="#1a1a1a" stroke="#666" stroke-width=".6" ry="1.7" id="rect341"></rect>
+    <rect width="82" height="44.3" x="203" y="89.7" fill="#333" stroke="#666" stroke-width=".5" ry="1.5" id="rect342"></rect>
+  </g>
+  <path fill="#b3b3b3" d="M19.1 39.9v.4h-.4v-.4z" id="path342"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aP)" transform="rotate(90 -3.8 29.7) scale(.03246)" id="use342"></use>
+  <path fill="#b3b3b3" d="M19.1 41.4V41h-.4v.4z" id="path343"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aQ)" transform="matrix(0 -.03144 -.03144 0 25.7 47.7)" id="use343"></use>
+  <g transform="rotate(90 -1 29.8) scale(.04518)" id="g345">
+    <g fill="#4d4d4d" id="g344">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect343"></rect>
+      <use xlink:href="#m" id="use344"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect344"></rect>
+  </g>
+  <path fill="#b3b3b3" d="M18.3 40v.3H18V40z" id="path345"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aR)" transform="rotate(90 -4.2 29.3) scale(.03246)" id="use345"></use>
+  <path fill="#b3b3b3" d="M18.3 41.4v-.3H18v.3z" id="path346"></path>
+  <use xlink:href="#j" stroke-width="2" filter="url(#aS)" transform="matrix(0 -.03144 -.03144 0 24.9 47.7)" id="use346"></use>
+  <g transform="rotate(90 -1.5 29.4) scale(.04518)" id="g348">
+    <g fill="#4d4d4d" id="g347">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect346"></rect>
+      <use xlink:href="#m" id="use347"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#333" ry="1.6" id="rect347"></rect>
+  </g>
+  <g transform="rotate(90 -6.2 34) scale(.03923)" id="g354">
+    <use xlink:href="#i" id="use348"></use>
+    <use xlink:href="#j" stroke-width="2" id="use349"></use>
+    <use xlink:href="#k" id="use350"></use>
+    <path fill="#ececec" stroke="#fff" stroke-width="2" d="M230.9 210.7v9.4" id="path350"></path>
+    <g fill="#4d4d4d" id="g351">
+      <rect width="21.7" height="11.4" x="206.7" y="209.9" ry="1.6" id="rect350"></rect>
+      <use xlink:href="#m" id="use351"></use>
+    </g>
+    <rect width="21.7" height="11.4" x="207.7" y="211.5" fill="#d4aa00" ry="1.6" id="rect351"></rect>
+    <use xlink:href="#n" id="use352"></use>
+    <use xlink:href="#o" style="mix-blend-mode:normal" transform="matrix(-1 0 0 1 420 0)" id="use353"></use>
+    <use xlink:href="#p" id="use354"></use>
+  </g>
+  <path fill="none" stroke="#6a7782" stroke-width=".1" d="M23.4 33.5v4.1h-3.7v-4.1zm-3.9 6.1v2.3h-2.1v-2.3zm3.9 1.9v4.1h-3.6v-4.1zm-3.9 2.6v2.2h-2.1v-2.2zm.4 3.6V50h-1.3v-2.3zm-10.6 0v2.2H8.1v-2.2zm-2.4-4V46H5.6v-2.3zm.1-3.4v3.3H5.4v-3.3zm3.2-.6V46H8v-6.3zm-2.8-3.9v3.3H5.2v-3.3zm-.3-3.4v3.2H5.5v-3.2zm2.1 0v3.2H7.6v-3.2zm0 3.6v3.2H7.6V36zm7-2.4h2.3V38h-2.3v1.2H9.5v-7h6.7z" id="path354"></path>
+  <path fill="none" stroke="#5c5c5c" stroke-width=".576" d="M20.833 6.105V.96h-4.42v2.807H13.88v-2.8h-2.303v2.779H8.95V.895H6.755V5.5M18.601.93v5.037" id="path355"></path>
+  <g fill="#f8d840" transform="rotate(90)" id="g392">
+    <circle cx="7.6" cy="-26.6" r=".7" id="circle355"></circle>
+    <circle cx="10.2" cy="-26.6" r=".7" id="circle356"></circle>
+    <circle cx="12.7" cy="-26.6" r=".7" id="circle357"></circle>
+    <circle cx="15.2" cy="-26.6" r=".7" id="circle358"></circle>
+    <circle cx="17.8" cy="-26.6" r=".7" id="circle359"></circle>
+    <circle cx="20.3" cy="-26.6" r=".7" id="circle360"></circle>
+    <circle cx="22.9" cy="-26.6" r=".7" id="circle361"></circle>
+    <circle cx="25.4" cy="-26.6" r=".7" id="circle362"></circle>
+    <circle cx="27.9" cy="-26.6" r=".7" id="circle363"></circle>
+    <circle cx="30.5" cy="-26.6" r=".7" id="circle364"></circle>
+    <circle cx="33" cy="-26.6" r=".7" id="circle365"></circle>
+    <circle cx="35.6" cy="-26.6" r=".7" id="circle366"></circle>
+    <circle cx="38.1" cy="-26.6" r=".7" id="circle367"></circle>
+    <circle cx="40.6" cy="-26.6" r=".7" id="circle368"></circle>
+    <circle cx="43.2" cy="-26.6" r=".7" id="circle369"></circle>
+    <circle cx="45.7" cy="-26.6" r=".7" id="circle370"></circle>
+    <circle cx="48.3" cy="-26.6" r=".7" id="circle371"></circle>
+    <circle cx="50.8" cy="-26.6" r=".7" id="circle372"></circle>
+    <circle cx="53.3" cy="-26.6" r=".7" id="circle373"></circle>
+    <circle cx="7.6" cy="-1.2" r=".7" id="circle374"></circle>
+    <circle cx="10.2" cy="-1.2" r=".7" id="circle375"></circle>
+    <circle cx="12.7" cy="-1.2" r=".7" id="circle376"></circle>
+    <circle cx="15.2" cy="-1.2" r=".7" id="circle377"></circle>
+    <circle cx="17.8" cy="-1.2" r=".7" id="circle378"></circle>
+    <circle cx="20.3" cy="-1.2" r=".7" id="circle379"></circle>
+    <circle cx="22.9" cy="-1.2" r=".7" id="circle380"></circle>
+    <circle cx="25.4" cy="-1.2" r=".7" id="circle381"></circle>
+    <circle cx="27.9" cy="-1.2" r=".7" id="circle382"></circle>
+    <circle cx="30.5" cy="-1.2" r=".7" id="circle383"></circle>
+    <circle cx="33" cy="-1.2" r=".7" id="circle384"></circle>
+    <circle cx="35.6" cy="-1.2" r=".7" id="circle385"></circle>
+    <circle cx="38.1" cy="-1.2" r=".7" id="circle386"></circle>
+    <circle cx="40.6" cy="-1.2" r=".7" id="circle387"></circle>
+    <circle cx="43.2" cy="-1.2" r=".7" id="circle388"></circle>
+    <circle cx="45.7" cy="-1.2" r=".7" id="circle389"></circle>
+    <circle cx="48.3" cy="-1.2" r=".7" id="circle390"></circle>
+    <circle cx="50.8" cy="-1.2" r=".7" id="circle391"></circle>
+    <circle cx="53.3" cy="-1.2" r=".7" id="circle392"></circle>
+  </g>
+  <text font-family="sans-serif" xml:space="preserve" x="20.155001" y="16.1" fill="#e6e6e6" font-size="5.002px" letter-spacing="-0.1" style="line-height:0" id="text392"><tspan x="13.555" y="14.4" style="text-align:center" text-anchor="middle" id="tspan392">ESP32</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="5.1999998" y="47.200001" font-size="1.3px" style="line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" id="text393"><tspan x="5.1999998" y="47.200001" fill="#b3b3b3" id="tspan393" style="fill:#b3b3b3;fill-opacity:1;stroke:none">EN</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="20.299999" y="47.299999" font-size="1.3px" style="line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" id="text394"><tspan x="20.299999" y="47.299999" fill="#b3b3b3" id="tspan394" style="fill:#b3b3b3;fill-opacity:1;stroke:none">Boot</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="6.8000002" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text395"><tspan x="6.8000002" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan395" style="fill:#b3b3b3;fill-opacity:1;stroke:none">3V3</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="9.3999996" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text396"><tspan x="9.3999996" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan396" style="fill:#b3b3b3;fill-opacity:1;stroke:none">EN</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="12" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" fill="#b3b3b3" font-weight="bold">VP</text>
+  <text font-family="sans-serif" xml:space="preserve" x="14.5" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text398"><tspan x="14.5" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan398" style="fill:#b3b3b3;fill-opacity:1;stroke:none">VN</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="17.1" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text399"><tspan x="17.1" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan399" style="fill:#b3b3b3;fill-opacity:1;stroke:none">34</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="19.700001" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text400"><tspan x="19.700001" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan400" style="fill:#b3b3b3;fill-opacity:1;stroke:none">35</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="22.200001" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text401"><tspan x="22.200001" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan401" style="fill:#b3b3b3;fill-opacity:1;stroke:none">32</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="24.700001" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text402"><tspan x="24.700001" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan402" style="fill:#b3b3b3;fill-opacity:1;stroke:none">33</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="27.299999" y="-2.5999999" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(90)" id="text403"><tspan x="27.299999" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan403" style="fill:#b3b3b3;fill-opacity:1;stroke:none">25</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="29.799999" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text404"><tspan x="29.799999" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan404" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">26</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="32.299999" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text405"><tspan x="32.299999" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan405" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">27</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="34.799999" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text406"><tspan x="34.799999" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan406" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">14</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="37.400002" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text407"><tspan x="37.400002" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan407" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">12</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="39.400002" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text408"><tspan x="39.400002" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan408" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">GND</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="42.5" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text409"><tspan x="42.5" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan409" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">13</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="45" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text410"><tspan x="45" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan410" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">D2</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="47.5" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text411"><tspan x="47.5" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan411" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">D3</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="49.5" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text412"><tspan x="49.5" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan412" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">CMD</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="52.599998" y="-2.5999999" style="font-size:1px;line-height:1.25;stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1" transform="rotate(90)" id="text413"><tspan x="52.599998" y="-2.5999999" fill="#b3b3b3" font-weight="bold" id="tspan413" style="stroke:none;stroke-opacity:1;fill:#b3b3b3;fill-opacity:1">5V</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-54.5" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text414"><tspan x="-54.5" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan414" style="fill:#b3b3b3;fill-opacity:1;stroke:none">CLK</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-51.700001" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text415"><tspan x="-51.700001" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan415" style="fill:#b3b3b3;fill-opacity:1;stroke:none">D0</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-49.099998" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text416"><tspan x="-49.099998" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan416" style="fill:#b3b3b3;fill-opacity:1;stroke:none">D1</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-46.5" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text417"><tspan x="-46.5" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan417" style="stroke:none;fill:#b3b3b3;fill-opacity:1">15</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-43.700001" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text418"><tspan x="-43.700001" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan418" style="stroke:none;fill:#b3b3b3;fill-opacity:1">2</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-41" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text419"><tspan x="-41" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan419" style="stroke:none;fill:#b3b3b3;fill-opacity:1">0</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-38.5" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text420"><tspan x="-38.5" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan420" style="stroke:none;fill:#b3b3b3;fill-opacity:1">4</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-36.400002" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text421"><tspan x="-36.400002" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan421" style="stroke:none;fill:#b3b3b3;fill-opacity:1">16</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-33.799999" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text422"><tspan x="-33.799999" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan422" style="stroke:none;fill:#b3b3b3;fill-opacity:1">17</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-30.9" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text423"><tspan x="-30.9" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan423" style="stroke:none;fill:#b3b3b3;fill-opacity:1">5</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-28.700001" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text424"><tspan x="-28.700001" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan424" style="stroke:none;fill:#b3b3b3;fill-opacity:1">18</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-26.200001" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text425"><tspan x="-26.200001" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan425" style="fill:#b3b3b3;fill-opacity:1;stroke:none">19</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-24.200001" y="25.4" letter-spacing="0" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text426"><tspan x="-24.200001" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan426" style="fill:#b3b3b3;fill-opacity:1;stroke:none">GND</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-21.1" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text427"><tspan x="-21.1" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan427" style="fill:#b3b3b3;fill-opacity:1;stroke:none">21</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-18.6" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text428"><tspan x="-18.6" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan428" style="fill:#b3b3b3;fill-opacity:1;stroke:none">RX</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-16.1" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text429"><tspan x="-16.1" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan429" style="stroke:none;fill:#b3b3b3;fill-opacity:1">TX</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-13.5" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text430"><tspan x="-13.5" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan430" style="fill:#b3b3b3;fill-opacity:1;stroke:none">22</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-11" y="25.4" style="font-size:1px;line-height:1.25;stroke:none;fill:#b3b3b3;fill-opacity:1" transform="rotate(-90)" id="text431"><tspan x="-11" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan431" style="stroke:none;fill:#b3b3b3;fill-opacity:1">23</tspan></text>
+  <text font-family="sans-serif" xml:space="preserve" x="-9" y="25.4" style="font-size:1px;line-height:1.25;fill:#b3b3b3;fill-opacity:1;stroke:none" transform="rotate(-90)" id="text432"><tspan x="-9" y="25.4" fill="#b3b3b3" font-weight="bold" id="tspan432" style="fill:#b3b3b3;fill-opacity:1;stroke:none">GND</tspan></text>
+  <circle cx="5.9" cy="-20.9" r=".4" fill="#a80" fill-opacity=".996" transform="rotate(90)" id="circle433"></circle>
+  <circle cx="5.9" cy="-18.7" r=".4" fill="#a80" fill-opacity=".996" transform="rotate(90)" id="circle434"></circle>
+</g>
+      </svg>

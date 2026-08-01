@@ -1,0 +1,10 @@
+<svg width="20mm" height="16mm" version="1.1" viewBox="0 0 20 16" xmlns="http://www.w3.org/2000/svg">
+        <!-- Leads -->
+        <rect x="0" y="7.4" width="7" height="1.2" fill="#aaa"></rect>
+        <rect x="13" y="7.4" width="7" height="1.2" fill="#aaa"></rect>
+        <!-- Ceramic disc body -->
+        <ellipse cx="10" cy="8" rx="4.2" ry="6" fill="#d9a441" stroke="#8a5a1a" stroke-width="0.4"></ellipse>
+        <text x="10" y="9.5" text-anchor="middle" font-size="3.2" font-family="sans-serif" fill="#2a1a05">
+          <!--?lit$169001558$-->100n
+        </text>
+      </svg>

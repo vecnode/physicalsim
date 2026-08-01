@@ -2,16 +2,25 @@
 
 Native desktop PComp simulator host.
 
+Every AVR and RP2040 board runs a **JS/TS-native sketch runtime** - no
+C/C++ compiler, no vendored Arduino/pico-sdk core. Sketches are
+interpreted directly, staying faithful to the real hardware APIs (Arduino's
+`pinMode`/`digitalWrite`/`Serial`/`LiquidCrystal`, pico-sdk's
+`gpio_init`/`gpio_put`/`sleep_ms`) - same names, same semantics, just JS/TS
+syntax instead of compiled C++. ESP32 is the one board family still
+compiling for real, via a vendored `esp-idf` (a JS-native ESP-IDF-shaped
+runtime is a planned follow-up - see [ARCHITECTURE.md](ARCHITECTURE.md)).
+
 Emulators:
 
-- `vecnode/avr8js`
+- `vecnode/avr8js` (CPU core + `arduino/` JS-native sketch runtime)
 	- Arduino Uno
   - Arduino Nano
   - Arduino Mega
   - Franzininho (ATtiny85)
   - Arduino Leonardo (ATmega32u4)
 
-- `vecnode/rp2040js`
+- `vecnode/rp2040js` (CPU core + `pico/` JS-native sketch runtime)
   - Raspberry Pi Pico
   - Raspberry Pi Pico W
   - Arduino Nano RP2040 Connect
@@ -34,11 +43,9 @@ upstream:
 * [vecnode/rp2040js](https://github.com/vecnode/rp2040js)
 * [vecnode/esp32js](https://github.com/vecnode/esp32js)
 * [vecnode/wokwi-elements](https://github.com/vecnode/wokwi-elements)
-* [vecnode/ArduinoCore-avr](https://github.com/vecnode/ArduinoCore-avr)
-* [vecnode/ATTinyCore](https://github.com/vecnode/ATTinyCore)
-* [vecnode/pico-sdk](https://github.com/vecnode/pico-sdk)
-* [vecnode/LiquidCrystal](https://github.com/vecnode/LiquidCrystal)
-* [vecnode/esp-idf](https://github.com/vecnode/esp-idf)
+* [vecnode/esp-idf](https://github.com/vecnode/esp-idf) - ESP32's real
+  compile step only; every other board's sketch runtime is pure JS/TS,
+  no vendored C/C++ Arduino/pico-sdk core needed
 
 ## Reproduce
 
@@ -80,7 +87,7 @@ cmake --build build --target physicalsim -j --config Release
 .\build_and_run.bat
 
 # One-command portable package to Desktop\Release
-# (always bundles fixed WebView2 runtime + avr-gcc toolchain)
+# (always bundles a fixed WebView2 runtime)
 .\package_release.bat
 
 # -----------------------------

@@ -158,13 +158,16 @@ export const boardAdapterId: Record<string, AdapterId> = {
   "nano-rp2040-connect": "rp2040-js",
   "pi-pico": "rp2040-js",
   "pi-pico-w": "rp2040-js",
-  // Backed by @physicalsim/adapter-esp32 (web/adapters/esp32), a JS/TS
-  // Worker adapter over the esp32js emulator core - same shape as
-  // avr8/rp2040's own Worker adapters, no native process involved.
-  "esp32-devkit-v1": "esp32",
-  // Same chip, same adapter - no new adapter needed for either.
-  "esp32-devkit-c-v4": "esp32",
-  "esp32-cam": "esp32",
+  // "esp32-js" (JS/TS-interpreted ESP-IDF-shaped sketches via
+  // esp32js/espidf, no C/C++ toolchain). The old real-compile,
+  // cycle-accurate Xtensa adapter (a vendored esp-idf +
+  // xtensa-esp-elf-gcc CMake component tree) has been removed entirely,
+  // per the same direction ArduinoCore-avr/pico-sdk/LiquidCrystal/
+  // ATTinyCore were removed for. Same chip, same adapter for all three
+  // boards - no per-board adapter needed.
+  "esp32-devkit-v1": "esp32-js",
+  "esp32-devkit-c-v4": "esp32-js",
+  "esp32-cam": "esp32-js",
 };
 
 // Board id -> how to reflect powered on/off on its placed element. Board-

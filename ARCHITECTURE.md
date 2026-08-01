@@ -1625,148 +1625,67 @@ the `BUNDLE_AVR_TOOLCHAIN` CMake option and its fetch/bundle steps.
 `/compile`'s AVR fallback now cleanly returns 501 ("no C/C++ compiler
 backs this board") instead of attempting a compile that can no longer
 succeed - nothing valid reaches it; every AVR/RP2040 board is routed away
-by `NO_COMPILER_ADAPTER_IDS` before the endpoint is ever called. ESP32 is
-the one board family left with a real C/C++ compile step (`esp-idf`, see
-"ESP32 board and toolchain" below) - a JS-native ESP-IDF-shaped runtime is
-a planned follow-up, not done here.
+by `NO_COMPILER_ADAPTER_IDS` before the endpoint is ever called.
 
-## ESP32 board and toolchain
+## ESP32 sketch runtime (JS-native, no compiler)
 
-`"esp32"` is a Worker-backed adapter like every other adapter this
-project ships - see "One adapter kind: Worker-backed" above. `web/adapters/esp32/src/adapter.ts`
-wraps `esp32js`'s `Board` class (a `Cpu`+`SystemBus` pair for the Xtensa
-LX6 ESP32 - GPIO, UART0, TIMG0, the interrupt matrix, and the SAR ADC;
-explicitly not WiFi/Bluetooth, the second CPU core, or crypto
-accelerators): `readPin`/`writePin` are thin passthroughs to
-`Board.getPin()`/`setPin()`, `readPinDirection` reads the real
-`GPIO_ENABLE` register bit, and `writeAnalogPin` scales a voltage into a
-raw ADC1 code against the fixed ESP32 pin<->channel wiring (GPIO32-39).
-An earlier version of this adapter spawned a real `qemu-system-xtensa`
-process (a fork, `vecnode/qemu-esp32`, since mainline QEMU's ESP32
-machine has no GPIO matrix/IOMUX support) and drove it over QMP/GDB RSP
-the same way a since-removed `cortex-m` adapter drove `qemu-system-arm` -
-that native process, and everything it needed (a bundled QEMU binary +
-DLLs + ROM images, `esptool merge_bin`'d flash images), was removed once
-`vecnode/esp32js` existed to run compiled firmware directly in the same
-Worker/JS shape every other adapter here already uses.
+**History, briefly.** A real-compile pipeline shipped 2026-07-25: a
+vendored, untrimmed `espressif/esp-idf` fork (`vecnode/esp-idf`, pinned
+to `v5.3.1`) plus a fetched `xtensa-esp-elf-gcc` toolchain,
+`src/esp32_toolchain.cpp` driving a real `cmake -G Ninja` + `ninja`
+build of ESP-IDF's full component tree (bootloader, partition table,
+`nvs_flash`, `lwip`, dozens more - none of it trimmed) for every "Compile
+& Run" click, producing a real Xtensa ELF that `esp32js`'s `Board` class
+(a `Cpu`+`SystemBus` pair for the Xtensa LX6 ESP32) executed cycle-
+accurately via `loadElf()`. It worked - verified end-to-end with two
+genuinely blinking LEDs through the real UI - and is documented in git
+history if that approach is ever needed again, but it meant the single
+heaviest toolchain this project carried: a ~590MB submodule (plus its own
+nested submodules - FreeRTOS-Kernel, mbedtls, and more), a separately
+fetched Xtensa gcc, and a Python/`cmake`/`ninja` environment that only
+ever resolved on a dev machine, never bundled.
 
-**Compile & Run (`src/esp32_toolchain.cpp`).** A real ESP-IDF project -
-genuinely heavier than `avr_toolchain.cpp`'s flat per-file `avr-gcc`
-invocations or `rp2040_toolchain.cpp`'s single `add_executable()` against
-raw `pico-sdk`: ESP-IDF's own `tools/cmake/project.cmake` pulls in its
-entire component tree (bootloader, partition table, `nvs_flash`, `lwip`,
-dozens more - none of it trimmed, unlike `ArduinoCore-avr`'s cores/one-
-variant trim) for every project, however small. `compile_sketch()`
-mirrors `rp2040_toolchain.cpp`'s shape - a persistent work directory,
-configured once, rebuilt incrementally via `ninja` on every "Compile &
-Run" click - and the user's `app_main()` body becomes
-`src/esp32_sketch_template/main/main.c`, the same "just the function
-body, not a full translation unit" convention every other toolchain here
-uses.
+**What replaced it (2026-08-01).** Same move `avr8js/arduino` and
+`rp2040js/pico` already made (see "RP2040 sketch runtime" and "AVR
+sketch runtime" above): interpret the sketch directly, no compiler.
+`esp32js/espidf` (a new module in the `esp32js` fork) exposes
+`EspIdfRuntime` - GPIO pin state faithful to real ESP-IDF `gpio_config()`/
+`gpio_set_level()`/`gpio_get_level()` semantics (a pin's direction is
+whatever the most recent `gpio_config()` call covering it set, undefined-
+direction pins default to `'input'` matching real hardware reset state)
+and a blocking `vTaskDelay()`. `compileSketch()`/`createSketchGlobals()`
+interpret a sketch's `setup()`/`loop()` via `new Function(...)` - no
+compiler, no Xtensa machine code, no `esp32js` CPU core involved at all
+for this path.
 
-Invoked via **direct `cmake -G Ninja` + `cmake --build`, not the `idf.py`
-wrapper script** - confirmed both work, but `idf.py` re-derives its own
-environment and re-checks Python dependencies on every invocation (real,
-measured overhead per "Compile & Run" click), while a raw `cmake`
-invocation needs exactly `-DCMAKE_TOOLCHAIN_FILE=<esp-idf>/tools/cmake/
-toolchain-esp32.cmake -DIDF_TARGET=esp32 -DPYTHON=<venv python.exe>
--DPYTHON_DEPS_CHECKED=1` plus `IDF_PATH`/`ESP_ROM_ELF_DIR` env vars and
-`PATH` entries for the `xtensa-esp32-elf` toolchain/`ninja`/the esp-idf
-Python venv (all found by inspecting a known-good `idf.py`-produced
-`CMakeCache.txt`, not guessed) - the same "skip the wrapper, call the
-real tools directly" choice `rp2040_toolchain.cpp` already made over a
-hypothetical `arduino-pico`-style CLI.
+Sketches still use **real ESP-IDF C API names** (`gpio_config`,
+`gpio_set_level`, `gpio_get_level`, `vTaskDelay`, `portTICK_PERIOD_MS`,
+`GPIO_MODE_OUTPUT` - real ESP-IDF constants, not invented ones) inside
+the same `setup()`/`loop()` shape - JS/TS syntax now (`function setup()
+{}`, not `void app_main(void) {}`), since a real C parser is out of
+scope, but the function names/constants/semantics stay faithful to the
+real framework, the same posture `rp2040js/pico`'s pico-sdk names take.
 
-Compiled output is the app's own ELF (`build/physicalsim_esp32_sketch.elf`
-inside `compile_sketch()`'s persistent work directory) - `esp32js`'s
-`loadElf()` reads `PT_LOAD` segments directly at their real `p_vaddr` and
-takes the entry point from `e_entry`, so unlike a real flash write there
-is no `esptool merge_bin` (bootloader + partition table + app, at flash
-offsets) step at all; `compile_sketch()` just reads the ELF file back out
-and returns it as `POST /compile`'s `binHex` field (the same
-hex-pair-per-byte convention `rp2040_toolchain.cpp` established), which
-the browser feeds straight into `Esp32Adapter.loadFirmware()` the same
-way avr8/rp2040's own compiled output reaches their adapters.
+`web/adapters/esp32-js` (`Esp32JsAdapter`) implements the same
+`SimulatorAdapter` contract the real, cycle-accurate `esp32` adapter did.
+One class backs all three ESP32 boards - `esp32-devkit-v1`/
+`esp32-devkit-c-v4`/`esp32-cam`'s `boardAdapterId` (`circuit.ts`) all
+point at `"esp32-js"` directly, accepting either `"D<n>"` (`esp32-devkit-
+v1`'s own board map convention) or a bare `"<n>"` (`esp32-devkit-c-v4`/
+`esp32-cam`'s real bare-GPIO-number silkscreens) pin id, both resolving
+to the same GPIO index. `writeAnalogPin` throws (`"not an ADC-capable
+pin"`) - no ADC modeled yet in this JS-native runtime, a real documented
+gap rather than a silent no-op.
 
-**Distribution: two pieces vendored/bundled.** ESP32 needs two things
-beyond `avr8`/`rp2040`'s own single-toolchain shape:
-
-1. **`xtensa-esp-elf` (the gcc toolchain)** - not xPack (checked
-   directly - `xpack-dev-tools` publishes no xtensa/esp32 toolchain at
-   all); Espressif publishes it themselves, as prebuilt releases on
-   `espressif/crosstool-NG`'s GitHub releases (confirmed via the exact
-   URLs `install.ps1 esp32` itself downloads, in `esp-idf/tools/
-   tools.json`). `BUNDLE_XTENSA_TOOLCHAIN` (`CMakeLists.txt`) mirrors
-   `BUNDLE_ARM_TOOLCHAIN`'s `FetchContent` shape against these URLs.
-2. **`espressif/esp-idf` itself** - not just a compiler, a whole
-   framework whose CMake files/components the sketch template
-   `include()`s directly (`tools/cmake/project.cmake`), with no clean
-   per-file trim the way `ArduinoCore-avr` got one (ESP-IDF's own build
-   system reaches into most of its component tree unconditionally for
-   any project, small or large). Forked to `vecnode/esp-idf` (pinned to
-   `v5.3.1`, same "own the fork" posture as every other `simulators/`
-   submodule) and added as a real git submodule, `simulators/esp-idf` -
-   unlike a plain clone, a submodule reference costs `physicalsim`'s own
-   repo nothing but a 40-byte commit pointer; the actual ~590MB (plus its
-   own nested submodules - FreeRTOS-Kernel, mbedtls, and others) is only
-   fetched when someone runs `git submodule update --init --recursive`,
-   the same deal `pico-sdk` already made, just at a much bigger scale.
-   `esp32_toolchain.cpp`'s `find_vendored_esp_idf_dir()` resolves it via
-   `PHYSICALSIM_SOURCE_DIR` for a dev build, or a bundled `esp-idf/`
-   next to the executable (`CMakeLists.txt`'s `BUNDLE_ESP_IDF` - opt-in
-   given the size, unlike `pico-sdk`'s unconditional copy) for a packaged
-   one. A `C:\esp-idf` dev-machine fallback (`find_legacy_dev_esp_idf_dir()`)
-   is kept for a plain (non-submodule) checkout at that well-known path.
-
-`esptool` and a bundled `qemu-system-xtensa` (previously needed to
-produce and boot a merged, flashable image respectively) are gone -
-`esp32js` runs the ELF directly, so there is nothing left to merge or
-flash. `assets/esp32-demo/flash_image.bin` (the bundled QEMU demo flash
-image) and its `CMakeLists.txt` bundling step are removed for the same
-reason - a placed ESP32 board now only ever runs whatever a real
-"Compile & Run" click produces.
-
-What's still genuinely dev-machine-only, and likely to stay that way for
-a while (a materially different kind of gap than "needs a `FetchContent`
-URL", covered in `esp32_toolchain.hpp`'s own header comment): `cmake`/
-`ninja` resolve from PATH (the same gap `rp2040_toolchain.cpp` already
-accepts for its own pipeline), and a Python environment with esp-idf's
-own build-time dependencies installed (`kconfiglib` and others - a bare
-system Python won't work) still resolves from `%USERPROFILE%\.espressif`,
-installed by esp-idf's own `install.ps1 esp32`. Bundling a working esp-idf
-Python environment is a bigger, separate undertaking than the three
-FetchContent/submodule pieces above.
-
-**A real "compiles forever" bug report, traced and fixed.** The very
-first compile against the freshly-vendored `simulators/esp-idf` submodule
-(a from-scratch checkout, no build cache, no compiler cache warm) looked
-indistinguishable from a hang - the terminal's "compiling… (Ns)" counter
-kept ticking past two minutes with no visible `cmake`/`ninja`/`cc1`
-process in Task Manager at the moments it was checked. Two real,
-independent bugs were found and fixed while chasing this down, even
-though neither turned out to be the actual root cause (a genuinely slow
-first-ever cold build of a brand-new file tree, most likely real-time
-antivirus scanning overhead against thousands of freshly-written object
-files - confirmed by re-running the identical compile immediately after,
-which reused the warm build cache and finished in 24s):
-
-- `process_exec.cpp`'s Windows spawn path never used a Job Object - a
-  timed-out `cmake --build` (which spawns `ninja`, which spawns many
-  `xtensa-esp32-elf-gcc`/`cc1.exe` instances) would `TerminateProcess()`
-  only the immediate child, leaving the rest of the tree orphaned,
-  potentially still writing into the same shared work directory the
-  *next* compile attempt would try to reuse. Fixed with the same
-  `KILL_ON_JOB_CLOSE` job object those two files already use.
-- The 180s timeouts on the configure/build steps were tighter than a
-  genuinely slower machine (or a cold-cache first build) can need -
-  raised to 300s with real headroom.
-
-Verified after both fixes: the exact same "GPIO Blink (ESP32)" example,
-clicked through the real UI (not curl) - Compile & Run completed, and
-`Start` produced two genuinely blinking LEDs, confirming the whole
-pipeline works end-to-end against the vendored `esp-idf`, not just the
-dev-machine `C:\esp-idf` checkout the Phase 1/2 work was originally
-verified against.
+**Removed:** `simulators/esp-idf` (submodule), `src/esp32_toolchain.cpp`/
+`.hpp`, `src/process_exec.cpp`/`.hpp` (esp-idf's own dedicated subprocess
+runner - no other toolchain used it), `src/esp32_sketch_template/`, the
+`BUNDLE_ESP_IDF`/`BUNDLE_XTENSA_TOOLCHAIN` CMake options and their fetch/
+bundle steps, and the old cycle-accurate `web/adapters/esp32` package.
+`/compile` itself is gone entirely (`src/main.cpp`) - ESP32 was the last
+board still using it; every board now interprets its sketch directly via
+its own adapter's `loadFirmware()`, no C/C++ toolchain, no `/compile`
+round-trip at all (see `main.ts`'s `compileAndRun()`).
 
 ## Build pipeline
 

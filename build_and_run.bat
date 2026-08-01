@@ -156,11 +156,9 @@ echo [1/4] web\ unchanged since last build - skipping npm install/build
 :web_build_done
 
 	REM --- Configure / Build / Run -----------------------------------------------
-REM No AVR/RP2040 toolchain flag needed anymore - every AVR and RP2040
-REM board runs a JS-native sketch runtime (avr8js/arduino, rp2040js/pico),
-REM no C/C++ compiler involved. ESP32 still real-compiles via esp-idf; see
-REM BUNDLE_XTENSA_TOOLCHAIN/BUNDLE_ESP_IDF in CMakeLists.txt if a Debug
-REM build needs a packaged ESP32 Compile & Run too.
+REM No AVR/RP2040/ESP32 toolchain flag needed anymore - every board runs a
+REM JS-native sketch runtime (avr8js/arduino, rp2040js/pico, esp32js/espidf),
+REM no C/C++ compiler involved.
 echo [2/4] Configuring CMake
 "%CMAKE_EXE%" -B build
 if errorlevel 1 goto :error

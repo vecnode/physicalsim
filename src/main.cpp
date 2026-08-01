@@ -37,7 +37,6 @@
 #include <cpp-embedlib-httplib.h>
 #include "WebAssets.h"
 #include "webview/webview.h"
-#include "esp32_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
 #ifdef __GNUC__
@@ -201,14 +200,11 @@ void hide_window(webview::webview &w) {
 #endif
 }
 
-// 64KB was enough for every request this bridge took until ESP32's
-// loadFirmware: its merged flash image (bootloader + partition table +
-// app, unpadded - see esp32_toolchain.cpp's own comment on why it isn't
-// padded to the full 4MB flash size) runs to roughly 244KB, ~500KB once
-// hex-encoded to cross the JSON bridge (see decode_hex_bytes() below) -
-// raised enough to comfortably cover that plus headroom for a somewhat
-// larger sketch, while staying a real bound, not "unlimited", for a
-// bridge that's still meant to be hardened against oversized requests.
+// RP2040's binHex firmware, hex-encoded to cross the JSON bridge, is the
+// largest payload this bridge carries. 2MB comfortably covers that plus
+// headroom for a large sketch, while staying a real bound, not
+// "unlimited", for a bridge that's still meant to be hardened against
+// oversized requests.
 constexpr std::size_t kMaxRequestBodyBytes = 2 * 1024 * 1024;
 
 // --- Ctrl-C / SIGTERM handling for --headless mode -------------------------
@@ -283,20 +279,6 @@ void install_bridge(webview::webview &w) {
     g_bridge_cv.notify_all();
     return "null";
   });
-}
-
-// Encodes raw bytes as a plain hex-pair-per-byte string (the "binHex"
-// convention /compile uses for RP2040's and ESP32's response, since
-// neither has an Intel-HEX-shaped convention the way AVR does).
-std::string encode_hex_bytes(const std::string &binary) {
-  static const char *hex_digits = "0123456789abcdef";
-  std::string hex;
-  hex.reserve(binary.size() * 2);
-  for (unsigned char byte : binary) {
-    hex.push_back(hex_digits[byte >> 4]);
-    hex.push_back(hex_digits[byte & 0xf]);
-  }
-  return hex;
 }
 
 // Dispatches one adapter command into JS and blocks (with a timeout) for the
@@ -439,81 +421,6 @@ int main(int argc, char **argv) {
       });
 
 
-  // Real compilation for ESP32 only now - every AVR and RP2040 board is
-  // JS-native (interpreted directly by avr8js/arduino or rp2040js/pico
-  // in its own Worker adapter, no toolchain involved). Deliberately
-  // outside the /bridge/:adapter/... abstraction above: compiling isn't
-  // scoped to a running adapter instance the way pin I/O is, it's a
-  // standalone build step whose output (ELF bytes, "binHex") the
-  // browser feeds straight into esp32js's loadFirmware().
-  // POST /compile  body: {"source": "<sketch text>", "board": "<CircuitBoard.type>"}
-  server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
-    json body;
-    try {
-      body = json::parse(req.body);
-    } catch (const std::exception &) {
-      res.status = 400;
-      res.set_header("Cache-Control", "no-store");
-      res.set_content(R"({"ok":false,"log":"invalid JSON body"})", "application/json");
-      return;
-    }
-    const std::string source = body.value("source", std::string{});
-    if (source.empty()) {
-      res.status = 400;
-      res.set_header("Cache-Control", "no-store");
-      res.set_content(R"({"ok":false,"log":"empty sketch source"})", "application/json");
-      return;
-    }
-    const std::string board = body.value("board", std::string{"arduino-uno"});
-
-    if (board == "esp32-devkit-v1" || board == "esp32-devkit-c-v4" || board == "esp32-cam") {
-      // Real ESP-IDF build via esp32_toolchain.cpp - a genuinely heavier
-      // pipeline than avr-gcc's flat per-file compile (a full
-      // multi-component CMake project: sdkconfig, partition table,
-      // bootloader), and its toolchain
-      // discovery is dev-machine-only today, not bundled/portable yet -
-      // see esp32_toolchain.hpp. toolchain_available() check first so a
-      // machine without it gets a clear, immediate error rather than a
-      // confusing failure partway through a real compile attempt.
-      if (!esp32toolchain::toolchain_available()) {
-        res.status = 501;
-        res.set_header("Cache-Control", "no-store");
-        res.set_content(
-            R"({"ok":false,"log":"ESP32 toolchain not found on this machine - see )"
-            R"(esp32_toolchain.hpp for the expected esp-idf/tooling layout."})",
-            "application/json");
-        return;
-      }
-      // "binHex" here is the raw compiled ELF (see esp32_toolchain.hpp) -
-      // esp32js's Board.loadFirmware() takes an ELF Uint8Array directly,
-      // same hex-encoding-over-JSON convention rp2040's binHex already uses.
-      const auto result = esp32toolchain::compile_sketch(source);
-      json out = {{"ok", result.ok}, {"log", result.log}};
-      if (result.ok) {
-        out["binHex"] = encode_hex_bytes(result.binary);
-      }
-      res.set_header("Cache-Control", "no-store");
-      res.status = result.ok ? 200 : 422;
-      res.set_content(out.dump(), "application/json");
-      return;
-    }
-
-    // Every other board (Uno/Nano/Mega/Leonardo/Franzininho, RP2040's
-    // three boards) is JS-native now - interpreting Arduino-API- or
-    // pico-sdk-shaped sketches directly via avr8js/arduino or
-    // rp2040js/pico, no C/C++ toolchain at all (see circuit.ts's
-    // boardAdapterId and main.ts's NO_COMPILER_ADAPTER_IDS, which route
-    // them away from this endpoint entirely). Nothing valid reaches
-    // here anymore - avr_toolchain.cpp (and the ArduinoCore-avr/
-    // ATTinyCore/LiquidCrystal it depended on) was removed alongside
-    // the boards that needed it.
-    res.status = 501;
-    res.set_header("Cache-Control", "no-store");
-    res.set_content(
-        R"({"ok":false,"log":"no C/C++ compiler backs this board - it runs a JS-native sketch runtime instead"})",
-        "application/json");
-  });
-
   // Serve embedded static assets from public/.
   httplib::mount(server, Web::FS);
 
@@ -530,30 +437,6 @@ int main(int argc, char **argv) {
 
   // Start HTTP server thread
   std::thread server_thread([&]() { server.listen_after_bind(); });
-
-  // Warms the ESP32 compile pipeline (cmake configure + a full first ninja
-  // build of the whole component tree) in the background, right as the app
-  // starts, instead of paying that cost the moment a user's first ESP32
-  // "Compile & Run" click is sitting there waiting on it - by the time
-  // anyone has actually opened the app, picked an ESP32 board, written a
-  // sketch, and clicked Compile & Run, this has normally already finished.
-  // compile_sketch()'s own g_compile_mutex/CrossProcessCompileLock already
-  // serialize a real request behind this safely if it hasn't (see
-  // esp32_toolchain.cpp) - it just queues, same as it would behind any
-  // other in-flight ESP32 compile. Detached, not joined: a best-effort
-  // warm-up, not something app shutdown should ever block on. Skipped
-  // entirely if the toolchain isn't even available on this machine, same
-  // check /compile itself makes before attempting a real one.
-  if (esp32toolchain::toolchain_available()) {
-    std::thread([]() {
-      esp32toolchain::compile_sketch(
-          "// physicalsim startup warm-up build - see main.cpp's own comment\n"
-          "// on why this runs automatically; not a real user sketch.\n"
-          "void app_main(void) {\n"
-          "}\n");
-    }).detach();
-  }
-
 
   // -----------------------------
   // Show (or hide) the webview and start its message loop.

@@ -2,25 +2,16 @@
 
 Native desktop PComp simulator host.
 
-Every AVR and RP2040 board runs a **JS/TS-native sketch runtime** - no
-C/C++ compiler, no vendored Arduino/pico-sdk core. Sketches are
-interpreted directly, staying faithful to the real hardware APIs (Arduino's
-`pinMode`/`digitalWrite`/`Serial`/`LiquidCrystal`, pico-sdk's
-`gpio_init`/`gpio_put`/`sleep_ms`) - same names, same semantics, just JS/TS
-syntax instead of compiled C++. ESP32 is the one board family still
-compiling for real, via a vendored `esp-idf` (a JS-native ESP-IDF-shaped
-runtime is a planned follow-up - see [ARCHITECTURE.md](ARCHITECTURE.md)).
-
 Emulators:
 
-- `vecnode/avr8js` (CPU core + `arduino/` JS-native sketch runtime)
+- `vecnode/avr8js`
 	- Arduino Uno
   - Arduino Nano
   - Arduino Mega
   - Franzininho (ATtiny85)
   - Arduino Leonardo (ATmega32u4)
 
-- `vecnode/rp2040js` (CPU core + `pico/` JS-native sketch runtime)
+- `vecnode/rp2040js`
   - Raspberry Pi Pico
   - Raspberry Pi Pico W
   - Arduino Nano RP2040 Connect
@@ -43,9 +34,7 @@ upstream:
 * [vecnode/rp2040js](https://github.com/vecnode/rp2040js)
 * [vecnode/esp32js](https://github.com/vecnode/esp32js)
 * [vecnode/wokwi-elements](https://github.com/vecnode/wokwi-elements)
-* [vecnode/esp-idf](https://github.com/vecnode/esp-idf) - ESP32's real
-  compile step only; every other board's sketch runtime is pure JS/TS,
-  no vendored C/C++ Arduino/pico-sdk core needed
+
 
 ## Reproduce
 
@@ -53,14 +42,9 @@ upstream:
 # -----------------------------
 # One-time / after pulling
 # -----------------------------
-# Pulls every vendored dependency, including simulators/esp-idf - ESP32 is
-# a first-class supported board, not an opt-in extra, so this one command
-# is enough to build and run every board out of the box.
+# Pulls every vendored dependency - this one command is enough to build
+# and run every board out of the box.
 git submodule update --init --recursive
-
-# Optional: esp-idf's own nested submodules (mbedtls, bt, cmock, etc.) come
-# down at full history above - if you want them shallow instead:
-cd simulators/esp-idf && git submodule update --init --recursive --depth 1 && cd ../..
 
 # -----------------------------
 # Windows (manual dev flow)
@@ -130,10 +114,10 @@ curl -X POST http://127.0.0.1:<port>/bridge/rp2040/stop
 # Last known state (from the adapter's own stateChange events)
 curl http://127.0.0.1:<port>/bridge/rp2040/state
 
-# esp32 works over the exact same surface - a Worker running esp32js,
-# same as every other adapter
-curl -X POST http://127.0.0.1:<port>/bridge/esp32/start
-curl http://127.0.0.1:<port>/bridge/esp32/state
+# esp32-js works over the exact same surface - a Worker running
+# esp32js/espidf, same as every other adapter
+curl -X POST http://127.0.0.1:<port>/bridge/esp32-js/start
+curl http://127.0.0.1:<port>/bridge/esp32-js/state
 ```
 
 

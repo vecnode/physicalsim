@@ -26,7 +26,9 @@ export default defineConfig({
       // needs this subpath resolvable on its own.
       "avr8js/arduino": resolve("../../simulators/avr8js/src/arduino/index.ts"),
       avr8js: resolve("../../simulators/avr8js/src/index.ts"),
-      esp32js: resolve("../../simulators/esp32js/src/index.ts"),
+      // JS/TS-interpreted ESP-IDF-shaped sketch runtime (no C/C++
+      // toolchain, no cycle-accurate Xtensa CPU - see adapters/esp32-js).
+      "esp32js/espidf": resolve("../../simulators/esp32js/src/espidf/index.ts"),
       "@wokwi/elements": resolve("../../simulators/wokwi-elements/src/index.ts"),
       // wokwi-elements imports "lit" as a real npm dependency, but it
       // lives outside this alias's own resolution chain (simulators/ is a

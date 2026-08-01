@@ -1,5 +1,5 @@
 {
-  "name": "@physicalsim/adapter-esp32",
+  "name": "@physicalsim/adapter-esp32-js",
   "private": true,
   "version": "0.1.0",
   "type": "module",

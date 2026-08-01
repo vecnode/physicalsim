@@ -7,7 +7,7 @@
     "strict": false,
     "useDefineForClassFields": false,
     "paths": {
-      "esp32js": ["../../../simulators/esp32js/src/index.ts"],
+      "esp32js/espidf": ["../../../simulators/esp32js/src/espidf/index.ts"],
       "@physicalsim/common": ["../../common/src/index.ts"]
     }
   },

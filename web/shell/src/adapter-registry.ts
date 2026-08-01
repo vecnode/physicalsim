@@ -36,7 +36,11 @@ export type AdapterId =
   | "avr8-mega"
   | "avr8-attiny85"
   | "avr8-leonardo"
-  | "esp32";
+  // JS/TS-interpreted ESP-IDF-shaped sketches (esp32js/espidf), no C/C++
+  // toolchain - @physicalsim/adapter-esp32-js. Same shape as avr8-js/
+  // rp2040-js; one class backs all three ESP32 boards (see
+  // adapters/esp32-js/src/adapter.ts's own pin-id doc comment).
+  | "esp32-js";
 
 // Structural interface AdapterClient (Worker-backed) satisfies. main.ts
 // drives whatever getAdapterClient() hands back through this shape.
@@ -67,9 +71,9 @@ function createWorker(id: AdapterId): Worker {
       { type: "module" },
     );
   }
-  if (id === "esp32") {
+  if (id === "esp32-js") {
     return new Worker(
-      new URL("../../adapters/esp32/src/worker.ts", import.meta.url),
+      new URL("../../adapters/esp32-js/src/worker.ts", import.meta.url),
       { type: "module" },
     );
   }

@@ -71,10 +71,6 @@ export interface Circuit {
 // that menu generically from this table.
 export const boardTagName: Record<string, string> = {
   "arduino-uno": "wokwi-arduino-uno",
-  // Same wokwi-arduino-uno element as "arduino-uno" above - only the
-  // backing adapter differs (avr8-js: JS-interpreted sketches, no C/C++
-  // compiler - see boardAdapterId below), not the board artwork.
-  "arduino-uno-js": "wokwi-arduino-uno",
   "arduino-nano": "wokwi-arduino-nano",
   "arduino-mega": "wokwi-arduino-mega",
   "arduino-leonardo": "wokwi-arduino-leonardo",
@@ -104,7 +100,6 @@ export const boardTagName: Record<string, string> = {
 // board types needs its own label lookup, not to reach into the DOM.
 export const boardDisplayName: Record<string, string> = {
   "arduino-uno": "Arduino Uno",
-  "arduino-uno-js": "Arduino Uno (JS, no compiler)",
   "arduino-nano": "Arduino Nano",
   "arduino-mega": "Arduino Mega",
   "arduino-leonardo": "Arduino Leonardo",
@@ -121,25 +116,33 @@ export const boardDisplayName: Record<string, string> = {
 // a board into an adapter" resolves to - see main.ts's showBoard(),
 // which calls apply(boardAdapterId[type]) right after placing a board.
 export const boardAdapterId: Record<string, AdapterId> = {
-  "arduino-uno": "avr8",
-  // Its own adapter id - @physicalsim/adapter-avr8-js interprets a JS/TS
-  // sketch directly via avr8js's ArduinoRuntime (no compiler, no CPU
-  // emulation), a fundamentally different execution model from "avr8"'s
-  // real-compile-then-emulate one, even though both back the same
-  // wokwi-arduino-uno element.
-  "arduino-uno-js": "avr8-js",
-  "arduino-nano": "avr8",
-  // Its own adapter id, not "avr8" - the atmega2560 needs a different
-  // chip config (chip.ts's ATMEGA2560), and clients are cached one per
-  // AdapterId (see adapter-registry.ts's getAdapterClient()), so sharing
-  // "avr8" here would mean an Uno and a Mega fight over one CPU instance
-  // shaped for neither of them correctly.
-  "arduino-mega": "avr8-mega",
-  // Its own adapter id too - genuinely a different chip (ATmega32u4),
-  // see chip.ts's ATMEGA32U4 config.
-  "arduino-leonardo": "avr8-leonardo",
-  // Its own adapter id too - genuinely a different chip (ATtiny85, not
-  // an ATmega at all), see chip.ts's ATTINY85 config.
+  // "avr8-js" (JS/TS-interpreted Arduino-API sketches via avr8js/arduino,
+  // no C/C++ toolchain - @physicalsim/adapter-avr8-js) rather than "avr8"
+  // (the real-compile, cycle-accurate atmega328p adapter) - same
+  // direction pico-sdk/RP2040 already moved in. The real "avr8" adapter
+  // class is untouched (still plain JS/TS) - just unreachable now, with
+  // no C/C++ toolchain left to produce real AVR machine code for it.
+  "arduino-uno": "avr8-js",
+  // Same adapter id as "arduino-uno" - the Nano is the same ATmega328p,
+  // and the JS-native runtime doesn't distinguish chips the way the real
+  // CPU-register-level avr8 adapter had to (see arduino-nano.ts).
+  "arduino-nano": "avr8-js",
+  // Its own adapter id, not "avr8-js" - Mega needs a much larger pin
+  // count (54 digital + 16 analog vs the Uno's 14+6), and clients are
+  // cached one per AdapterId (adapter-registry.ts's getAdapterClient()),
+  // so sharing "avr8-js" would mean an Uno and a Mega fight over one
+  // ArduinoRuntime shaped for neither of them correctly.
+  "arduino-mega": "avr8-js-mega",
+  // Same adapter id as "arduino-uno" - Leonardo's real ATmega32u4 has a
+  // different port layout, but the JS-native runtime uses the same
+  // plain D0-D13/A0-A5 numbering for every 14+6-pin AVR board regardless
+  // of the real chip underneath (see arduino-leonardo.ts).
+  "arduino-leonardo": "avr8-js",
+  // Still the real, cycle-accurate ATtiny85 adapter (chip.ts's ATTINY85)
+  // - Franzininho hasn't moved to a JS-native runtime yet (ATtiny85's
+  // pin numbering doesn't follow the same D<n>/A<n> convention the other
+  // AVR boards do, and needs its own careful mapping - a follow-up, not
+  // done here). simulators/ATTinyCore is still needed for this board.
   franzininho: "avr8-attiny85",
   // "rp2040-js" (JS/TS-interpreted pico-sdk sketches, no C/C++ toolchain -
   // @physicalsim/adapter-rp2040-js) rather than "rp2040" (the real-compile,
@@ -170,9 +173,6 @@ export const boardAdapterId: Record<string, AdapterId> = {
 // wokwi-arduino-nano happens to expose the identical property name.
 export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => void> = {
   "arduino-uno": (el, on) => {
-    (el as ArduinoUnoElement).ledPower = on;
-  },
-  "arduino-uno-js": (el, on) => {
     (el as ArduinoUnoElement).ledPower = on;
   },
   "arduino-nano": (el, on) => {

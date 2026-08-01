@@ -181,14 +181,19 @@ std::optional<std::filesystem::path> find_core_dir(const std::string &core_kind)
 
 // Board -> {-mmcu= value, which core tree, its own variants/ subdirectory,
 // the ARDUINO_AVR_* define real Arduino board.txt files set for it,
-// F_CPU}. Every entry here is atmega328p + "arduino" core + 16MHz except
-// Mega (a genuinely different chip - see chip.ts's own AvrChipConfig on
-// the JS/TS side for the CPU-emulation half of this same board/chip
-// split) and Franzininho (a genuinely different chip AND core tree - see
-// find_core_dir() above). Keyed by circuit.ts's CircuitBoard.type string,
-// so it stays in lockstep with boardAdapterId there without either file
-// importing the other (this is native C++, that's TS - there's no shared
-// module to put one canonical table in).
+// F_CPU}. Keyed by circuit.ts's CircuitBoard.type string, so it stays in
+// lockstep with boardAdapterId there without either file importing the
+// other (this is native C++, that's TS - there's no shared module to put
+// one canonical table in).
+//
+// In practice, only "franzininho" ever reaches this function today -
+// main.ts's NO_COMPILER_ADAPTER_IDS routes arduino-uno/nano/mega/
+// leonardo to the JS-native avr8-js runtime before compileAndRun() ever
+// fetches /compile. The "arduino"-core-kind branches below are kept
+// (not deleted) as an honest fallback for a direct /compile call with
+// one of those board strings - they correctly fail with a clear "core
+// not found" error now that ArduinoCore-avr is gone, rather than being
+// silently wrong.
 struct BoardTarget {
   std::string mcu;        // avr-gcc -mmcu=
   std::string core_kind;  // find_core_dir()'s "arduino" or "tiny"
@@ -263,12 +268,16 @@ std::optional<std::filesystem::path> find_variant_dir(const std::string &core_ki
 // Every vendored Arduino library a sketch is allowed to #include - one
 // git submodule per name (simulators/<name>), each following the modern
 // Arduino 1.5+ layout (headers/sources directly under its own src/).
-// Adding a second library is one more name here plus one more line in
-// CMakeLists.txt's own AVR_LIBRARIES list - nothing else in this file
-// needs to change, since compile_sketch() below just iterates whatever
-// find_library_dirs() returns.
+// Empty today: LiquidCrystal was removed alongside ArduinoCore-avr (LCD
+// sketches now run through the JS-native avr8-js runtime instead - see
+// avr8js/arduino's own LiquidCrystal class), and no vendored library
+// currently targets ATtiny85, the only board left reaching this file.
+// Adding one back is a single entry here plus a matching CMakeLists.txt
+// copy step - nothing else in this file needs to change, since
+// compile_sketch() below just iterates whatever find_library_dirs()
+// returns.
 const std::vector<std::string> &known_libraries() {
-  static const std::vector<std::string> libs = {"LiquidCrystal"};
+  static const std::vector<std::string> libs = {};
   return libs;
 }
 

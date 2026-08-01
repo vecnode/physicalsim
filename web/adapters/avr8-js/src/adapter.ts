@@ -1,26 +1,44 @@
-import { ArduinoRuntime, compileSketch, createSketchGlobals, pinName, type CompiledSketch } from "avr8js/arduino";
+import {
+  ArduinoRuntime,
+  compileSketch,
+  createSketchGlobals,
+  parsePinName,
+  pinName,
+  type CompiledSketch,
+} from "avr8js/arduino";
 import type { SimState, SimulatorAdapter } from "@physicalsim/common";
 
-// A second, parallel Arduino Uno adapter: instead of compiling a real
-// C++ sketch with avr-gcc and running the resulting machine code through
+// A JS/TS-native Arduino adapter: instead of compiling a real C++
+// sketch with avr-gcc and running the resulting machine code through
 // avr8js's cycle-accurate CPU emulation (see ../avr8/src/adapter.ts),
 // this interprets a JS/TS-authored sketch directly via avr8js's
-// ArduinoRuntime - no C/C++ toolchain involved at all. Deliberately a
-// separate adapter/board type ("avr8-js" / "arduino-uno-js"), not a mode
-// flag on Avr8Adapter - the execution model (interpreted setup()/loop(),
-// blocking delay(), no register-level anything) is different enough that
-// sharing one class would mean every method branching on which mode it's
-// in, rather than two adapters that both happen to implement the same
-// SimulatorAdapter shape.
+// ArduinoRuntime - no C/C++ toolchain involved at all. One class backs
+// every 14-digital-pin AVR board (Uno/Nano/Leonardo - see
+// UNO_PIN_SHAPE) plus Mega (its own much bigger pin count - see
+// worker-mega.ts), parameterized by `pinShape` rather
+// than one class per chip, since the JS-native execution model has no
+// chip-specific register/vector-table differences left to encode -
+// pin count is the only thing that actually varies.
 //
-// Pin ids are exactly ArduinoRuntime's own pinName() output ("D0".."D13",
-// "A0".."A5") - see boards/arduino-uno-js.ts's identity BoardPinMap, which
-// exists only so the board-resolution layer has a map to look up, not
-// because any actual translation happens.
+// Pin ids are exactly avr8js/arduino's own pinName() output
+// ("D0".."D13"/"A0".."A5" for the default shape, "D0".."D53"/
+// "A0".."A15" for Mega) - see boards/arduino-uno.ts's identity
+// BoardPinMap, which exists only so the board-resolution layer has a
+// map to look up, not because any actual translation happens.
+export interface Avr8JsPinShape {
+  digitalPinCount: number;
+  analogPinCount: number;
+}
+
+// Uno/Nano/Leonardo's shape - 14 digital + 6 analog. Mega passes its own
+// (54 digital + 16 analog, see worker-mega.ts) instead of this default.
+export const UNO_PIN_SHAPE: Avr8JsPinShape = { digitalPinCount: 14, analogPinCount: 6 };
+
 export class Avr8JsAdapter implements SimulatorAdapter {
   readonly id = "avr8-js";
 
-  private runtime = new ArduinoRuntime();
+  private readonly pinShape: Avr8JsPinShape;
+  private runtime: ArduinoRuntime;
   private sketch: CompiledSketch | null = null;
   private running = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
@@ -39,6 +57,15 @@ export class Avr8JsAdapter implements SimulatorAdapter {
   private listeners = new Set<(state: SimState) => void>();
   private pinListeners = new Map<string, Set<(value: number) => void>>();
   private serialListeners = new Set<(byte: number) => void>();
+
+  constructor(pinShape: Avr8JsPinShape = UNO_PIN_SHAPE) {
+    this.pinShape = pinShape;
+    this.runtime = this.createRuntime();
+  }
+
+  private createRuntime(): ArduinoRuntime {
+    return new ArduinoRuntime({ pinCount: this.pinShape.digitalPinCount + this.pinShape.analogPinCount });
+  }
 
   async init(_config: unknown): Promise<void> {
     // Nothing to boot into yet - loadFirmware() (really "load sketch
@@ -91,7 +118,7 @@ export class Avr8JsAdapter implements SimulatorAdapter {
 
   reset(): void {
     this.stop();
-    this.runtime = new ArduinoRuntime();
+    this.runtime = this.createRuntime();
     this.wireRuntimeListeners();
     this.setupRan = false;
     if (this.sketch) {
@@ -100,7 +127,7 @@ export class Avr8JsAdapter implements SimulatorAdapter {
       // only ever receives a signal, not the bytes again, so the already-
       // compiled closures (which captured the OLD runtime's globals) must
       // be discarded and re-created against the new one.
-      this.sketch = compileSketch(this.lastSource ?? "", createSketchGlobals(this.runtime));
+      this.sketch = compileSketch(this.lastSource ?? "", createSketchGlobals(this.runtime, this.pinShape));
     }
     this.emitState();
   }
@@ -111,15 +138,15 @@ export class Avr8JsAdapter implements SimulatorAdapter {
   }
 
   readPin(pin: string): number {
-    return this.runtime.readPin(parsePinName(pin));
+    return this.runtime.readPin(this.parsePin(pin));
   }
 
   readPinDirection(pin: string): "input" | "output" {
-    return this.runtime.readPinDirection(parsePinName(pin));
+    return this.runtime.readPinDirection(this.parsePin(pin));
   }
 
   writePin(pin: string, value: number): void {
-    this.runtime.setDigitalInput(parsePinName(pin), value ? 1 : 0);
+    this.runtime.setDigitalInput(this.parsePin(pin), value ? 1 : 0);
   }
 
   onPinChange(pin: string, cb: (value: number) => void): () => void {
@@ -133,12 +160,13 @@ export class Avr8JsAdapter implements SimulatorAdapter {
   }
 
   writeAnalogPin(pin: string, voltage: number): void {
-    const numericPin = parsePinName(pin);
-    if (numericPin < 14) {
+    const numericPin = this.parsePin(pin);
+    if (numericPin < this.pinShape.digitalPinCount) {
       throw new Error(`Pin "${pin}" is not an ADC-capable pin`);
     }
-    // 0-5V, matching the Uno's real ADC reference range (same clamp
-    // Avr8Adapter.writeAnalogPin() applies before AVRADC ever sees it).
+    // 0-5V, matching every classic AVR board's real ADC reference range
+    // (same clamp Avr8Adapter.writeAnalogPin() applies before AVRADC
+    // ever sees it).
     const clampedVoltage = Math.min(5, Math.max(0, voltage));
     this.runtime.setAnalogInput(numericPin, Math.round((clampedVoltage / 5) * 1023));
   }
@@ -156,9 +184,9 @@ export class Avr8JsAdapter implements SimulatorAdapter {
   loadFirmware(bytes: Uint8Array): void {
     const source = new TextDecoder().decode(bytes);
     this.lastSource = source;
-    this.runtime = new ArduinoRuntime();
+    this.runtime = this.createRuntime();
     this.wireRuntimeListeners();
-    this.sketch = compileSketch(source, createSketchGlobals(this.runtime));
+    this.sketch = compileSketch(source, createSketchGlobals(this.runtime, this.pinShape));
     this.running = false;
     this.setupRan = false;
     if (this.timer !== null) {
@@ -168,12 +196,17 @@ export class Avr8JsAdapter implements SimulatorAdapter {
     this.emitState();
   }
 
+  private parsePin(pin: string): number {
+    return parsePinName(pin, this.pinShape.digitalPinCount, this.pinShape.analogPinCount);
+  }
+
   private wireRuntimeListeners(): void {
     this.runtime.onSerialWrite((byte) => {
       for (const cb of this.serialListeners) cb(byte);
     });
-    for (let pin = 0; pin < 20; pin++) {
-      const name = pinName(pin);
+    const totalPins = this.pinShape.digitalPinCount + this.pinShape.analogPinCount;
+    for (let pin = 0; pin < totalPins; pin++) {
+      const name = pinName(pin, this.pinShape.digitalPinCount, this.pinShape.analogPinCount);
       this.runtime.onPinChange(pin, (value) => {
         for (const cb of this.pinListeners.get(name) ?? []) cb(value);
       });
@@ -210,24 +243,4 @@ export class Avr8JsAdapter implements SimulatorAdapter {
     };
     for (const listener of this.listeners) listener(state);
   }
-}
-
-// Inverse of avr8js/arduino's pinName() - "D0".."D13" -> 0-13, "A0".."A5"
-// -> 14-19. Lives here, not in avr8js, the same way Avr8Adapter's own
-// resolvePin() (parsing "B5" into a port+bit) lives in adapter.ts rather
-// than avr8js itself - adapter-facing pin-string parsing, not core
-// runtime logic.
-function parsePinName(pin: string): number {
-  const letter = pin.charAt(0).toUpperCase();
-  const index = Number(pin.slice(1));
-  if (!Number.isInteger(index) || index < 0) {
-    throw new Error(`Invalid pin id "${pin}"`);
-  }
-  if (letter === "D" && index <= 13) {
-    return index;
-  }
-  if (letter === "A" && index <= 5) {
-    return 14 + index;
-  }
-  throw new Error(`Invalid pin id "${pin}"`);
 }

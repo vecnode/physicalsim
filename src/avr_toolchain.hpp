@@ -2,18 +2,17 @@
 // avr_toolchain.hpp
 //
 // Compiles a real Arduino sketch (setup()/loop(), digitalRead/Write,
-// Serial, etc.) into an Intel HEX image for whichever AVR board is
-// placed (Arduino Uno/Nano - ATmega328p; Arduino Mega - ATmega2560;
-// Franzininho - ATtiny85, its own core tree - see resolve_board_target()
-// in the .cpp), using a bundled/system avr-gcc, the vendored
-// ArduinoCore-avr subset (simulators/ArduinoCore-avr - cores/arduino +
-// variants/standard + variants/mega) or, for Franzininho, the vendored
-// ATTinyCore subset (simulators/ATTinyCore - avr/cores/tiny +
-// avr/variants/tinyx5), and whatever vendored Arduino libraries a sketch
-// #includes (e.g. LiquidCrystal - simulators/LiquidCrystal,
-// CMakeLists.txt's AVR_LIBRARIES list). No compiler ships inside
-// physicalsim's own binary; this shells out to avr-gcc/avr-g++/
-// avr-objcopy via process_exec.hpp's cross-platform spawn helper.
+// Serial, etc.) into an Intel HEX image - today, only for Franzininho
+// (ATtiny85, its own core tree - see resolve_board_target() in the
+// .cpp), using a bundled/system avr-gcc and the vendored ATTinyCore
+// subset (simulators/ATTinyCore - avr/cores/tiny + avr/variants/
+// tinyx5). Uno/Nano/Mega/Leonardo moved to a JS-native runtime
+// (avr8js/arduino, web/adapters/avr8-js) with no C/C++ toolchain
+// involved at all - this file's own ArduinoCore-avr/LiquidCrystal
+// support for those boards was removed alongside that vendored core and
+// library. No compiler ships inside physicalsim's own binary; this
+// shells out to avr-gcc/avr-g++/avr-objcopy via process_exec.hpp's
+// cross-platform spawn helper.
 //
 // The resulting hex text is meant to be fed through the exact same path
 // "Load .hex..." already uses (web/common/src/intel-hex.ts's
@@ -31,16 +30,15 @@ namespace avrtoolchain {
 
 struct ToolchainPaths {
   std::filesystem::path bin_dir;      // avr-gcc/avr-g++/avr-objcopy live here
-  std::filesystem::path core_dir;     // ArduinoCore-avr's cores/arduino
-  std::filesystem::path variant_dir;  // ArduinoCore-avr's variants/<target's variant>
-  // One entry per vendored Arduino library (CMakeLists.txt's
-  // AVR_LIBRARIES list, e.g. LiquidCrystal) that a sketch can #include -
-  // each is that library's own src/ directory, added to both the
-  // compiler's include path and the set of files compiled alongside the
-  // sketch/core (see compile_sketch()). Not required to be non-empty:
-  // a missing library is dropped with a warning in the log rather than
-  // failing the whole compile, since most sketches don't need any of
-  // them.
+  std::filesystem::path core_dir;     // the resolved core tree's cores/<arduino|tiny>
+  std::filesystem::path variant_dir;  // the resolved core tree's variants/<target's variant>
+  // One entry per vendored Arduino library a sketch can #include - empty
+  // today (LiquidCrystal was removed alongside ArduinoCore-avr; no
+  // vendored library currently targets ATtiny85, the only board left
+  // reaching this file). Kept as a list, not deleted outright, since
+  // find_library_dirs()/compile_sketch() already handle "zero libraries"
+  // correctly and a future ATtiny-compatible library is a one-line
+  // addition to known_libraries(), not new plumbing.
   std::vector<std::filesystem::path> library_dirs;
 };
 

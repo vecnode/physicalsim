@@ -4,10 +4,10 @@ import { arduinoUno } from "./arduino-uno.js";
 import { rp2040Board } from "./rp2040-board.js";
 
 describe("resolvePin", () => {
-  it("resolves known Arduino Uno pin names to avr8 pin ids", () => {
-    expect(resolvePin(arduinoUno, "D13")).toBe("B5");
+  it("resolves known Arduino Uno pin names to avr8-js pin ids (identity)", () => {
+    expect(resolvePin(arduinoUno, "D13")).toBe("D13");
     expect(resolvePin(arduinoUno, "D0")).toBe("D0");
-    expect(resolvePin(arduinoUno, "A0")).toBe("C0");
+    expect(resolvePin(arduinoUno, "A0")).toBe("A0");
   });
 
   it("resolves known Pico pin names to rp2040 pin ids", () => {

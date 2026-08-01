@@ -37,7 +37,6 @@
 #include <cpp-embedlib-httplib.h>
 #include "WebAssets.h"
 #include "webview/webview.h"
-#include "avr_toolchain.hpp"
 #include "esp32_toolchain.hpp"
 #include <nlohmann/json.hpp>
 
@@ -440,21 +439,14 @@ int main(int argc, char **argv) {
       });
 
 
-  // Compiles a real Arduino sketch (setup()/loop(), digitalRead/Write,
-  // Serial, etc.) into an Intel HEX image using a bundled/system avr-gcc -
-  // see avr_toolchain.hpp. Deliberately outside the /bridge/:adapter/...
-  // abstraction above: compiling isn't scoped to a running adapter
-  // instance the way pin I/O is, it's a standalone build step whose
-  // output (hex text) the browser then feeds through the exact same
-  // parseIntelHex() -> loadFirmware() path "Load .hex..." already uses.
-  // POST /compile  body: {"source": "<sketch text>", "board": "<CircuitBoard.type, optional>"}
-  // "board" selects the -mmcu=/variant target (see avr_toolchain.hpp's
-  // resolve_board_target()) - omitted or unrecognized falls back to
-  // Arduino Uno, matching this endpoint's original single-board behavior.
-  // RP2040 boards (nano-rp2040-connect, pi-pico, pi-pico-w) are JS-native
-  // (web/adapters/rp2040-js) and never reach this endpoint - see the
-  // early-return comment below. ESP32's "binHex" convention (below) is
-  // what a future non-AVR real-compile board would still reuse.
+  // Real compilation for ESP32 only now - every AVR and RP2040 board is
+  // JS-native (interpreted directly by avr8js/arduino or rp2040js/pico
+  // in its own Worker adapter, no toolchain involved). Deliberately
+  // outside the /bridge/:adapter/... abstraction above: compiling isn't
+  // scoped to a running adapter instance the way pin I/O is, it's a
+  // standalone build step whose output (ELF bytes, "binHex") the
+  // browser feeds straight into esp32js's loadFirmware().
+  // POST /compile  body: {"source": "<sketch text>", "board": "<CircuitBoard.type>"}
   server.Post("/compile", [](const httplib::Request &req, httplib::Response &res) {
     json body;
     try {
@@ -506,20 +498,20 @@ int main(int argc, char **argv) {
       return;
     }
 
-    // RP2040 boards (nano-rp2040-connect, pi-pico, pi-pico-w) no longer
-    // route here at all - they're JS-native now (web/adapters/rp2040-js,
-    // interpreting pico-sdk-shaped sketches directly via rp2040js/pico,
-    // no C/C++ toolchain), the same direction ArduinoCore-avr/
-    // LiquidCrystal were removed for. See circuit.ts's boardAdapterId.
-
-    const auto result = avrtoolchain::compile_sketch(source, board);
-    json out = {{"ok", result.ok}, {"log", result.log}};
-    if (result.ok) {
-      out["hexText"] = result.hex_text;
-    }
+    // Every other board (Uno/Nano/Mega/Leonardo/Franzininho, RP2040's
+    // three boards) is JS-native now - interpreting Arduino-API- or
+    // pico-sdk-shaped sketches directly via avr8js/arduino or
+    // rp2040js/pico, no C/C++ toolchain at all (see circuit.ts's
+    // boardAdapterId and main.ts's NO_COMPILER_ADAPTER_IDS, which route
+    // them away from this endpoint entirely). Nothing valid reaches
+    // here anymore - avr_toolchain.cpp (and the ArduinoCore-avr/
+    // ATTinyCore/LiquidCrystal it depended on) was removed alongside
+    // the boards that needed it.
+    res.status = 501;
     res.set_header("Cache-Control", "no-store");
-    res.status = result.ok ? 200 : 422;
-    res.set_content(out.dump(), "application/json");
+    res.set_content(
+        R"({"ok":false,"log":"no C/C++ compiler backs this board - it runs a JS-native sketch runtime instead"})",
+        "application/json");
   });
 
   // Serve embedded static assets from public/.

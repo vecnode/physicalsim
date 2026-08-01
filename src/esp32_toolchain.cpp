@@ -32,9 +32,8 @@ namespace {
 // esp-idf itself is now vendored (simulators/esp-idf, a fork of
 // espressif/esp-idf, added as a git submodule pinned to v5.3.1 the same
 // "own the fork" way every other simulators/ dependency is) - a dev build
-// finds it there via PHYSICALSIM_SOURCE_DIR, the same fallback
-// avr_toolchain.cpp already uses for its own vendored ArduinoCore-avr
-// tree, and a packaged build finds a bundled copy next to the executable
+// finds it there via PHYSICALSIM_SOURCE_DIR, and a packaged build finds a
+// bundled copy next to the executable
 // (CMakeLists.txt's BUNDLE_ESP_IDF, opt-in given the size - esp-idf has
 // no clean trim boundary and runs to hundreds of MB). The
 // xtensa-esp-elf-gcc toolchain itself is bundled via
@@ -59,10 +58,8 @@ std::filesystem::path executable_dir() {
 }
 
 // Bundled "esp32-toolchain/bin" next to the executable (CMakeLists.txt's
-// BUNDLE_XTENSA_TOOLCHAIN copies one there, mirroring
-// BUNDLE_AVR_TOOLCHAIN's "avr-toolchain/bin") - checked first, same
-// "bundled beats dev-machine" priority avr_toolchain.cpp's own
-// find_toolchain_bin_dir() uses. Only the compiler itself is bundled this
+// BUNDLE_XTENSA_TOOLCHAIN copies one there) - checked first, "bundled
+// beats dev-machine" priority. Only the compiler itself is bundled this
 // way today - esp-idf/cmake/ninja/python still resolve from this dev
 // machine's fixed paths below (see esp32_toolchain.hpp's header comment
 // on why those three aren't bundled yet).
@@ -81,9 +78,7 @@ std::optional<std::filesystem::path> find_bundled_xtensa_gcc_bin_dir() {
 // BUNDLE_ESP_IDF copies simulators/esp-idf there for packaged builds,
 // opt-in given the size), then simulators/esp-idf straight from the
 // source tree (PHYSICALSIM_SOURCE_DIR) for a dev build run before that
-// copy step has ever happened - the same two-step fallback
-// avr_toolchain.cpp's own find_core_dir() already uses for its vendored
-// tree.
+// copy step has ever happened.
 std::optional<std::filesystem::path> find_vendored_esp_idf_dir() {
   const auto bundled = executable_dir() / "esp-idf";
   std::error_code ec;
@@ -369,11 +364,10 @@ CompileResult compile_sketch(const std::string &source) {
   std::error_code ec;
   std::filesystem::create_directories(dir / "main", ec);
 
-  // main.c: the user's app_main() body, wrapped the same "just the body,
-  // not a full translation unit" way avr_toolchain.cpp's Arduino sketches
-  // are - except this API surface is ESP-IDF's own (gpio_set_level(),
-  // vTaskDelay()), not Arduino's, since no Arduino-compatible core is
-  // vendored for ESP32.
+  // main.c: the user's app_main() body, wrapped as just the body, not a
+  // full translation unit - this API surface is ESP-IDF's own
+  // (gpio_set_level(), vTaskDelay()), not Arduino's, since no
+  // Arduino-compatible core is vendored for ESP32.
   {
     std::ofstream main_file(dir / "main" / "main.c");
     main_file << "#include \"driver/gpio.h\"\n"

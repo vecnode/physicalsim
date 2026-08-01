@@ -7,9 +7,6 @@
 [submodule "simulators/wokwi-elements"]
 	path = simulators/wokwi-elements
 	url = https://github.com/vecnode/wokwi-elements.git
-[submodule "simulators/ATTinyCore"]
-	path = simulators/ATTinyCore
-	url = https://github.com/vecnode/ATTinyCore.git
 [submodule "simulators/esp-idf"]
 	path = simulators/esp-idf
 	url = https://github.com/vecnode/esp-idf.git

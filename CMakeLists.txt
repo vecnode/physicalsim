@@ -19,26 +19,13 @@ set(WEBVIEW2_FIXED_RUNTIME_DIR "" CACHE PATH "Path to fixed WebView2 runtime dir
 
 include(FetchContent)
 
-# The AVR toolchain (avr-gcc/avr-g++/avr-objcopy) backing the in-app
-# Arduino sketch compiler (see src/avr_toolchain.cpp). Unlike WebView2
-# above, this isn't "copy an already-installed directory" - it's fetched
-# as Arduino's own prebuilt, redistributable toolchain archive (the exact
-# one arduino-cli itself downloads) via FetchContent below - a plain
-# "download a URL tarball, don't build from source" shape. Off by default:
-# it's a ~150MB download, only needed to actually compile sketches -
-# src/avr_toolchain.cpp falls back to PATH/an existing Arduino IDE install
-# when unbundled.
-option(BUNDLE_AVR_TOOLCHAIN "Fetch and bundle a prebuilt avr-gcc toolchain for the in-app sketch compiler" OFF)
-
 # simulators/esp-idf (vendored, see below) is genuinely too big to always
-# ship the way ArduinoCore-avr's ~1MB (trimmed) unconditionally does - a
-# real ESP-IDF checkout with its own submodules runs to hundreds of MB,
-# with no clean per-file trim boundary (same reasoning
+# ship - a real ESP-IDF checkout with its own submodules runs to hundreds
+# of MB, with no clean per-file trim boundary (same reasoning
 # BUNDLE_XTENSA_TOOLCHAIN's own comment gives). Off by default; a dev
 # build without this still works via esp32_toolchain.cpp's
-# PHYSICALSIM_SOURCE_DIR fallback straight to simulators/esp-idf, the
-# same way avr-core falls back to its own source tree before its own
-# copy step has run.
+# PHYSICALSIM_SOURCE_DIR fallback straight to simulators/esp-idf before
+# a packaged build's own copy step has run.
 option(BUNDLE_ESP_IDF "Bundle vendored esp-idf next to the executable for a packaged ESP32 Compile & Run" OFF)
 
 if(POLICY CMP0135)
@@ -110,71 +97,20 @@ FetchContent_Declare(nlohmann_json
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# Prebuilt avr-gcc toolchain (see BUNDLE_AVR_TOOLCHAIN above). This archive
-# has no CMakeLists.txt of its own - FetchContent_MakeAvailable populates
-# (downloads + extracts) it and, finding nothing to add_subdirectory(),
-# stops there, which is exactly what's wanted for a plain prebuilt-binary
-# vendor. AVR_TOOLCHAIN_BIN_DIR is only meaningful when BUNDLE_AVR_TOOLCHAIN
-# is ON; src/avr_toolchain.cpp's own PATH/well-known-location fallback
-# covers the OFF case.
-set(AVR_TOOLCHAIN_BIN_DIR "")
-if(BUNDLE_AVR_TOOLCHAIN)
-    if(WIN32)
-        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-i686-w64-mingw32.zip")
-    elseif(APPLE)
-        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-x86_64-apple-darwin14.tar.bz2")
-    elseif(UNIX)
-        set(_avr_toolchain_url "https://downloads.arduino.cc/tools/avr-gcc-7.3.0-atmel3.6.1-arduino7-x86_64-pc-linux-gnu.tar.bz2")
-    endif()
-
-    if(_avr_toolchain_url)
-        FetchContent_Declare(avr_gcc_toolchain URL ${_avr_toolchain_url})
-        FetchContent_MakeAvailable(avr_gcc_toolchain)
-        # Despite the name, this is the *root* directory that gets mirrored
-        # wholesale into avr-toolchain/ below (copy_directory copies
-        # AVR_TOOLCHAIN_BIN_DIR's *contents*, so it needs to be "the thing
-        # containing bin/, libexec/, etc.", not bin/ itself) - src/
-        # avr_toolchain.cpp then looks for avr-toolchain/bin/avr-g++.exe.
-        # Layout differs by platform archive, confirmed by actually
-        # extracting and looking (not assumed): the macOS/Linux archives
-        # nest the *entire* toolchain (bin/, include/, lib/, libexec/, the
-        # "avr-"-prefixed compiler drivers and all) one level down inside a
-        # top-level "avr/" directory. The Windows zip is flatter - bin/
-        # (with the real avr-g++.exe/avr-gcc.exe/avr-objcopy.exe) and
-        # libexec/ (cc1plus, needed at compile time) already sit at the
-        # archive root; its own "avr/" subdirectory is just the AVR target
-        # sysroot (unprefixed binutils only - ar.exe, ld.exe, no compiler
-        # driver at all), not a second nested copy of the toolchain. Using
-        # avr/bin/ on Windows silently drops the whole compiler while still
-        # leaving something on disk (a real bug: BUNDLE_AVR_TOOLCHAIN
-        # "succeeded" but Compile & Run still failed with the exact
-        # toolchain-not-found error this whole feature exists to fix).
-        if(EXISTS "${avr_gcc_toolchain_SOURCE_DIR}/bin/avr-g++.exe" OR EXISTS "${avr_gcc_toolchain_SOURCE_DIR}/bin/avr-g++")
-            set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}")
-        else()
-            set(AVR_TOOLCHAIN_BIN_DIR "${avr_gcc_toolchain_SOURCE_DIR}/avr")
-        endif()
-    else()
-        message(WARNING "[physicalsim] BUNDLE_AVR_TOOLCHAIN is ON but this platform has no known prebuilt avr-gcc URL - skipping")
-    endif()
-endif()
-
 # Prebuilt xtensa-esp-elf-gcc toolchain (the "esp32" adapter's Compile & Run
-# pipeline, src/esp32_toolchain.cpp) - same "copy an already-published
-# archive in, don't build it ourselves" posture as BUNDLE_AVR_TOOLCHAIN
-# above. Not xPack (checked directly - xpack-dev-tools publishes no
+# pipeline, src/esp32_toolchain.cpp) - a "copy an already-published
+# archive in, don't build it ourselves" posture. Not xPack (checked
+# directly - xpack-dev-tools publishes no
 # xtensa/esp32 toolchain at all): Espressif
 # publishes it themselves on espressif/crosstool-NG's GitHub releases -
 # these are the exact URLs esp-idf's own installer (install.ps1/
 # idf_tools.py) downloads, read straight out of a real esp-idf checkout's
 # tools/tools.json rather than guessed. The Windows archive nests
 # everything one level down inside its own "xtensa-esp-elf/" directory
-# (confirmed by actually extracting it), unlike BUNDLE_AVR_TOOLCHAIN's
-# flatter Windows archive. Not yet confirmed whether
+# (confirmed by actually extracting it). Not yet confirmed whether
 # macOS/Linux releases nest the same way (this project's ESP32 work so
-# far has only run on Windows), so the same EXISTS-based detection
-# BUNDLE_AVR_TOOLCHAIN uses for its own per-platform nesting difference is
-# applied here too, rather than assuming.
+# far has only run on Windows), so an EXISTS-based detection is applied
+# here rather than assuming.
 option(BUNDLE_XTENSA_TOOLCHAIN "Fetch and bundle a prebuilt xtensa-esp-elf-gcc toolchain for the in-app ESP32 sketch compiler" OFF)
 set(XTENSA_TOOLCHAIN_BIN_DIR "")
 if(BUNDLE_XTENSA_TOOLCHAIN)
@@ -217,12 +153,12 @@ cpp_embedlib_add(WebAssets
 
 # ---- Application target and hardening --------------------------------------
 add_executable(physicalsim src/main.cpp
-    src/avr_toolchain.cpp src/esp32_toolchain.cpp src/process_exec.cpp)
+    src/esp32_toolchain.cpp src/process_exec.cpp)
 
-# Dev-build fallback so src/avr_toolchain.cpp can find simulators/ATTinyCore
+# Dev-build fallback so src/esp32_toolchain.cpp can find simulators/esp-idf
 # straight from the source tree before the POST_BUILD copy below has ever
 # run (e.g. the very first debug build). Packaged builds always have the
-# POST_BUILD-copied attiny-core/ next to the executable and never need this.
+# POST_BUILD-copied esp-idf/ next to the executable and never need this.
 target_compile_definitions(physicalsim PRIVATE
     PHYSICALSIM_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}"
 )
@@ -364,68 +300,16 @@ if(WIN32)
 
 endif()
 
-# ---- AVR sketch-compiler assets (cross-platform, not gated on WIN32) -------
-# ArduinoCore-avr and the LiquidCrystal library are gone - Uno/Nano/Mega/
-# Leonardo (and their LCD examples) all run through the JS-native avr8-js
-# runtime now (avr8js/arduino, see that repo), no C/C++ Arduino core
-# needed for them at all. ATtiny85 (Franzininho) is the one board that
-# still needs a real vendored core tree - ATtiny85 has no USART/SPI/TWI
-# hardware and a much smaller register set, so its Arduino.h/wiring.c
-# are written completely differently from any ATmega core, real or JS
-# (SpenceKonde/ATTinyCore, LGPL 2.1, forked to vecnode/ATTinyCore) - a
-# JS-native ATtiny85 runtime is a planned follow-up, not done here.
-add_custom_command(TARGET physicalsim POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:physicalsim>/attiny-core/cores
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/cores/tiny
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/attiny-core/cores/tiny
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMAND ${CMAKE_COMMAND} -E make_directory
-        $<TARGET_FILE_DIR:physicalsim>/attiny-core/variants
-    COMMAND ${CMAKE_COMMAND}
-        -DSRC=${CMAKE_CURRENT_SOURCE_DIR}/simulators/ATTinyCore/avr/variants/tinyx5
-        -DDEST=$<TARGET_FILE_DIR:physicalsim>/attiny-core/variants/tinyx5
-        -DSTAMP=.copied.stamp
-        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-    COMMENT "Copying vendored ATTinyCore (cores/tiny + variants/tinyx5)"
-)
-
-# The toolchain itself, only when BUNDLE_AVR_TOOLCHAIN actually fetched one
-# (see the FetchContent block above) - large (~150MB), opt-in.
-if(BUNDLE_AVR_TOOLCHAIN AND AVR_TOOLCHAIN_BIN_DIR)
-    add_custom_command(TARGET physicalsim POST_BUILD
-        COMMAND ${CMAKE_COMMAND}
-            -DSRC=${AVR_TOOLCHAIN_BIN_DIR}
-            -DDEST=$<TARGET_FILE_DIR:physicalsim>/avr-toolchain
-            -DSTAMP=.copied.stamp
-            -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/copy_if_stale.cmake
-        COMMENT "Bundling avr-gcc toolchain"
-    )
-
-    # The archive ships its own license text (GPLv3 for gcc/binutils) under
-    # a version-specific name (e.g. "AVR Toolchain (GPL).txt") rather than
-    # a fixed "COPYING" - globbed rather than hardcoded so this doesn't
-    # silently stop bundling a license file on a toolchain version bump.
-    file(GLOB _avr_toolchain_license_files
-        "${AVR_TOOLCHAIN_BIN_DIR}/*[Ll][Ii][Cc][Ee][Nn][Ss][Ee]*"
-        "${AVR_TOOLCHAIN_BIN_DIR}/*COPYING*"
-    )
-    if(_avr_toolchain_license_files)
-        add_custom_command(TARGET physicalsim POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                ${_avr_toolchain_license_files}
-                $<TARGET_FILE_DIR:physicalsim>/avr-toolchain/
-            COMMENT "Bundling avr-gcc toolchain license"
-        )
-    endif()
-endif()
-
 # ---- ESP32 sketch-compiler assets (cross-platform, not gated on WIN32) -----
+# ArduinoCore-avr, ATTinyCore, and LiquidCrystal are all gone - every AVR
+# board (Uno/Nano/Mega/Leonardo/Franzininho) runs through a JS-native
+# runtime now (avr8js/arduino, see that repo), no C/C++ Arduino core
+# needed for any of them. ESP32 is the one board family that still
+# compiles for real.
+#
 # src/esp32_sketch_template is tiny (two CMakeLists.txt files) - always
-# copied, same "small enough to always ship" posture as avr-core's own
-# copy step above. simulators/esp-idf itself is the opposite case (see
+# copied, same "small enough to always ship" posture the vendored AVR
+# cores used to have. simulators/esp-idf itself is the opposite case (see
 # BUNDLE_ESP_IDF's own comment above) - only copied when explicitly
 # requested.
 add_custom_command(TARGET physicalsim POST_BUILD
@@ -449,8 +333,7 @@ if(BUNDLE_ESP_IDF)
 endif()
 
 # The xtensa-esp-elf toolchain itself, only when BUNDLE_XTENSA_TOOLCHAIN
-# actually fetched one - same "off unless packaging a release" posture as
-# BUNDLE_AVR_TOOLCHAIN. Lands at
+# actually fetched one - off unless packaging a release. Lands at
 # esp32-toolchain/bin/xtensa-esp32-elf-gcc.exe next to the executable -
 # src/esp32_toolchain.cpp's find_toolchain() checks there first, before
 # falling back to this dev machine's fixed C:\esp-idf/.espressif paths.

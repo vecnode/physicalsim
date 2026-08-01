@@ -29,6 +29,10 @@ export type AdapterId =
   // getAdapterClient() below), so sharing "avr8-js" would mean an Uno
   // and a Mega fight over one runtime shaped for neither of them.
   | "avr8-js-mega"
+  // Own adapter id too - ATtiny85's pin numbering doesn't follow the
+  // D<n>/A<n> convention "avr8-js"/"avr8-js-mega" share (see
+  // web/adapters/avr8-js/src/adapter-attiny85.ts).
+  | "avr8-js-attiny85"
   | "avr8-mega"
   | "avr8-attiny85"
   | "avr8-leonardo"
@@ -78,6 +82,12 @@ function createWorker(id: AdapterId): Worker {
   if (id === "avr8-js-mega") {
     return new Worker(
       new URL("../../adapters/avr8-js/src/worker-mega.ts", import.meta.url),
+      { type: "module" },
+    );
+  }
+  if (id === "avr8-js-attiny85") {
+    return new Worker(
+      new URL("../../adapters/avr8-js/src/worker-attiny85.ts", import.meta.url),
       { type: "module" },
     );
   }

@@ -560,24 +560,24 @@ const EXAMPLES: Record<string, Example> = {
     level: "beginner",
     board: "Franzininho",
     glyph: "🔘",
-    // ATTinyCore (simulators/ATTinyCore, avr_toolchain.cpp's franzininho
-    // target) is a genuine Arduino-API-compatible core, not pico-sdk's
-    // raw C API the way the RP2040 examples are - pinMode()/digitalRead()/
+    // JS-interpreted via the avr8-js-attiny85 adapter (avr8js/arduino's
+    // ArduinoRuntime, no C/C++ toolchain) - pinMode()/digitalRead()/
     // digitalWrite() work exactly like on the Uno, just against a much
-    // smaller chip (ATtiny85: one port, no USART/SPI/TWI hardware - see
-    // chip.ts's ATTINY85 config). Pin numbers 0-5 are ATTinyCore's own
-    // Arduino-style numbering for PB0-PB5 (tinyx5's pins_arduino.h) -
-    // franzininho-element.ts's own pin markers use the real "PB<n>"
-    // silkscreen names instead, mapped through boards/franzininho.ts.
-    sketch: `const int buttonPin = 0;
-const int ledPin = 1;
+    // smaller chip (ATtiny85: one port, no USART/SPI/TWI hardware).
+    // Pin numbers 0-5 map directly onto PB0-PB5 (real ATTinyCore's own
+    // Arduino-style numbering, which this adapter matches - see
+    // adapter-attiny85.ts's own header comment) - franzininho-element.ts's
+    // own pin markers use the real "PB<n>" silkscreen names instead,
+    // mapped through boards/franzininho.ts's identity map.
+    sketch: `const buttonPin = 0;
+const ledPin = 1;
 
-void setup() {
+function setup() {
   pinMode(buttonPin, INPUT);
   pinMode(ledPin, OUTPUT);
 }
 
-void loop() {
+function loop() {
   digitalWrite(ledPin, digitalRead(buttonPin));
 }`,
     build: async () => {
@@ -1324,7 +1324,7 @@ function parseHexBytes(hex: string): Uint8Array {
 // Adapter ids that interpret the sketch source directly (no compiler) -
 // compileAndRun() below skips the /compile HTTP round-trip entirely for
 // these, calling loadFirmware() with the sketch's own UTF-8 bytes.
-const NO_COMPILER_ADAPTER_IDS = new Set<AdapterId>(["avr8-js", "rp2040-js"]);
+const NO_COMPILER_ADAPTER_IDS = new Set<AdapterId>(["avr8-js", "avr8-js-mega", "avr8-js-attiny85", "rp2040-js"]);
 
 async function compileAndRun(): Promise<void> {
   const client = activeClient();

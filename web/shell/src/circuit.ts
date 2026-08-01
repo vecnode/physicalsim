@@ -138,12 +138,14 @@ export const boardAdapterId: Record<string, AdapterId> = {
   // plain D0-D13/A0-A5 numbering for every 14+6-pin AVR board regardless
   // of the real chip underneath (see arduino-leonardo.ts).
   "arduino-leonardo": "avr8-js",
-  // Still the real, cycle-accurate ATtiny85 adapter (chip.ts's ATTINY85)
-  // - Franzininho hasn't moved to a JS-native runtime yet (ATtiny85's
-  // pin numbering doesn't follow the same D<n>/A<n> convention the other
-  // AVR boards do, and needs its own careful mapping - a follow-up, not
-  // done here). simulators/ATTinyCore is still needed for this board.
-  franzininho: "avr8-attiny85",
+  // Its own adapter id - ATtiny85's pin numbering doesn't follow the
+  // D<n>/A<n> convention the other AVR boards do (Arduino pins 0-5 map
+  // directly onto PB0-PB5 - see web/adapters/avr8-js/src/
+  // adapter-attiny85.ts's own header comment), so it's a small dedicated
+  // adapter class, not another Avr8JsPinShape. The real, cycle-accurate
+  // "avr8-attiny85" adapter class is untouched - just unreachable now,
+  // same posture as "avr8"/"rp2040".
+  franzininho: "avr8-js-attiny85",
   // "rp2040-js" (JS/TS-interpreted pico-sdk sketches, no C/C++ toolchain -
   // @physicalsim/adapter-rp2040-js) rather than "rp2040" (the real-compile,
   // cycle-accurate ARM Cortex-M0+ adapter) - real compilation for RP2040

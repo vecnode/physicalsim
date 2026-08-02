@@ -1360,33 +1360,42 @@ linkStyleBtn.addEventListener("click", () => {
   renderLinkStyleIcon();
 });
 
-// The cable color palette (#wire-color-panel) - nine swatches, one
-// click sets every wire's color (WiringLayer.setColor(), the same
-// "global setting, applies immediately" posture cycleStyle() above has).
-// Not persisted, same reasoning as link style. Hidden by default; the
-// toggle button just flips a class, no state beyond that to track.
-const WIRE_COLORS = [
-  DEFAULT_WIRE_COLOR,
-  "#e03131", // red
-  "#2f9e44", // green
-  "#1971c2", // blue
-  "#9c36b5", // purple
-  "#e8590c", // orange
-  "#0c8599", // teal
-  "#c2255c", // pink
-  "#ffffff", // white
+// The cable color palette (#wire-color-panel) - nine swatches, one click
+// sets every wire's color (WiringLayer.setColor(), the same "global
+// setting, applies immediately" posture cycleStyle() above has). Not
+// persisted, same reasoning as link style. Hidden by default; the toggle
+// button just flips a class, no state beyond that to track.
+//
+// The eight non-default swatches follow the conventional breadboard
+// signal-type color code (also documented in ARCHITECTURE.md), so a
+// swatch's hover title tells you which signal it's meant for, not just
+// its hex value - there's no per-wire signal detection here (a wire is
+// still one global color, same as before), this just gives the palette
+// itself a documented meaning instead of nine arbitrary hues. GND uses a
+// dark gray rather than pure black so it stays visible against the
+// canvas's own #1a1a1a dark-theme background.
+const WIRE_COLORS: Array<{ color: string; label: string }> = [
+  { color: DEFAULT_WIRE_COLOR, label: "Default" },
+  { color: "#e03131", label: "VCC (power)" },
+  { color: "#333333", label: "GND (ground)" },
+  { color: "#1971c2", label: "Analog" },
+  { color: "#2f9e44", label: "Digital" },
+  { color: "#9c36b5", label: "PWM" },
+  { color: "#d4a017", label: "I2C (SDA/SCL)" },
+  { color: "#e8590c", label: "SPI (MOSI/MISO/SCK)" },
+  { color: "#15aabf", label: "USART (TX/RX)" },
 ];
 
 const wireColorToggleBtn = document.getElementById("wire-color-toggle-btn") as HTMLButtonElement;
 const wireColorPanel = document.getElementById("wire-color-panel") as HTMLElement;
 const wireColorSwatches = document.getElementById("wire-color-swatches") as HTMLElement;
 
-for (const color of WIRE_COLORS) {
+for (const { color, label } of WIRE_COLORS) {
   const swatch = document.createElement("button");
   swatch.type = "button";
   swatch.className = "wire-color-swatch";
   swatch.style.background = color;
-  swatch.title = color;
+  swatch.title = `${label} — ${color}`;
   swatch.addEventListener("click", () => canvas.scene.wiring.setColor(color));
   wireColorSwatches.appendChild(swatch);
 }

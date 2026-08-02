@@ -34,7 +34,7 @@ function clampVoltage(v: number): number {
   return Number.isFinite(v) ? Math.min(5, Math.max(0, v)) : 0;
 }
 
-// wokwi-potentiometer/wokwi-slide-potentiometer both expose `value`
+// iot-potentiometer/iot-slide-potentiometer both expose `value`
 // (default range 0..1023, `min`/`max` properties) - see potentiometer-
 // element.ts. Mapped linearly onto 0..5V, the same 10-bit-ADC-over-5V-
 // reference relationship the real AVRADC assumes (see avr8js's own
@@ -50,7 +50,7 @@ function potentiometerVoltage(el: Record<string, unknown>): number {
 export const componentAnalogPins: Record<string, ComponentAnalogPin[]> = {
   potentiometer: [{ pinName: "SIG", toVoltage: potentiometerVoltage }],
   "slide-potentiometer": [{ pinName: "SIG", toVoltage: potentiometerVoltage }],
-  // wokwi-analog-joystick's xValue/yValue range -1..1, centered at 0 when
+  // iot-analog-joystick's xValue/yValue range -1..1, centered at 0 when
   // released (analog-joystick-element.ts) - a real joystick's wiper sits
   // at mid-rail (2.5V on a 5V ADC reference) when centered, so the
   // mapping is (value+1)/2 * 5, not value/1023 * 5 like the pots above.

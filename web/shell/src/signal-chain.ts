@@ -95,7 +95,7 @@ export class SignalChain {
     }
 
     // role === "read": drive the placed element's own `value` property
-    // (e.g. wokwi-led's) from the pin - Led (web/common) models the same
+    // (e.g. iot-led's) from the pin - Led (web/common) models the same
     // "reflect, don't drive" relationship but has no external change hook
     // to redraw a DOM property from, so this talks to CircuitPin directly
     // rather than wrapping it.

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { pinPowerInfo, validateWires, type PinPowerInfo } from "./wire-validator.js";
 import type { Wire } from "./wiring.js";
-import type { ElementPin } from "@wokwi/elements";
+import type { ElementPin } from "iot-elements";
 
 function wire(id: string, aEntity: string, aPin: string, bEntity: string, bPin: string): Wire {
   return { id, a: { entityId: aEntity, pin: aPin }, b: { entityId: bEntity, pin: bPin }, elbow: {}, waypoints: [] };

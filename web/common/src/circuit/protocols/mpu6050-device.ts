@@ -30,7 +30,7 @@ const MPU6050_BUS_ADDRESS = 0x69;
 // the bus address above, not a copy/paste of it.
 const WHO_AM_I_VALUE = 0x68;
 //
-// What this actually buys, given wokwi-mpu6050 has no tilt/shake
+// What this actually buys, given iot-mpu6050 has no tilt/shake
 // interaction to sample from (see COMPONENTS.md - the placed element is
 // only a static illustration plus one boolean-driven LED, unlike a
 // joystick's real analog axes): register-protocol correctness for a

@@ -1,5 +1,5 @@
 import { boardPinMaps, resolveBoardPinName, resolvePin } from "@physicalsim/common";
-import type { ElementPin } from "@wokwi/elements";
+import type { ElementPin } from "iot-elements";
 import type { AdapterId, SimClient } from "./adapter-registry.js";
 import type { CircuitBoard } from "./circuit.js";
 import type { Scene } from "./canvas/scene.js";

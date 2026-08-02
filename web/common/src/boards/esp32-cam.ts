@@ -1,6 +1,6 @@
 import type { BoardPinMap } from "./board.js";
 
-// wokwi-esp32-cam's own pin markers (esp32-cam-element.ts, vendored from
+// iot-esp32-cam's own pin markers (esp32-cam-element.ts, vendored from
 // upstream wokwi/wokwi-boards) are bare GPIO numbers - this board's own
 // real silkscreen. Identity mapping, same shape as esp32-devkit-v1.ts's
 // own. GPIO0 (boot-mode strapping pin) is excluded, same precedent as

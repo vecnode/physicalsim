@@ -1,4 +1,4 @@
-import type { ElementPin } from "@wokwi/elements";
+import type { ElementPin } from "iot-elements";
 import type { Scene } from "./canvas/scene.js";
 import { pinPowerInfo, validateWires } from "./canvas/wire-validator.js";
 

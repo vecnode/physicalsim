@@ -40,9 +40,9 @@ const PROTOCOL_ATTACHERS: Record<
   string,
   (pins: Record<string, CircuitPin>, el: HTMLElement) => ProtocolAttachment
 > = {
-  // wokwi-lcd1602's own fixed size (16 cols x 2 rows).
+  // iot-lcd1602's own fixed size (16 cols x 2 rows).
   lcd1602: (pins, el) => attachHd44780(pins, el, 16, 2),
-  // wokwi-lcd2004 - a plain subclass of wokwi-lcd1602 (same pinInfo,
+  // iot-lcd2004 - a plain subclass of iot-lcd1602 (same pinInfo,
   // same "characters" API) overriding only its size to 20x4, so it needs
   // no protocol work of its own beyond this entry - see hd44780-decoder.
   // ts's own generalized row-offset math for why 4 rows "just works".

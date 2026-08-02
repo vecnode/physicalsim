@@ -6,7 +6,7 @@
     "useDefineForClassFields": false,
     "paths": {
       "@physicalsim/common": ["../common/src/index.ts"],
-      "@wokwi/elements": ["../../simulators/iot-elements/src/index.ts"],
+      "iot-elements": ["../../simulators/iot-elements/src/index.ts"],
       // wokwi-elements imports "lit" as a real npm package, but it lives
       // outside web/'s npm workspace (simulators/ is a sibling of web/,
       // not nested under it), so plain node resolution walking up from

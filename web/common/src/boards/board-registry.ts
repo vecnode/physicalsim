@@ -25,7 +25,7 @@ export const boardPinMaps: Record<string, BoardPinMap> = {
   "nano-rp2040-connect": nanoRp2040Connect,
   // rp2040-board.ts's own generic GP<n> identity map - written before any
   // placeable board used it (only board.test.ts's own coverage), and
-  // finally the right fit: wokwi-pi-pico's own pin markers are literally
+  // finally the right fit: iot-pi-pico's own pin markers are literally
   // "GP0".."GP28" (see pi-pico-element.ts, vendored from wokwi/wokwi-
   // boards), unlike nano-rp2040-connect's Arduino-Nano-shaped D/A markers.
   "pi-pico": rp2040Board,

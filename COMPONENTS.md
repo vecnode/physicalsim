@@ -18,17 +18,17 @@ ESP-IDF core).
 
 | Board | Custom element | Adapter | Fork | Preview |
 |---|---|---|---|---|
-| Arduino Uno | `wokwi-arduino-uno` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-arduino-uno.svg" height="53"> |
-| Arduino Nano | `wokwi-arduino-nano` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-arduino-nano.svg" height="17"> |
-| Arduino Mega | `wokwi-arduino-mega` | `avr8-js-mega` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-arduino-mega.svg" height="50"> |
-| Franzininho | `wokwi-franzininho` | `avr8-js-attiny85` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-franzininho.svg" height="30"> |
-| Arduino Leonardo | `wokwi-arduino-leonardo` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-arduino-leonardo.svg" height="51"> |
-| Arduino Nano RP2040 Connect | `wokwi-nano-rp2040-connect` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-nano-rp2040-connect.svg" height="17"> |
-| Raspberry Pi Pico | `wokwi-pi-pico` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-pi-pico.svg" height="20"> |
-| Raspberry Pi Pico W | `wokwi-pi-pico-w` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-pi-pico-w.svg" height="20"> |
-| ESP32 DevKit V1 | `wokwi-esp32-devkit-v1` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-v1.svg" height="28"> |
-| ESP32 DevKit C V4 | `wokwi-esp32-devkit-c-v4` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-esp32-devkit-c-v4.svg" height="27"> |
-| ESP32-CAM | `wokwi-esp32-cam` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-esp32-cam.svg" height="27"> |
+| Arduino Uno | `iot-arduino-uno` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-arduino-uno.svg" height="53"> |
+| Arduino Nano | `iot-arduino-nano` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-arduino-nano.svg" height="17"> |
+| Arduino Mega | `iot-arduino-mega` | `avr8-js-mega` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-arduino-mega.svg" height="50"> |
+| Franzininho | `iot-franzininho` | `avr8-js-attiny85` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-franzininho.svg" height="30"> |
+| Arduino Leonardo | `iot-arduino-leonardo` | `avr8-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-arduino-leonardo.svg" height="51"> |
+| Arduino Nano RP2040 Connect | `iot-nano-rp2040-connect` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-nano-rp2040-connect.svg" height="17"> |
+| Raspberry Pi Pico | `iot-pi-pico` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-pi-pico.svg" height="20"> |
+| Raspberry Pi Pico W | `iot-pi-pico-w` | `rp2040-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-pi-pico-w.svg" height="20"> |
+| ESP32 DevKit V1 | `iot-esp32-devkit-v1` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-esp32-devkit-v1.svg" height="28"> |
+| ESP32 DevKit C V4 | `iot-esp32-devkit-c-v4` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-esp32-devkit-c-v4.svg" height="27"> |
+| ESP32-CAM | `iot-esp32-cam` | `esp32-js` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-esp32-cam.svg" height="27"> |
 
 
 ## Components
@@ -40,51 +40,51 @@ state - purely placed and wireable (see [ARCHITECTURE.md](ARCHITECTURE.md)'s
 
 | Component | Custom element | Fork | Preview |
 |---|---|---|---|
-| DHT22 (Temp/Humidity) | `wokwi-dht22` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-dht22.svg" height="16"> |
-| HC-SR04 (Ultrasonic) | `wokwi-hc-sr04` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-hc-sr04.svg" height="25"> |
-| Flame Sensor | `wokwi-flame-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-flame-sensor.svg" height="16"> |
-| Gas Sensor | `wokwi-gas-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-gas-sensor.svg" height="16"> |
-| Heart Beat Sensor | `wokwi-heart-beat-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-heart-beat-sensor.svg" height="20"> |
-| IR Receiver | `wokwi-ir-receiver` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ir-receiver.svg" height="16"> |
-| MPU6050 (Accel/Gyro) | `wokwi-mpu6050` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-mpu6050.svg" height="16"> |
-| NTC Temperature Sensor | `wokwi-ntc-temperature-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ntc-temperature-sensor.svg" height="19"> |
-| Photoresistor | `wokwi-photoresistor-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-photoresistor-sensor.svg" height="16"> |
-| PIR Motion Sensor | `wokwi-pir-motion-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-pir-motion-sensor.svg" height="24"> |
-| Small Sound Sensor | `wokwi-small-sound-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-small-sound-sensor.svg" height="16"> |
-| Big Sound Sensor | `wokwi-big-sound-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-big-sound-sensor.svg" height="16"> |
-| Tilt Switch | `wokwi-tilt-switch` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-tilt-switch.svg" height="16"> |
-| HX711 (Load Cell Amp) | `wokwi-hx711` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-hx711.svg" height="43"> |
-| LED | `wokwi-led` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-led.svg" height="40"> |
-| RGB LED | `wokwi-rgb-led` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-rgb-led.svg" height="42"> |
-| LED Ring | `wokwi-led-ring` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-led-ring.svg" height="37"> |
-| LED Bar Graph | `wokwi-led-bar-graph` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-led-bar-graph.svg" height="16"> |
-| NeoPixel | `wokwi-neopixel` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-neopixel.svg" height="16"> |
-| NeoPixel Matrix | `wokwi-neopixel-matrix` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-neopixel-matrix.svg" height="47"> |
-| 7-Segment Display | `wokwi-7segment` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-7segment.svg" height="16"> |
-| LCD1602 | `wokwi-lcd1602` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-lcd1602.svg" height="36"> |
-| LCD2004 | `wokwi-lcd2004` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-lcd2004.svg" height="47"> |
-| SSD1306 (OLED) | `wokwi-ssd1306` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ssd1306.svg" height="96"> |
-| ILI9341 (TFT) | `wokwi-ili9341` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ili9341.svg" height="46"> |
-| Buzzer | `wokwi-buzzer` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-buzzer.svg" height="16"> |
-| Servo Motor | `wokwi-servo` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-servo.svg" height="31"> |
-| Stepper Motor | `wokwi-stepper-motor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-stepper-motor.svg" height="58"> |
-| Biaxial Stepper | `wokwi-biaxial-stepper` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-biaxial-stepper.svg" height="56"> |
-| Resistor | `wokwi-resistor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-resistor.svg" height="16"> |
-| Capacitor | `wokwi-capacitor` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-capacitor.svg" height="16"> |
-| Potentiometer | `wokwi-potentiometer` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-potentiometer.svg" height="20"> |
-| Slide Potentiometer | `wokwi-slide-potentiometer` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-slide-potentiometer.svg" height="29"> |
-| Pushbutton | `wokwi-pushbutton` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-pushbutton.svg" height="16"> |
-| Pushbutton (6mm) | `wokwi-pushbutton-6mm` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-pushbutton-6mm.svg" height="16"> |
-| Slide Switch | `wokwi-slide-switch` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-slide-switch.svg" height="16"> |
-| DIP Switch (8-way) | `wokwi-dip-switch-8` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-dip-switch-8.svg" height="55"> |
-| Membrane Keypad | `wokwi-membrane-keypad` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-membrane-keypad.svg" height="70"> |
-| Rotary Dialer | `wokwi-rotary-dialer` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-rotary-dialer.svg" height="96"> |
-| Relay (KS2E-M-DC5) | `wokwi-ks2e-m-dc5` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ks2e-m-dc5.svg" height="16"> |
-| DS1307 (RTC) | `wokwi-ds1307` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ds1307.svg" height="22"> |
-| MicroSD Card | `wokwi-microsd-card` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-microsd-card.svg" height="20"> |
-| Analog Joystick | `wokwi-analog-joystick` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-analog-joystick.svg" height="27"> |
-| Rotary Encoder (KY-040) | `wokwi-ky-040` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ky-040.svg" height="18"> |
-| IR Remote | `wokwi-ir-remote` | `vecnode/iot-elements` | <img src="assets/component-previews/wokwi-ir-remote.svg" height="40"> |
+| DHT22 (Temp/Humidity) | `iot-dht22` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-dht22.svg" height="16"> |
+| HC-SR04 (Ultrasonic) | `iot-hc-sr04` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-hc-sr04.svg" height="25"> |
+| Flame Sensor | `iot-flame-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-flame-sensor.svg" height="16"> |
+| Gas Sensor | `iot-gas-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-gas-sensor.svg" height="16"> |
+| Heart Beat Sensor | `iot-heart-beat-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-heart-beat-sensor.svg" height="20"> |
+| IR Receiver | `iot-ir-receiver` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ir-receiver.svg" height="16"> |
+| MPU6050 (Accel/Gyro) | `iot-mpu6050` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-mpu6050.svg" height="16"> |
+| NTC Temperature Sensor | `iot-ntc-temperature-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ntc-temperature-sensor.svg" height="19"> |
+| Photoresistor | `iot-photoresistor-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-photoresistor-sensor.svg" height="16"> |
+| PIR Motion Sensor | `iot-pir-motion-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-pir-motion-sensor.svg" height="24"> |
+| Small Sound Sensor | `iot-small-sound-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-small-sound-sensor.svg" height="16"> |
+| Big Sound Sensor | `iot-big-sound-sensor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-big-sound-sensor.svg" height="16"> |
+| Tilt Switch | `iot-tilt-switch` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-tilt-switch.svg" height="16"> |
+| HX711 (Load Cell Amp) | `iot-hx711` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-hx711.svg" height="43"> |
+| LED | `iot-led` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-led.svg" height="40"> |
+| RGB LED | `iot-rgb-led` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-rgb-led.svg" height="42"> |
+| LED Ring | `iot-led-ring` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-led-ring.svg" height="37"> |
+| LED Bar Graph | `iot-led-bar-graph` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-led-bar-graph.svg" height="16"> |
+| NeoPixel | `iot-neopixel` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-neopixel.svg" height="16"> |
+| NeoPixel Matrix | `iot-neopixel-matrix` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-neopixel-matrix.svg" height="47"> |
+| 7-Segment Display | `iot-7segment` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-7segment.svg" height="16"> |
+| LCD1602 | `iot-lcd1602` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-lcd1602.svg" height="36"> |
+| LCD2004 | `iot-lcd2004` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-lcd2004.svg" height="47"> |
+| SSD1306 (OLED) | `iot-ssd1306` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ssd1306.svg" height="96"> |
+| ILI9341 (TFT) | `iot-ili9341` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ili9341.svg" height="46"> |
+| Buzzer | `iot-buzzer` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-buzzer.svg" height="16"> |
+| Servo Motor | `iot-servo` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-servo.svg" height="31"> |
+| Stepper Motor | `iot-stepper-motor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-stepper-motor.svg" height="58"> |
+| Biaxial Stepper | `iot-biaxial-stepper` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-biaxial-stepper.svg" height="56"> |
+| Resistor | `iot-resistor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-resistor.svg" height="16"> |
+| Capacitor | `iot-capacitor` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-capacitor.svg" height="16"> |
+| Potentiometer | `iot-potentiometer` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-potentiometer.svg" height="20"> |
+| Slide Potentiometer | `iot-slide-potentiometer` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-slide-potentiometer.svg" height="29"> |
+| Pushbutton | `iot-pushbutton` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-pushbutton.svg" height="16"> |
+| Pushbutton (6mm) | `iot-pushbutton-6mm` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-pushbutton-6mm.svg" height="16"> |
+| Slide Switch | `iot-slide-switch` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-slide-switch.svg" height="16"> |
+| DIP Switch (8-way) | `iot-dip-switch-8` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-dip-switch-8.svg" height="55"> |
+| Membrane Keypad | `iot-membrane-keypad` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-membrane-keypad.svg" height="70"> |
+| Rotary Dialer | `iot-rotary-dialer` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-rotary-dialer.svg" height="96"> |
+| Relay (KS2E-M-DC5) | `iot-ks2e-m-dc5` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ks2e-m-dc5.svg" height="16"> |
+| DS1307 (RTC) | `iot-ds1307` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ds1307.svg" height="22"> |
+| MicroSD Card | `iot-microsd-card` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-microsd-card.svg" height="20"> |
+| Analog Joystick | `iot-analog-joystick` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-analog-joystick.svg" height="27"> |
+| Rotary Encoder (KY-040) | `iot-ky-040` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ky-040.svg" height="18"> |
+| IR Remote | `iot-ir-remote` | `vecnode/iot-elements` | <img src="assets/component-previews/iot-ir-remote.svg" height="40"> |
 
 ## Originally-drawn parts
 
@@ -92,37 +92,37 @@ docs.wokwi.com lists more parts than Wokwi ever open-sourced - these 24
 exist only in Wokwi's closed-source simulator, so there was no MIT source
 to vendor. Each is an original element added directly to
 `vecnode/iot-elements` (same "small, original, not copied from Wokwi"
-precedent the fork's own `wokwi-capacitor` already set - see that
+precedent the fork's own `iot-capacitor` already set - see that
 submodule's README for the full list and reasoning). Visual/wireable
 only, same tier as most parts in the tables above - no board here has a
 `SimulatorAdapter`, even the four that look like MCU dev boards.
 
 | Component | Custom element | Preview |
 |---|---|---|
-| BMP180 (Pressure) | `wokwi-bmp180` | <img src="assets/component-previews/wokwi-bmp180.svg" height="28"> |
-| DS18B20 (1-Wire Temp) | `wokwi-ds18b20` | <img src="assets/component-previews/wokwi-ds18b20.svg" height="20"> |
-| MFRC522 (RFID) | `wokwi-mfrc522` | <img src="assets/component-previews/wokwi-mfrc522.svg" height="48"> |
-| Logic Analyzer | `wokwi-logic-analyzer` | <img src="assets/component-previews/wokwi-logic-analyzer.svg" height="32"> |
-| 74HC165 (Shift-In) | `wokwi-74hc165` | <img src="assets/component-previews/wokwi-74hc165.svg" height="27"> |
-| 74HC595 (Shift-Out) | `wokwi-74hc595` | <img src="assets/component-previews/wokwi-74hc595.svg" height="27"> |
-| NLSF595 (Shift-Out) | `wokwi-nlsf595` | <img src="assets/component-previews/wokwi-nlsf595.svg" height="27"> |
-| ATtiny85 (bare chip) | `wokwi-attiny85` | <img src="assets/component-previews/wokwi-attiny85.svg" height="27"> |
-| A4988 (Stepper Driver) | `wokwi-a4988` | <img src="assets/component-previews/wokwi-a4988.svg" height="50"> |
-| Clock Generator | `wokwi-clock-generator` | <img src="assets/component-previews/wokwi-clock-generator.svg" height="28"> |
-| Grove OLED (SH1107) | `wokwi-grove-oled-sh1107` | <img src="assets/component-previews/wokwi-grove-oled-sh1107.svg" height="32"> |
-| LED Matrix (8x8) | `wokwi-led-matrix` | <img src="assets/component-previews/wokwi-led-matrix.svg" height="42"> |
-| LED Strip | `wokwi-led-strip` | <img src="assets/component-previews/wokwi-led-strip.svg" height="32"> |
-| MAX7219 Matrix | `wokwi-max7219-matrix` | <img src="assets/component-previews/wokwi-max7219-matrix.svg" height="48"> |
-| Nokia 5110 Screen | `wokwi-nokia-5110-screen` | <img src="assets/component-previews/wokwi-nokia-5110-screen.svg" height="60"> |
-| Relay Module | `wokwi-relay-module` | <img src="assets/component-previews/wokwi-relay-module.svg" height="40"> |
-| Text Label | `wokwi-text` | <img src="assets/component-previews/wokwi-text.svg" height="16"> |
-| TM1637 7-Segment | `wokwi-tm1637-7segment` | <img src="assets/component-previews/wokwi-tm1637-7segment.svg" height="32"> |
-| TV (Composite) | `wokwi-tv` | <img src="assets/component-previews/wokwi-tv.svg" height="52"> |
-| WiFi Access Point | `wokwi-wifi-ap` | <img src="assets/component-previews/wokwi-wifi-ap.svg" height="40"> |
-| Franzininho WiFi (visual only) | `wokwi-franzininho-wifi` | <img src="assets/component-previews/wokwi-franzininho-wifi.svg" height="52"> |
-| Nucleo C031C6 (visual only) | `wokwi-nucleo-c031c6` | <img src="assets/component-previews/wokwi-nucleo-c031c6.svg" height="60"> |
-| Nucleo L031K6 (visual only) | `wokwi-nucleo-l031k6` | <img src="assets/component-previews/wokwi-nucleo-l031k6.svg" height="60"> |
-| STM32 Blue Pill (visual only) | `wokwi-stm32-bluepill` | <img src="assets/component-previews/wokwi-stm32-bluepill.svg" height="70"> |
+| BMP180 (Pressure) | `iot-bmp180` | <img src="assets/component-previews/iot-bmp180.svg" height="28"> |
+| DS18B20 (1-Wire Temp) | `iot-ds18b20` | <img src="assets/component-previews/iot-ds18b20.svg" height="20"> |
+| MFRC522 (RFID) | `iot-mfrc522` | <img src="assets/component-previews/iot-mfrc522.svg" height="48"> |
+| Logic Analyzer | `iot-logic-analyzer` | <img src="assets/component-previews/iot-logic-analyzer.svg" height="32"> |
+| 74HC165 (Shift-In) | `iot-74hc165` | <img src="assets/component-previews/iot-74hc165.svg" height="27"> |
+| 74HC595 (Shift-Out) | `iot-74hc595` | <img src="assets/component-previews/iot-74hc595.svg" height="27"> |
+| NLSF595 (Shift-Out) | `iot-nlsf595` | <img src="assets/component-previews/iot-nlsf595.svg" height="27"> |
+| ATtiny85 (bare chip) | `iot-attiny85` | <img src="assets/component-previews/iot-attiny85.svg" height="27"> |
+| A4988 (Stepper Driver) | `iot-a4988` | <img src="assets/component-previews/iot-a4988.svg" height="50"> |
+| Clock Generator | `iot-clock-generator` | <img src="assets/component-previews/iot-clock-generator.svg" height="28"> |
+| Grove OLED (SH1107) | `iot-grove-oled-sh1107` | <img src="assets/component-previews/iot-grove-oled-sh1107.svg" height="32"> |
+| LED Matrix (8x8) | `iot-led-matrix` | <img src="assets/component-previews/iot-led-matrix.svg" height="42"> |
+| LED Strip | `iot-led-strip` | <img src="assets/component-previews/iot-led-strip.svg" height="32"> |
+| MAX7219 Matrix | `iot-max7219-matrix` | <img src="assets/component-previews/iot-max7219-matrix.svg" height="48"> |
+| Nokia 5110 Screen | `iot-nokia-5110-screen` | <img src="assets/component-previews/iot-nokia-5110-screen.svg" height="60"> |
+| Relay Module | `iot-relay-module` | <img src="assets/component-previews/iot-relay-module.svg" height="40"> |
+| Text Label | `iot-text` | <img src="assets/component-previews/iot-text.svg" height="16"> |
+| TM1637 7-Segment | `iot-tm1637-7segment` | <img src="assets/component-previews/iot-tm1637-7segment.svg" height="32"> |
+| TV (Composite) | `iot-tv` | <img src="assets/component-previews/iot-tv.svg" height="52"> |
+| WiFi Access Point | `iot-wifi-ap` | <img src="assets/component-previews/iot-wifi-ap.svg" height="40"> |
+| Franzininho WiFi (visual only) | `iot-franzininho-wifi` | <img src="assets/component-previews/iot-franzininho-wifi.svg" height="52"> |
+| Nucleo C031C6 (visual only) | `iot-nucleo-c031c6` | <img src="assets/component-previews/iot-nucleo-c031c6.svg" height="60"> |
+| Nucleo L031K6 (visual only) | `iot-nucleo-l031k6` | <img src="assets/component-previews/iot-nucleo-l031k6.svg" height="60"> |
+| STM32 Blue Pill (visual only) | `iot-stm32-bluepill` | <img src="assets/component-previews/iot-stm32-bluepill.svg" height="70"> |
 
 ## Adding a new sensor or connection
 
@@ -134,7 +134,7 @@ listed above. Adding one to the menu is a single entry in
 
 ```ts
 "my-new-part": {
-  tagName: "wokwi-my-new-part",
+  tagName: "iot-my-new-part",
   displayName: "My New Part",
   category: "sensors", // or "connections"
 },

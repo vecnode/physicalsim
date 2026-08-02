@@ -19,7 +19,7 @@ import type { I2CSubDevice } from "@physicalsim/common";
 // Avr8Adapter.attachPeripherals() (via I2CBus - see i2c-bus.ts) - I2C is
 // address-based, not wire-routed (a real I2C bus has every device
 // listening for its own address on the same two wires), so "the chip is
-// present" doesn't depend on whether a wokwi-ds1307 element happens to
+// present" doesn't depend on whether a iot-ds1307 element happens to
 // be placed and wired on the canvas, the same way Serial output doesn't
 // depend on whether the Serial Monitor pane is open.
 const DS1307_ADDRESS = 0x68;

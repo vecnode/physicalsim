@@ -1,4 +1,4 @@
-import type { ElementPin } from "@wokwi/elements";
+import type { ElementPin } from "iot-elements";
 import type { Wire } from "./wiring.js";
 
 // Wire-level electrical validation - digital-only, name/metadata-based,

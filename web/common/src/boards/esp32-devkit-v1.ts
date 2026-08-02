@@ -1,6 +1,6 @@
 import type { BoardPinMap } from "./board.js";
 
-// wokwi-esp32-devkit-v1's own pin markers (esp32-devkit-v1-element.ts,
+// iot-esp32-devkit-v1's own pin markers (esp32-devkit-v1-element.ts,
 // vendored from upstream wokwi/wokwi-elements) are already "D<n>" - an
 // identity mapping, same shape as rp2040-board.ts's "GP<n>" one.
 // web/adapters/esp32's Esp32Adapter parses "D<n>" straight into a GPIO

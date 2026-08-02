@@ -702,7 +702,7 @@ adapter-backed I/O without `WiringLayer` gaining any opinion about it:
   and constructs a `CircuitPin` against the board's own
   `SimulatorAdapter` client. A `role: "write"` component gets wrapped in
   a `Button` driven by the placed element's own `button-press`/
-  `button-release` DOM events (already dispatched by `wokwi-pushbutton`'s
+  `button-release` DOM events (already dispatched by `iot-pushbutton`'s
   built-in mouse handling — clicking it in the canvas presses it for
   real); a `role: "read"` component skips the `Led` wrapper entirely and
   drives the placed element's own `value` property directly from
@@ -882,7 +882,7 @@ hit-region math. Switching to the real components trades a canvas-specific
 dependency-free property for the DOM's native event model — clicks land on
 the actual element under the pointer, no coordinate math required, and it's
 what Wokwi's own app is built on. The per-pin click events this switch
-didn't give for free on its own — `<wokwi-arduino-uno>`'s pin headers
+didn't give for free on its own — `<iot-arduino-uno>`'s pin headers
 render as a few grouped `<rect>` strips, not one interactive element per
 pin — are exactly what "Pin markers" and "Pin-to-pin wiring" above went
 on to build: small positioned marker elements using `pinInfo`'s
@@ -1091,7 +1091,7 @@ LED/pushbutton path along the way), this is a parallel system, the same
   component type (`lcd1602`/`lcd2004` → both construct an
   `Hd44780Decoder` and assign its output to the placed element's own
   `characters` property, differing only in the `cols`/`rows` passed in -
-  `wokwi-lcd2004` is a plain subclass of `wokwi-lcd1602` in
+  `iot-lcd2004` is a plain subclass of `iot-lcd1602` in
   `simulators/iot-elements`, same pinInfo, same API, just a 20x4 size
   override, so it needed no protocol work of its own once
   `Hd44780Decoder`'s row addressing was generalized - see below).
@@ -1148,7 +1148,7 @@ general HD44780 folklore:
   them into two bogus "bytes" (`0x33`, `0x32`), and both happen to decode
   as `FUNCTION SET` (bit `0x20` is the highest set bit in each) under the
   real HD44780 priority encoding below - which this decoder treats as an
-  intentional no-op anyway, since the wokwi-lcd1602 element it drives is
+  intentional no-op anyway, since the iot-lcd1602 element it drives is
   a fixed 16×2, 5×8-font display regardless of what any sketch requests.
   The mispairing is inert by construction, not a tolerated bug.
 - **Instruction decoding is real HD44780 priority encoding** - each
@@ -1177,7 +1177,7 @@ the real running app: a genuine `LiquidCrystal`-based sketch
 public domain, used verbatim as the "LCD Display" canvas example)
 compiled, loaded, and run through the full pipeline - `lcd.print("hello,
 world!")` and a live `millis()/1000` counter on row 2 both appeared on
-the placed `wokwi-lcd1602` element and kept advancing in real time, with
+the placed `iot-lcd1602` element and kept advancing in real time, with
 no static/preset text involved anywhere in the path.
 
 **Generalizing to `lcd2004`.** DDRAM row addressing wasn't a 2-row
@@ -1188,7 +1188,7 @@ unconditionally regardless of line count - and `addressToRowCol()`
 resolves an address against however many of those four offsets the
 display actually has rows for (the highest offset not exceeding the
 address wins, the same way a real chip's row boundaries work). So a
-20x4 `wokwi-lcd2004` (a plain `wokwi-lcd1602` subclass in
+20x4 `iot-lcd2004` (a plain `iot-lcd1602` subclass in
 `simulators/iot-elements` - same `pinInfo`, same `characters`/`text`
 API, only `numCols`/`numRows` overridden) needed no protocol work of its
 own: one more `componentProtocols`/`PROTOCOL_ATTACHERS` entry passing
@@ -1197,7 +1197,7 @@ own: one more `componentProtocols`/`PROTOCOL_ATTACHERS` entry passing
 0/1) is a real, slightly odd quirk of 4-line HD44780 displays, not a
 physicalsim simplification of one - covered by its own
 `hd44780-decoder.test.ts` case. Verified in the running app that a
-placed `wokwi-lcd2004` exposes the same `RS`/`E`/`D4`-`D7` pin names and
+placed `iot-lcd2004` exposes the same `RS`/`E`/`D4`-`D7` pin names and
 wires successfully through the exact same `ProtocolChain` path
 `lcd1602` already runs through end-to-end above; the row-addressing math
 itself is what the new unit test covers.
@@ -1434,7 +1434,7 @@ Items 1-5 of the original plan landed in one pass:
   the DS1307's actual register map (0x00-0x06 BCD clock/calendar,
   0x08-0x3F NVRAM), bound unconditionally at I2C address 0x68 (I2C is
   address-based, not wire-routed, so it doesn't need a placed-and-wired
-  `wokwi-ds1307` element to be "on the bus" — the same reasoning Serial
+  `iot-ds1307` element to be "on the bus" — the same reasoning Serial
   output doesn't depend on the Serial Monitor pane being open). Clock
   registers are computed live from the host machine's wall-clock time on
   every read (a documented simplification — `rtc.adjust()` acks correctly
@@ -1499,7 +1499,7 @@ Items 1-5 of the original plan landed in one pass:
   3.3V reference — rp2040js's ADC stores raw 12-bit codes directly, unlike
   avr8js's voltage-based `channelValues`). Discovered along the way: no
   plain "Raspberry Pi Pico" element exists in the vendored
-  `wokwi-elements` fork — the one RP2040-family element is `wokwi-nano-
+  `iot-elements` fork — the one RP2040-family element is `iot-nano-
   rp2040-connect` (Arduino Nano RP2040 Connect, Arduino-Nano-shaped D/A
   pin markers, not bare `GP<n>`). `boards/nano-rp2040-connect.ts`'s pin
   map comes straight from that element's own `pinInfo.description`

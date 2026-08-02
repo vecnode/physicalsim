@@ -12,7 +12,7 @@ import type { I2CSubDevice } from "../i2c-sub-device.js";
 // (128x64, monochrome, 1 bit/pixel) buffer. onFrame() fires with a copy
 // of that buffer on every I2C STOP that followed at least one data byte -
 // the shell side (web/shell/src/i2c-display-chain.ts) turns it into the
-// placed wokwi-ssd1306 element's own ImageData.
+// placed iot-ssd1306 element's own ImageData.
 //
 // Two deliberate simplifications, both documented rather than silent:
 // - Doesn't implement the Co=1 "one byte, then another control byte"

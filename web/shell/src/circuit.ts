@@ -6,7 +6,7 @@ import type {
   FranzininhoElement,
   NanoRP2040ConnectElement,
   ESP32DevkitV1Element,
-} from "@wokwi/elements";
+} from "iot-elements";
 // ArduinoLeonardoElement has no ledPower (or any other) @property - the
 // vendored Fritzing artwork has no obvious dedicated power-status LED
 // wired up yet, same posture as pi-pico's own missing boardPowerSetter
@@ -70,28 +70,28 @@ export interface Circuit {
 // exact same way Arduino Uno already is, since context-menu.ts builds
 // that menu generically from this table.
 export const boardTagName: Record<string, string> = {
-  "arduino-uno": "wokwi-arduino-uno",
-  "arduino-nano": "wokwi-arduino-nano",
-  "arduino-mega": "wokwi-arduino-mega",
-  "arduino-leonardo": "wokwi-arduino-leonardo",
-  franzininho: "wokwi-franzininho",
+  "arduino-uno": "iot-arduino-uno",
+  "arduino-nano": "iot-arduino-nano",
+  "arduino-mega": "iot-arduino-mega",
+  "arduino-leonardo": "iot-arduino-leonardo",
+  franzininho: "iot-franzininho",
   // The one RP2040-family element @wokwi/elements actually vendors - see
   // boards/nano-rp2040-connect.ts's own comment on why this, not a plain
   // "Pico" element, is what makes rp2040 placeable at all.
-  "nano-rp2040-connect": "wokwi-nano-rp2040-connect",
-  "pi-pico": "wokwi-pi-pico",
-  "pi-pico-w": "wokwi-pi-pico-w",
+  "nano-rp2040-connect": "iot-nano-rp2040-connect",
+  "pi-pico": "iot-pi-pico",
+  "pi-pico-w": "iot-pi-pico-w",
   // Vendored in wokwi-elements (upstream wokwi/wokwi-elements, not custom-
   // authored like the Pico boards) - see esp32-devkit-v1-element.ts.
-  "esp32-devkit-v1": "wokwi-esp32-devkit-v1",
+  "esp32-devkit-v1": "iot-esp32-devkit-v1",
   // Same ESP32-WROOM-32 chip as esp32-devkit-v1, real artwork vendored
   // from wokwi/wokwi-boards the same way pi-pico-w's is (unlike
   // esp32-devkit-v1's own hand-drawn element).
-  "esp32-devkit-c-v4": "wokwi-esp32-devkit-c-v4",
+  "esp32-devkit-c-v4": "iot-esp32-devkit-c-v4",
   // OV2640 camera + microSD slot are physically present but not emulated
   // (esp32js has no camera/SD peripheral) - GPIO/LED pins work normally,
   // same "present, not modeled" posture as pi-pico-w's WiFi chip.
-  "esp32-cam": "wokwi-esp32-cam",
+  "esp32-cam": "iot-esp32-cam",
 };
 
 // Board id -> human-readable label, for menus that list board types (the
@@ -175,7 +175,7 @@ export const boardAdapterId: Record<string, AdapterId> = {
 // (or any property at all) for this - Arduino Uno's power-supply LED
 // ("ON" on the silkscreen) is independent of any GPIO pin, unlike
 // led13/ledTX/ledRX which track real pin state (not wired up yet).
-// wokwi-arduino-nano happens to expose the identical property name.
+// iot-arduino-nano happens to expose the identical property name.
 export const boardPowerSetter: Record<string, (el: HTMLElement, on: boolean) => void> = {
   "arduino-uno": (el, on) => {
     (el as ArduinoUnoElement).ledPower = on;

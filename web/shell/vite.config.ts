@@ -31,13 +31,14 @@ export default defineConfig({
       "esp32js/espidf": resolve("../../simulators/esp32js/src/espidf/index.ts"),
       // simulators/iot-elements (vecnode/iot-elements) is this project's
       // vendored element library - originally a fork of upstream
-      // wokwi/wokwi-elements, later renamed on GitHub and consolidated
-      // with the (separately vendored, then-unused) iot-elements
-      // submodule into one repo, so simulators/wokwi-elements no longer
-      // exists as a submodule here. The "@wokwi/elements" import
-      // specifier itself is unchanged - every custom element file still
-      // imports from that name, it's just the alias target that moved.
-      "@wokwi/elements": resolve("../../simulators/iot-elements/src/index.ts"),
+      // wokwi/wokwi-elements published as "@wokwi/elements", later
+      // renamed on GitHub, consolidated with the (separately vendored,
+      // then-unused) iot-elements submodule into one repo, and rebranded
+      // as its own standalone "iot-elements" npm package (own
+      // package.json name, every wokwi-* custom element tag renamed to
+      // iot-*) - so both the alias key here and the tag names every
+      // element registers itself under changed, not just the target path.
+      "iot-elements": resolve("../../simulators/iot-elements/src/index.ts"),
       // iot-elements imports "lit" as a real npm dependency, but it
       // lives outside this alias's own resolution chain (simulators/ is a
       // sibling of web/, not nested under it - plain node resolution

@@ -1,5 +1,5 @@
 import type { LitElement } from "lit";
-import type { ElementPin } from "@wokwi/elements";
+import type { ElementPin } from "iot-elements";
 import {
   boardTagName,
   createBoard,
@@ -552,7 +552,7 @@ export class Scene {
     tagName: string,
     center: { x: number; y: number } | null,
     // Element-specific properties to set before the first render (e.g.
-    // wokwi-led's "color") - a plain Lit @property, not something
+    // iot-led's "color") - a plain Lit @property, not something
     // component-registry.ts's tag lookup knows about, so it's set here
     // rather than baked into the registry. Optional and rare: only an
     // Example's build() (main.ts) uses this today, to tell otherwise-

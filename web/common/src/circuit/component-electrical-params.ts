@@ -29,7 +29,7 @@ export interface ComponentElectricalParam {
   // The component's own two electrical terminal pin names, exactly as
   // wiring.connect() refs it - "1"/"2" for a plain two-lead part
   // (ResistorElement/CapacitorElement, both generic @wokwi/elements
-  // terminals), but "A"/"C" for an LED (wokwi-led's real anode/cathode
+  // terminals), but "A"/"C" for an LED (iot-led's real anode/cathode
   // silkscreen names - see every wiring.connect(..., { pin: "A" | "C" })
   // call already in main.ts's EXAMPLES table). netlist.ts reads this
   // instead of assuming every electrical component shares the same "1"/"2"

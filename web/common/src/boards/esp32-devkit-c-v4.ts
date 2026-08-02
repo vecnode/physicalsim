@@ -1,6 +1,6 @@
 import type { BoardPinMap } from "./board.js";
 
-// wokwi-esp32-devkit-c-v4's own pin markers (esp32-devkit-c-v4-element.ts,
+// iot-esp32-devkit-c-v4's own pin markers (esp32-devkit-c-v4-element.ts,
 // vendored from upstream wokwi/wokwi-boards) are bare GPIO numbers - this
 // board's own real silkscreen, unlike esp32-devkit-v1-element.ts's
 // hand-picked "D<n>" convention. Identity mapping, same shape as

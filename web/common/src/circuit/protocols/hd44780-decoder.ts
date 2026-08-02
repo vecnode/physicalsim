@@ -55,7 +55,7 @@ export class Hd44780Decoder {
   // (setRowOffsets(0x00, 0x40, 0x00 + cols, 0x40 + cols), called
   // unconditionally regardless of how many lines the display actually
   // has) - not a 2-row-specific hardcode, so this same formula is already
-  // correct for wokwi-lcd2004's 20x4 layout too (rows 2/3 continuing from
+  // correct for iot-lcd2004's 20x4 layout too (rows 2/3 continuing from
   // rows 0/1's DDRAM at a `cols`-sized offset, the real, slightly odd
   // quirk of 4-line HD44780 displays, not a physicalsim simplification of
   // it).
@@ -203,7 +203,7 @@ export class Hd44780Decoder {
     } else if (byte & 0x20) {
       // FUNCTION SET (interface width/line count/font). A deliberate
       // no-op: whichever fixed-size element this decoder drives
-      // (wokwi-lcd1602's 16x2, wokwi-lcd2004's 20x4 - see this.cols/rows)
+      // (iot-lcd1602's 16x2, iot-lcd2004's 20x4 - see this.cols/rows)
       // has a size fixed by its own class, not by what a sketch requests
       // here, so there's no display-side state for this to change. Also
       // what begin()'s 4-bit-mode reset dance harmlessly resolves to twice

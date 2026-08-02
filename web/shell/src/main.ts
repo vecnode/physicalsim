@@ -19,7 +19,7 @@ import "./native-bridge.js";
 // vendored library for now, not just Arduino Uno - fine at this scale,
 // worth trimming to a narrower import if bundle size becomes a concern
 // once more boards are wired up.
-import "@wokwi/elements";
+import "iot-elements";
 
 // Compile & Run/Start/Pause/Stop/Load .hex… all live on the icon-rail
 // now - see index.html's own comment (the sketch panel's own Compile &
@@ -530,10 +530,10 @@ const EXAMPLES: Record<string, Example> = {
       // outside the board's own footprint.
       const led = await canvas.scene.addComponentAt("led", board.x + 620, board.y + 60);
       if (!led) return;
-      // "13" is the wokwi-arduino-uno pin marker name for digital pin 13
+      // "13" is the iot-arduino-uno pin marker name for digital pin 13
       // (see circuit.ts's boardTagName/resolveBoardPinName in
       // board-registry.ts - markers are bare numbers, mapped to "D13"
-      // internally); "A" is wokwi-led's anode, the one pin
+      // internally); "A" is iot-led's anode, the one pin
       // component-signal-pin.ts's role: "read" entry actually checks.
       canvas.scene.wiring.connect({ entityId: board.id, pin: "13" }, { entityId: led.id, pin: "A" });
       // Current-limiting resistor between the LED's cathode and board
@@ -1027,7 +1027,7 @@ function loop() {
     build: async () => {
       const board = await canvas.scene.showBoard("arduino-uno");
       if (!board) return;
-      // wokwi-lcd1602 defaults to pins: "full" already, exposing RS/E/
+      // iot-lcd1602 defaults to pins: "full" already, exposing RS/E/
       // D4-D7 (among others) by name - no attrs needed to select it.
       const lcd = await canvas.scene.addComponentAt("lcd1602", board.x + 620, board.y + 10);
       if (!lcd) return;
@@ -1090,7 +1090,7 @@ function loop() {
     board: "ESP32 DevKit V1",
     glyph: "🕹️",
     // analog-joystick's SEL pin dispatches the exact same button-press/
-    // button-release DOM events wokwi-pushbutton does (see
+    // button-release DOM events iot-pushbutton does (see
     // component-signal-pin.ts's own comment) - a joystick's click button
     // instead of a standalone pushbutton, same shape as the other ESP32
     // examples' plain ESP-IDF gpio_config()/gpio_get_level()/

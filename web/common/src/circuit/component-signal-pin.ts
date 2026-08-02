@@ -33,7 +33,7 @@ export const componentSignalPins: Record<string, ComponentSignalPin> = {
   led: { pinNames: ["A"], role: "read" },
   // The joystick's SEL (button) pin dispatches the exact same
   // "button-press"/"button-release" DOM events wokwi-pushbutton does
-  // (simulators/wokwi-elements' own analog-joystick-element.ts) - no new
+  // (simulators/iot-elements' own analog-joystick-element.ts) - no new
   // signal-chain code needed, same as pushbutton above. VERT/HORZ
   // (analog X/Y) are wired separately, through componentAnalogPins (see
   // component-analog-pin.ts) - digital and analog pins on the same

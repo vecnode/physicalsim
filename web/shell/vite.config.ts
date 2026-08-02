@@ -29,11 +29,19 @@ export default defineConfig({
       // JS/TS-interpreted ESP-IDF-shaped sketch runtime (no C/C++
       // toolchain, no cycle-accurate Xtensa CPU - see adapters/esp32-js).
       "esp32js/espidf": resolve("../../simulators/esp32js/src/espidf/index.ts"),
-      "@wokwi/elements": resolve("../../simulators/wokwi-elements/src/index.ts"),
-      // wokwi-elements imports "lit" as a real npm dependency, but it
+      // simulators/iot-elements (vecnode/iot-elements) is this project's
+      // vendored element library - originally a fork of upstream
+      // wokwi/wokwi-elements, later renamed on GitHub and consolidated
+      // with the (separately vendored, then-unused) iot-elements
+      // submodule into one repo, so simulators/wokwi-elements no longer
+      // exists as a submodule here. The "@wokwi/elements" import
+      // specifier itself is unchanged - every custom element file still
+      // imports from that name, it's just the alias target that moved.
+      "@wokwi/elements": resolve("../../simulators/iot-elements/src/index.ts"),
+      // iot-elements imports "lit" as a real npm dependency, but it
       // lives outside this alias's own resolution chain (simulators/ is a
       // sibling of web/, not nested under it - plain node resolution
-      // walking up from simulators/wokwi-elements/src never reaches
+      // walking up from simulators/iot-elements/src never reaches
       // web/node_modules). This alias's string form matches both the bare
       // "lit" specifier and every subpath ("lit/decorators.js" etc.) -
       // mirrored in tsconfig.json's "paths" for tsc's own typecheck.
@@ -48,7 +56,7 @@ export default defineConfig({
   worker: {
     format: "es",
   },
-  // rp2040js/avr8js/wokwi-elements are aliased in as raw source (see
+  // rp2040js/avr8js/iot-elements are aliased in as raw source (see
   // above), but Vite transforms the whole bundle against this project's
   // tsconfig rather than each vendored file's own tsconfig.json. Both
   // simulator libraries build themselves with useDefineForClassFields:false
@@ -57,7 +65,7 @@ export default defineConfig({
   // fields in the same constructor pass — with esbuild's native (spec)
   // class-field semantics that trips a use-before-init crash at runtime
   // (not just a type error). Match that setting here for the whole bundle,
-  // workers included. experimentalDecorators is wokwi-elements' own
+  // workers included. experimentalDecorators is iot-elements' own
   // requirement (its tsconfig.json sets both) - its components are Lit
   // classes using legacy TS decorators (@customElement/@property/@query),
   // which esbuild only understands with this flag on.

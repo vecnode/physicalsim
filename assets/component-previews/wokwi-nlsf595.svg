@@ -1,0 +1,8 @@
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="13.620mm" height="27.4mm" viewBox="-3 -1 13.620 27.4">
+    <g fill="#ccc">
+      <rect height="0.7" x="-2" y="3.46" width="2"></rect><rect height="0.7" x="-2" y="6" width="2"></rect><rect height="0.7" x="-2" y="8.540" width="2"></rect><rect height="0.7" x="-2" y="11.08" width="2"></rect><rect height="0.7" x="-2" y="13.620" width="2"></rect><rect height="0.7" x="-2" y="16.159" width="2"></rect><rect height="0.7" x="-2" y="18.7" width="2"></rect><rect height="0.7" x="-2" y="21.24" width="2"></rect><rect height="0.7" x="7.62" y="21.24" width="2"></rect><rect height="0.7" x="7.62" y="18.7" width="2"></rect><rect height="0.7" x="7.62" y="16.159" width="2"></rect><rect height="0.7" x="7.62" y="13.620" width="2"></rect><rect height="0.7" x="7.62" y="11.08" width="2"></rect><rect height="0.7" x="7.62" y="8.540" width="2"></rect><rect height="0.7" x="7.62" y="6" width="2"></rect><rect height="0.7" x="7.62" y="3.46" width="2"></rect>
+    </g>
+    <rect x="0" y="0" rx="0.6" fill="#211f1f" stroke="#050505" stroke-width="0.15" width="7.62" height="25.4"></rect>
+    <path fill="#050505" d="M 2.81 0 a 1 1 0 0 0 2 0 Z"></path>
+    <text y="0" text-anchor="middle" font-size="1.5" font-family="sans-serif" fill="#ddd" x="3.81" transform="rotate(90 3.81 12.7) translate(0 13.2)">NLSF595</text>
+      </svg>

@@ -1,0 +1,90 @@
+<svg width="24mm" height="24mm" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="24" height="22" fill="#7a1010"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="12" y="11">MAX7219</text>
+        <rect x="2" y="2" width="16" height="16" fill="#1a1a1a"></rect>
+              <circle r="0.7" cx="3.2" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="3.2" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="5.060" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="6.92" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="8.780" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="10.64" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="12.5" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="14.36" fill="#3a1414"></circle>
+              <circle r="0.7" cx="3.2" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="5.060" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="6.92" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="8.780" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="10.64" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="12.5" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="14.36" cy="16.220" fill="#3a1414"></circle>
+              <circle r="0.7" cx="16.220" cy="16.220" fill="#3a1414"></circle>
+        <g fill="#ccc">
+          <rect y="22" width="0.3" height="2" x="1.85"></rect><rect y="22" width="0.3" height="2" x="5.85"></rect><rect y="22" width="0.3" height="2" x="9.85"></rect><rect y="22" width="0.3" height="2" x="13.85"></rect><rect y="22" width="0.3" height="2" x="17.85"></rect><rect y="22" width="0.3" height="2" x="21.85"></rect>
+        </g>
+    <circle r="0.6" fill="#d4af37" cx="2" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="2" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="2" y="26.4" text-anchor="middle">VCC</text>
+    <circle r="0.6" fill="#d4af37" cx="6" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="6" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="6" y="26.4" text-anchor="middle">GND</text>
+    <circle r="0.6" fill="#d4af37" cx="10" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="10" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="10" y="26.4" text-anchor="middle">DIN</text>
+    <circle r="0.6" fill="#d4af37" cx="14" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="14" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="14" y="26.4" text-anchor="middle">CS</text>
+    <circle r="0.6" fill="#d4af37" cx="18" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="18" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="18" y="26.4" text-anchor="middle">CLK</text>
+    <circle r="0.6" fill="#d4af37" cx="22" cy="24"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="22" cy="24"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="22" y="26.4" text-anchor="middle">DOUT</text>
+      </svg>

@@ -1,0 +1,27 @@
+<svg width="16mm" height="16mm" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="16" height="14" fill="#1a1a2e"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="8" y="7">TM1637</text>
+        <rect x="1" y="1" width="14" height="6" fill="#111"></rect>
+            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="2.5">-</text>
+            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="5.7">-</text>
+            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="8.9">-</text>
+            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="12.100">-</text>
+        <g fill="#ccc">
+          <rect x="1.85" y="14" width="0.3" height="2"></rect>
+          <rect x="5.85" y="14" width="0.3" height="2"></rect>
+          <rect x="9.85" y="14" width="0.3" height="2"></rect>
+          <rect x="13.85" y="14" width="0.3" height="2"></rect>
+        </g>
+    <circle r="0.6" fill="#d4af37" cx="2" cy="16"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="2" cy="16"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="2" y="18.4" text-anchor="middle">CLK</text>
+    <circle r="0.6" fill="#d4af37" cx="6" cy="16"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="6" cy="16"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="6" y="18.4" text-anchor="middle">DIO</text>
+    <circle r="0.6" fill="#d4af37" cx="10" cy="16"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="10" cy="16"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="10" y="18.4" text-anchor="middle">VCC</text>
+    <circle r="0.6" fill="#d4af37" cx="14" cy="16"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="14" cy="16"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="14" y="18.4" text-anchor="middle">GND</text>
+      </svg>

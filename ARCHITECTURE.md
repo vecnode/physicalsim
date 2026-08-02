@@ -339,10 +339,14 @@ power-LED and energy-readout logic), and `canvas.refresh()` (re-measure
 the minimap after it was `display:none` — switching tabs, or the panel-
 visibility toggle hiding it — see `Minimap.syncSize()`).
 
-**Vendoring `@wokwi/elements`.** `simulators/wokwi-elements` is a git
-submodule (`https://github.com/vecnode/wokwi-elements`, a fork of
-`wokwi/wokwi-elements`, MIT, 0 commits ahead at the time it was added) —
-consumed exactly like `simulators/{avr8js,rp2040js}`: aliased straight to
+**Vendoring `@wokwi/elements`.** `simulators/iot-elements` is a git
+submodule (`https://github.com/vecnode/iot-elements`, originally forked
+as `vecnode/wokwi-elements` from `wokwi/wokwi-elements`, MIT, 0 commits
+ahead at the time it was added — later renamed on GitHub, and, once a
+second, separately vendored `vecnode/iot-elements` submodule turned out
+to be the exact same repo under its new name, consolidated into this one
+submodule; `simulators/wokwi-elements` no longer exists here) — consumed
+exactly like `simulators/{avr8js,rp2040js}`: aliased straight to
 its raw `src/index.ts` in `web/shell/vite.config.ts`'s `resolve.alias`, no
 build step, esbuild compiles the TS as part of the Vite bundle. This
 wasn't optional — the package's `dist/` (what `npm install` from its
@@ -353,18 +357,18 @@ Two things this vendoring needed that avr8js/rp2040js didn't:
 - **`experimentalDecorators: true`** alongside the existing
   `useDefineForClassFields: false` in `vite.config.ts`'s
   `esbuild.tsconfigRaw.compilerOptions` (and mirrored in
-  `web/shell/tsconfig.json` for `tsc`'s own typecheck) — wokwi-elements'
+  `web/shell/tsconfig.json` for `tsc`'s own typecheck) — iot-elements'
   components are Lit classes using legacy TS decorators
   (`@customElement`/`@property`/`@query`).
 - **A `lit` alias/path mapping** (`vite.config.ts`'s `resolve.alias`,
   `tsconfig.json`'s `paths`) redirecting the bare `"lit"` specifier (and
   every subpath, `"lit/decorators.js"` etc.) to `web/node_modules/lit`.
   `simulators/` sits outside `web/`'s npm workspace, so plain node
-  resolution walking up from `simulators/wokwi-elements/src/*.ts` never
+  resolution walking up from `simulators/iot-elements/src/*.ts` never
   reaches `web/node_modules` on its own — `lit` (a real, well-behaved npm
   dependency, unlike avr8js/rp2040js which vendor everything) needed an
   explicit bridge. Same fix, for the same reason, for the type-only
-  `import type React from 'react'` in wokwi-elements' `react-types.ts`
+  `import type React from 'react'` in iot-elements' `react-types.ts`
   (JSX typing for React consumers this project never uses) — a
   `"react"` path pointing at `@types/react` satisfies `tsc` without
   pulling in an actual React runtime dependency (the import is erased
@@ -461,7 +465,7 @@ rotated item.
 creates one small `.pin-marker` div per pin, positioned in plain CSS
 pixels. Those coordinates are plain CSS pixels of the rendered element,
 *not* the element's own SVG viewBox units — confirmed against
-wokwi-elements' own reference overlay (`utils/show-pins-element.ts`: its
+iot-elements' own reference overlay (`utils/show-pins-element.ts`: its
 `<svg>` has no viewBox at all, and uses `pin.x`/`pin.y` directly as CSS
 px) — dividing by the viewBox was tried first and produced markers
 positioned outside the board, which is what exposed this. Since the
@@ -1088,7 +1092,7 @@ LED/pushbutton path along the way), this is a parallel system, the same
   `Hd44780Decoder` and assign its output to the placed element's own
   `characters` property, differing only in the `cols`/`rows` passed in -
   `wokwi-lcd2004` is a plain subclass of `wokwi-lcd1602` in
-  `simulators/wokwi-elements`, same pinInfo, same API, just a 20x4 size
+  `simulators/iot-elements`, same pinInfo, same API, just a 20x4 size
   override, so it needed no protocol work of its own once
   `Hd44780Decoder`'s row addressing was generalized - see below).
   Disposal is per-component, not per-wire: the moment any one of the six
@@ -1185,7 +1189,7 @@ resolves an address against however many of those four offsets the
 display actually has rows for (the highest offset not exceeding the
 address wins, the same way a real chip's row boundaries work). So a
 20x4 `wokwi-lcd2004` (a plain `wokwi-lcd1602` subclass in
-`simulators/wokwi-elements` - same `pinInfo`, same `characters`/`text`
+`simulators/iot-elements` - same `pinInfo`, same `characters`/`text`
 API, only `numCols`/`numRows` overridden) needed no protocol work of its
 own: one more `componentProtocols`/`PROTOCOL_ATTACHERS` entry passing
 `cols=20, rows=4` into the same `Hd44780Decoder`. Rows 2/3 starting at
@@ -1375,7 +1379,7 @@ below. The bullets below are what's still actually open.)*
   (`hd44780-decoder.test.ts`) — velxio's docs don't describe an equivalent
   verification methodology for its own component decoders.
 - **Vendored, editable forks, not npm dependencies.** `avr8js`,
-  `rp2040js`, and `wokwi-elements` are all `vecnode/*` git submodules
+  `rp2040js`, and `iot-elements` are all `vecnode/*` git submodules
   physicalsim can patch directly (see the build pipeline note below on
   `useDefineForClassFields`) rather than being locked to whatever upstream
   publishes.

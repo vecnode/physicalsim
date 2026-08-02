@@ -30,7 +30,7 @@ export interface ComponentProtocol {
   roles: Record<string, ProtocolPinRole>;
 }
 
-// wokwi-lcd2004 (simulators/wokwi-elements) is a plain subclass of
+// wokwi-lcd2004 (simulators/iot-elements) is a plain subclass of
 // wokwi-lcd1602 overriding only numCols/numRows - its pinInfo (and so its
 // RS/E/D4-D7 pin names) is exactly the same, unchanged. Shared here for
 // the same reason: both entries name the identical set of roles.

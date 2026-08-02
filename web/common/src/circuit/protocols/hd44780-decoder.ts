@@ -81,7 +81,7 @@ export class Hd44780Decoder {
     private readonly onUpdate: (characters: Uint8Array) => void,
     // Matches whichever wokwi element this decoder is driving
     // (LCD1602Element.numCols/numRows or LCD2004Element's own override,
-    // in simulators/wokwi-elements) - not a general HD44780 parameter on
+    // in simulators/iot-elements) - not a general HD44780 parameter on
     // its own, since the real chip's usable DDRAM/row layout depends on
     // which physical display is wired, and the caller (protocol-chain.ts)
     // already knows which one that is.

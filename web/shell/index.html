@@ -302,11 +302,14 @@
       <!--
         Toggles #wire-color-panel (bottom-left of the canvas, mirroring
         .canvas-overlay's bottom-right minimap/zoom stack) - a 3x3 grid of
-        swatches (main.ts's WIRE_COLORS) that set WiringLayer's global
-        wire color (canvas/wiring.ts's setColor()), the same "one setting,
-        applies to every wire immediately" posture as the link-style
-        toggle next to it. Hidden by default (no persisted state, same as
-        link-style-btn) - most sessions never need to change it.
+        swatches (main.ts's WIRE_COLORS: one "Default" plus eight
+        following the conventional signal-type color code - VCC/GND/
+        Analog/Digital/PWM/I2C/SPI/USART, see ARCHITECTURE.md) that set
+        WiringLayer's global wire color (canvas/wiring.ts's setColor()),
+        the same "one setting, applies to every wire immediately" posture
+        as the link-style toggle next to it. Hidden by default (no
+        persisted state, same as link-style-btn) - most sessions never
+        need to change it.
         Icon: an original stroke-based glyph (a palette outline + four
         color dots), not a vendored Phosphor icon - matches the existing
         custom-icon precedent the link-style buttons above set for "no

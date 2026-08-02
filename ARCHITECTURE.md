@@ -630,6 +630,36 @@ delete already takes its own wires with it via `removeEntity()`, so the
 wire-only path only fires when the selection is a wire itself, not one
 of its endpoints.
 
+**Wire color palette (`#wire-color-panel`, `main.ts`'s `WIRE_COLORS`).**
+A wire's color is a single global setting (`WiringLayer.setColor()`), the
+same posture as link style above — not a per-wire, per-signal property
+computed from what a wire is actually carrying (`WiringLayer` has no such
+opinion; see the signal-chain section below for the one place that *does*
+know). The bottom bar's palette toggle exists so a user can *manually*
+color-code their own wiring, and its nine swatches follow the
+conventional breadboard signal-type color code, so a swatch's meaning is
+documented rather than an arbitrary hue:
+
+| Color  | Signal type          |
+| ------ | --------------------- |
+| Red    | VCC (power)           |
+| Black  | GND (ground)          |
+| Blue   | Analog                |
+| Green  | Digital               |
+| Purple | PWM                   |
+| Gold   | I2C (SDA/SCL)         |
+| Orange | SPI (MOSI/MISO/SCK)   |
+| Cyan   | USART (TX/RX)         |
+
+(GND's swatch renders as a dark gray, `#333333`, rather than pure black —
+true black would be invisible against the canvas's own `#1a1a1a`
+dark-theme background.) A first "Default" swatch (`DEFAULT_WIRE_COLOR`,
+`#f5b400`) rounds the panel out to nine. Picking a swatch recolors every
+wire on the canvas immediately, same as before this table existed —
+wires still don't self-color by voltage/current from the energy model
+(removed in #57; a wire keeps whatever color was last picked, or the
+default, regardless of what the analog solver reports for it).
+
 **From wires to real pin I/O — the signal chain
 (`web/shell/src/signal-chain.ts`).** Pin-to-pin wiring above is purely
 visual — `WiringLayer` never knows a `Wire` means anything electrical.

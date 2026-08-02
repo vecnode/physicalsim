@@ -1134,6 +1134,91 @@ function loop() {
       canvas.scene.wiring.connect({ entityId: resistor.id, pin: "2" }, { entityId: board.id, pin: "GND.1" });
     },
   },
+  "uno-servos-breadboard": {
+    label: "Two Servos on a Breadboard",
+    description: "An Arduino Uno powers two servos through a shared breadboard - rail and column bussing, not direct point-to-point wires.",
+    level: "intermediate",
+    board: "Arduino Uno",
+    glyph: "🦾",
+    // Manual digitalWrite()/delay() pulses on D9/D10, not the Arduino
+    // Servo library (analogWrite()/hardware-timer PWM isn't modeled by
+    // avr8js/arduino's JS-native ArduinoRuntime yet, and iot-servo has no
+    // componentSignalPins entry - see that table's own comment) - this
+    // is a demo of *wiring through a breadboard*, the same honesty
+    // "leonardo-relay-leds" already applies to its relay's un-modeled
+    // switched contacts: the circuit and the breadboard bussing are
+    // real, the servos' horns just won't visibly move yet.
+    sketch: `const servo1Pin = 9;
+const servo2Pin = 10;
+
+function setup() {
+  pinMode(servo1Pin, OUTPUT);
+  pinMode(servo2Pin, OUTPUT);
+}
+
+function loop() {
+  digitalWrite(servo1Pin, HIGH);
+  digitalWrite(servo2Pin, LOW);
+  delay(500);
+  digitalWrite(servo1Pin, LOW);
+  digitalWrite(servo2Pin, HIGH);
+  delay(500);
+}`,
+    build: async () => {
+      const board = await canvas.scene.showBoard("arduino-uno");
+      if (!board) return;
+      const breadboard = await canvas.scene.addComponentAt("breadboard-half", board.x + 600, board.y - 60);
+      if (!breadboard) return;
+      const servo1 = await canvas.scene.addComponentAt("servo", board.x + 980, board.y - 40);
+      if (!servo1) return;
+      const servo2 = await canvas.scene.addComponentAt("servo", board.x + 980, board.y + 160);
+      if (!servo2) return;
+
+      // Power: the Uno's 5V/GND land on the breadboard's rails just
+      // once (column 2) - "tp"/"tn" are the whole rail's own net names
+      // (iot-breadboard-half's pin.ts-style bussing, see that element's
+      // doc comment), so every column along either rail is already the
+      // same node without a second wire back to the board.
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "5V" }, { entityId: breadboard.id, pin: "tp.2" });
+      canvas.scene.wiring.connect(
+        { entityId: board.id, pin: "GND.2" },
+        { entityId: breadboard.id, pin: "tn.2" },
+      );
+      // Both servos draw power from the same rail at different columns
+      // (10 and 20) - proof the rail is genuinely one net end to end,
+      // not just wherever the board's own wire happens to land.
+      canvas.scene.wiring.connect(
+        { entityId: servo1.id, pin: "V+" },
+        { entityId: breadboard.id, pin: "tp.10" },
+      );
+      canvas.scene.wiring.connect(
+        { entityId: servo1.id, pin: "GND" },
+        { entityId: breadboard.id, pin: "tn.10" },
+      );
+      canvas.scene.wiring.connect(
+        { entityId: servo2.id, pin: "V+" },
+        { entityId: breadboard.id, pin: "tp.20" },
+      );
+      canvas.scene.wiring.connect(
+        { entityId: servo2.id, pin: "GND" },
+        { entityId: breadboard.id, pin: "tn.20" },
+      );
+      // Signal: D9/D10 each meet their servo's PWM pin inside one
+      // terminal-strip column (10/20) instead of a direct board-to-servo
+      // wire - the same 5-hole column strip a real breadboard clip
+      // would bus together (iot-breadboard-half's `{col}t.*` naming).
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "9" }, { entityId: breadboard.id, pin: "10t.a" });
+      canvas.scene.wiring.connect(
+        { entityId: servo1.id, pin: "PWM" },
+        { entityId: breadboard.id, pin: "10t.c" },
+      );
+      canvas.scene.wiring.connect({ entityId: board.id, pin: "10" }, { entityId: breadboard.id, pin: "20t.a" });
+      canvas.scene.wiring.connect(
+        { entityId: servo2.id, pin: "PWM" },
+        { entityId: breadboard.id, pin: "20t.c" },
+      );
+    },
+  },
 };
 
 const openExampleGalleryBtn = document.getElementById("open-example-gallery-btn") as HTMLButtonElement;

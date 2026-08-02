@@ -24,18 +24,26 @@ export interface MenuEntry {
   submenu?: MenuEntry[];
 }
 
+// Both menus are sorted by label (localeCompare, not insertion order) -
+// the registries above are grouped by category/when-added for their own
+// maintainability (see component-registry.ts's own comment), not in an
+// order a user hunting for one specific part by name would want.
 function boardMenuEntries(onAddBoard: (type: string) => void): MenuEntry[] {
-  return Object.keys(boardTagName).map((type) => ({
-    label: boardDisplayName[type] ?? type,
-    onSelect: () => onAddBoard(type),
-  }));
+  return Object.keys(boardTagName)
+    .map((type) => ({
+      label: boardDisplayName[type] ?? type,
+      onSelect: () => onAddBoard(type),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 function componentMenuEntries(onAddComponent: (type: string) => void): MenuEntry[] {
-  return Object.entries(componentRegistry).map(([type, def]) => ({
-    label: def.displayName,
-    onSelect: () => onAddComponent(type),
-  }));
+  return Object.entries(componentRegistry)
+    .map(([type, def]) => ({
+      label: def.displayName,
+      onSelect: () => onAddComponent(type),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
 }
 
 // Flips a submenu to open on whichever side of its parent row actually

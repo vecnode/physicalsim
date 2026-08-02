@@ -123,6 +123,7 @@ only, same tier as most parts in the tables above - no board here has a
 | Nucleo C031C6 (visual only) | `iot-nucleo-c031c6` | <img src="assets/component-previews/iot-nucleo-c031c6.svg" height="60"> |
 | Nucleo L031K6 (visual only) | `iot-nucleo-l031k6` | <img src="assets/component-previews/iot-nucleo-l031k6.svg" height="60"> |
 | STM32 Blue Pill (visual only) | `iot-stm32-bluepill` | <img src="assets/component-previews/iot-stm32-bluepill.svg" height="70"> |
+| Breadboard (Half, 30-Column) | `iot-breadboard-half` | <img src="assets/component-previews/iot-breadboard-half.svg" height="45"> |
 
 ## Adding a new sensor or connection
 

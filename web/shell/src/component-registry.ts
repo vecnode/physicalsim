@@ -226,4 +226,16 @@ export const componentRegistry: Record<string, ComponentDef> = {
     displayName: "STM32 Blue Pill (visual only)",
     category: "connections",
   },
+  // A 30-column half breadboard (iot-elements' own breadboard-half-
+  // element.ts) - power/ground rails and terminal strips are internally
+  // bussed via pin.ts's "same name prefix = same net" convention (see
+  // that element's doc comment), so wiring two components' pins into the
+  // same rail or column here genuinely puts them on the same node for
+  // the signal chain, the same as a real breadboard's internal clips -
+  // no breadboard-specific code needed anywhere in this app.
+  "breadboard-half": {
+    tagName: "iot-breadboard-half",
+    displayName: "Breadboard (Half, 30-Column)",
+    category: "connections",
+  },
 };

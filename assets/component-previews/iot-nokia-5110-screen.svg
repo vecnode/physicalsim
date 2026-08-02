@@ -1,7 +1,8 @@
 <svg width="30mm" height="32mm" version="1.1" viewBox="0 0 30 32" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="30" height="30" fill="#153a1a"></rect>
-    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="15" y="15">NOKIA 5110</text>
-        <rect x="3" y="3" width="24" height="14" fill="#9fbf9f" stroke="#0a1f0a" stroke-width="0.2"></rect>
+    <rect x="0" y="0" rx="1" stroke-width="0.2" width="30" height="30" fill="#153a6b" stroke="#0c3a1e"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" x="15" y="15" fill="#e8f5ec">NOKIA 5110</text>
+        <rect x="2" y="2" width="26" height="16" rx="0.6" fill="#111" stroke="#000" stroke-width="0.2"></rect>
+        <rect x="4" y="4" width="22" height="12" fill="#8a9c8a" stroke="#4a5a4a" stroke-width="0.2"></rect>
         <g fill="#ccc">
           <rect y="30" width="0.3" height="2" x="1.85"></rect><rect y="30" width="0.3" height="2" x="5.25"></rect><rect y="30" width="0.3" height="2" x="8.65"></rect><rect y="30" width="0.3" height="2" x="12.049"></rect><rect y="30" width="0.3" height="2" x="15.45"></rect><rect y="30" width="0.3" height="2" x="18.85"></rect><rect y="30" width="0.3" height="2" x="22.25"></rect><rect y="30" width="0.3" height="2" x="25.650"></rect>
         </g>

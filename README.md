@@ -33,7 +33,7 @@ upstream:
 * [vecnode/avr8js](https://github.com/vecnode/avr8js)
 * [vecnode/rp2040js](https://github.com/vecnode/rp2040js)
 * [vecnode/esp32js](https://github.com/vecnode/esp32js)
-* [vecnode/wokwi-elements](https://github.com/vecnode/wokwi-elements)
+* [vecnode/iot-elements](https://github.com/vecnode/iot-elements)
 
 
 ## Reproduce

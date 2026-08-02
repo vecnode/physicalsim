@@ -1,0 +1,32 @@
+<svg width="30mm" height="32mm" version="1.1" viewBox="0 0 30 32" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="30" height="30" fill="#153a1a"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="15" y="15">NOKIA 5110</text>
+        <rect x="3" y="3" width="24" height="14" fill="#9fbf9f" stroke="#0a1f0a" stroke-width="0.2"></rect>
+        <g fill="#ccc">
+          <rect y="30" width="0.3" height="2" x="1.85"></rect><rect y="30" width="0.3" height="2" x="5.25"></rect><rect y="30" width="0.3" height="2" x="8.65"></rect><rect y="30" width="0.3" height="2" x="12.049"></rect><rect y="30" width="0.3" height="2" x="15.45"></rect><rect y="30" width="0.3" height="2" x="18.85"></rect><rect y="30" width="0.3" height="2" x="22.25"></rect><rect y="30" width="0.3" height="2" x="25.650"></rect>
+        </g>
+    <circle r="0.6" fill="#d4af37" cx="2" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="2" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="2" y="34.4" text-anchor="middle">RST</text>
+    <circle r="0.6" fill="#d4af37" cx="5.4" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="5.4" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="5.4" y="34.4" text-anchor="middle">CE</text>
+    <circle r="0.6" fill="#d4af37" cx="8.8" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="8.8" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="8.8" y="34.4" text-anchor="middle">DC</text>
+    <circle r="0.6" fill="#d4af37" cx="12.2" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="12.2" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="12.2" y="34.4" text-anchor="middle">DIN</text>
+    <circle r="0.6" fill="#d4af37" cx="15.6" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="15.6" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="15.6" y="34.4" text-anchor="middle">CLK</text>
+    <circle r="0.6" fill="#d4af37" cx="19" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="19" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="19" y="34.4" text-anchor="middle">VCC</text>
+    <circle r="0.6" fill="#d4af37" cx="22.4" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="22.4" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="22.4" y="34.4" text-anchor="middle">BL</text>
+    <circle r="0.6" fill="#d4af37" cx="25.8" cy="32"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="25.8" cy="32"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="25.8" y="34.4" text-anchor="middle">GND</text>
+      </svg>

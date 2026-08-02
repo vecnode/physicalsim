@@ -154,4 +154,76 @@ export const componentRegistry: Record<string, ComponentDef> = {
     category: "connections",
   },
   "ir-remote": { tagName: "wokwi-ir-remote", displayName: "IR Remote", category: "connections" },
+
+  // --- Added from iot-elements' own "parts Wokwi documents but never
+  // open-sourced" batch (see COMPONENTS.md's "Originally-drawn parts"
+  // section) - visual/wireable only, same tier as most entries above. ---
+  bmp180: { tagName: "wokwi-bmp180", displayName: "BMP180 (Pressure)", category: "sensors" },
+  ds18b20: { tagName: "wokwi-ds18b20", displayName: "DS18B20 (1-Wire Temp)", category: "sensors" },
+  mfrc522: { tagName: "wokwi-mfrc522", displayName: "MFRC522 (RFID)", category: "sensors" },
+  "logic-analyzer": {
+    tagName: "wokwi-logic-analyzer",
+    displayName: "Logic Analyzer",
+    category: "sensors",
+  },
+  "74hc165": { tagName: "wokwi-74hc165", displayName: "74HC165 (Shift-In)", category: "connections" },
+  "74hc595": { tagName: "wokwi-74hc595", displayName: "74HC595 (Shift-Out)", category: "connections" },
+  nlsf595: { tagName: "wokwi-nlsf595", displayName: "NLSF595 (Shift-Out)", category: "connections" },
+  attiny85: { tagName: "wokwi-attiny85", displayName: "ATtiny85 (bare chip)", category: "connections" },
+  a4988: { tagName: "wokwi-a4988", displayName: "A4988 (Stepper Driver)", category: "connections" },
+  "clock-generator": {
+    tagName: "wokwi-clock-generator",
+    displayName: "Clock Generator",
+    category: "connections",
+  },
+  "grove-oled-sh1107": {
+    tagName: "wokwi-grove-oled-sh1107",
+    displayName: "Grove OLED (SH1107)",
+    category: "connections",
+  },
+  "led-matrix": { tagName: "wokwi-led-matrix", displayName: "LED Matrix (8x8)", category: "connections" },
+  "led-strip": { tagName: "wokwi-led-strip", displayName: "LED Strip", category: "connections" },
+  "max7219-matrix": {
+    tagName: "wokwi-max7219-matrix",
+    displayName: "MAX7219 Matrix",
+    category: "connections",
+  },
+  "nokia-5110-screen": {
+    tagName: "wokwi-nokia-5110-screen",
+    displayName: "Nokia 5110 Screen",
+    category: "connections",
+  },
+  "relay-module": {
+    tagName: "wokwi-relay-module",
+    displayName: "Relay Module",
+    category: "connections",
+  },
+  text: { tagName: "wokwi-text", displayName: "Text Label", category: "connections" },
+  "tm1637-7segment": {
+    tagName: "wokwi-tm1637-7segment",
+    displayName: "TM1637 7-Segment",
+    category: "connections",
+  },
+  tv: { tagName: "wokwi-tv", displayName: "TV (Composite)", category: "connections" },
+  "wifi-ap": { tagName: "wokwi-wifi-ap", displayName: "WiFi Access Point", category: "connections" },
+  "franzininho-wifi": {
+    tagName: "wokwi-franzininho-wifi",
+    displayName: "Franzininho WiFi (visual only)",
+    category: "connections",
+  },
+  "nucleo-c031c6": {
+    tagName: "wokwi-nucleo-c031c6",
+    displayName: "Nucleo C031C6 (visual only)",
+    category: "connections",
+  },
+  "nucleo-l031k6": {
+    tagName: "wokwi-nucleo-l031k6",
+    displayName: "Nucleo L031K6 (visual only)",
+    category: "connections",
+  },
+  "stm32-bluepill": {
+    tagName: "wokwi-stm32-bluepill",
+    displayName: "STM32 Blue Pill (visual only)",
+    category: "connections",
+  },
 };

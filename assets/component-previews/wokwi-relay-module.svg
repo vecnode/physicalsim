@@ -1,0 +1,29 @@
+<svg width="26mm" height="20mm" version="1.1" viewBox="0 0 26 20" xmlns="http://www.w3.org/2000/svg">
+    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="26" height="18" fill="#0e5c2f"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="13" y="9">RELAY</text>
+        <rect x="1" y="1" width="12" height="10" rx="1" fill="#3a5aa0" stroke="#1a2a50" stroke-width="0.2"></rect>
+        <rect x="15.5" y="0.5" width="10" height="17" fill="#1a1a1a" stroke="#000" stroke-width="0.15"></rect>
+        <g fill="#ccc">
+          <rect x="1.85" y="18" width="0.3" height="2"></rect>
+          <rect x="5.85" y="18" width="0.3" height="2"></rect>
+          <rect x="9.85" y="18" width="0.3" height="2"></rect>
+        </g>
+    <circle r="0.6" fill="#d4af37" cx="2" cy="20"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="2" cy="20"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="2" y="22.4" text-anchor="middle">VCC</text>
+    <circle r="0.6" fill="#d4af37" cx="6" cy="20"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="6" cy="20"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="6" y="22.4" text-anchor="middle">GND</text>
+    <circle r="0.6" fill="#d4af37" cx="10" cy="20"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="10" cy="20"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="10" y="22.4" text-anchor="middle">IN</text>
+    <circle r="0.6" fill="#d4af37" cx="18" cy="1"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="18" cy="1"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="19.6" y="1.5" text-anchor="start">NO</text>
+    <circle r="0.6" fill="#d4af37" cx="18" cy="9"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="18" cy="9"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="19.6" y="9.5" text-anchor="start">COM</text>
+    <circle r="0.6" fill="#d4af37" cx="18" cy="17"></circle>
+    <circle r="0.3" fill="#3a3a3a" cx="18" cy="17"></circle>
+    <text font-size="1.1" font-family="sans-serif" fill="#e8f5ec" x="19.6" y="17.5" text-anchor="start">NC</text>
+      </svg>

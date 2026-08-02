@@ -6,7 +6,7 @@ import type { Wire } from "./wiring.js";
 // out of scope" section: no Ohm's law, no SPICE/MNA). What this actually
 // checks is narrower and fully grounded in data that already exists: every
 // vendored @wokwi/elements board/component's own pinInfo carries a real
-// `signals: PinSignalInfo[]` array (simulators/wokwi-elements/src/pin.ts),
+// `signals: PinSignalInfo[]` array (simulators/iot-elements/src/pin.ts),
 // and a `{ type: "power", signal: "GND" | "VCC", voltage? }` entry there is
 // the element's own manufacturer-shaped electrical metadata, not a guess
 // this project is making from a pin's name string. A plain GPIO pin has no

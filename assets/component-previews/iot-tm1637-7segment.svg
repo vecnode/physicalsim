@@ -1,11 +1,45 @@
 <svg width="16mm" height="16mm" version="1.1" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
-    <rect x="0" y="0" rx="1" stroke="#0c3a1e" stroke-width="0.2" width="16" height="14" fill="#1a1a2e"></rect>
-    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" fill="#e8f5ec" x="8" y="7">TM1637</text>
-        <rect x="1" y="1" width="14" height="6" fill="#111"></rect>
-            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="2.5">-</text>
-            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="5.7">-</text>
-            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="8.9">-</text>
-            <text y="6" font-size="4" font-family="monospace" fill="#ff3b3b" x="12.100">-</text>
+    <rect x="0" y="0" rx="1" stroke-width="0.2" width="16" height="14" fill="#1a1a2e" stroke="#0c3a1e"></rect>
+    <text text-anchor="middle" dominant-baseline="middle" font-size="1.6" font-family="sans-serif" x="8" y="7" fill="#e8f5ec">TM1637</text>
+        <rect x="1" y="1" width="14" height="6.5" fill="#111"></rect>
+    <g stroke-width="0.55" stroke-linecap="round" transform="translate(1.7 1.4)">
+          <line x1="0.3" y1="0.15" x2="2.1" y2="0.15" stroke="#3a1414"></line>
+          <line x1="0.3" y1="2.1" x2="2.1" y2="2.1" stroke="#ff3b3b"></line>
+          <line x1="0.3" y1="4.05" x2="2.1" y2="4.05" stroke="#3a1414"></line>
+          <line x1="0.1" y1="0.3" x2="0.1" y2="1.950" stroke="#3a1414"></line>
+          <line x1="2.3" y1="0.3" x2="2.3" y2="1.950" stroke="#3a1414"></line>
+          <line x1="0.1" y1="2.25" x2="0.1" y2="3.900" stroke="#3a1414"></line>
+          <line x1="2.3" y1="2.25" x2="2.3" y2="3.900" stroke="#3a1414"></line>
+    </g>
+    <g stroke-width="0.55" stroke-linecap="round" transform="translate(5 1.4)">
+          <line x1="0.3" y1="0.15" x2="2.1" y2="0.15" stroke="#3a1414"></line>
+          <line x1="0.3" y1="2.1" x2="2.1" y2="2.1" stroke="#ff3b3b"></line>
+          <line x1="0.3" y1="4.05" x2="2.1" y2="4.05" stroke="#3a1414"></line>
+          <line x1="0.1" y1="0.3" x2="0.1" y2="1.950" stroke="#3a1414"></line>
+          <line x1="2.3" y1="0.3" x2="2.3" y2="1.950" stroke="#3a1414"></line>
+          <line x1="0.1" y1="2.25" x2="0.1" y2="3.900" stroke="#3a1414"></line>
+          <line x1="2.3" y1="2.25" x2="2.3" y2="3.900" stroke="#3a1414"></line>
+    </g>
+    <g stroke-width="0.55" stroke-linecap="round" transform="translate(8.299 1.4)">
+          <line x1="0.3" y1="0.15" x2="2.1" y2="0.15" stroke="#3a1414"></line>
+          <line x1="0.3" y1="2.1" x2="2.1" y2="2.1" stroke="#ff3b3b"></line>
+          <line x1="0.3" y1="4.05" x2="2.1" y2="4.05" stroke="#3a1414"></line>
+          <line x1="0.1" y1="0.3" x2="0.1" y2="1.950" stroke="#3a1414"></line>
+          <line x1="2.3" y1="0.3" x2="2.3" y2="1.950" stroke="#3a1414"></line>
+          <line x1="0.1" y1="2.25" x2="0.1" y2="3.900" stroke="#3a1414"></line>
+          <line x1="2.3" y1="2.25" x2="2.3" y2="3.900" stroke="#3a1414"></line>
+    </g>
+    <g stroke-width="0.55" stroke-linecap="round" transform="translate(11.599 1.4)">
+          <line x1="0.3" y1="0.15" x2="2.1" y2="0.15" stroke="#3a1414"></line>
+          <line x1="0.3" y1="2.1" x2="2.1" y2="2.1" stroke="#ff3b3b"></line>
+          <line x1="0.3" y1="4.05" x2="2.1" y2="4.05" stroke="#3a1414"></line>
+          <line x1="0.1" y1="0.3" x2="0.1" y2="1.950" stroke="#3a1414"></line>
+          <line x1="2.3" y1="0.3" x2="2.3" y2="1.950" stroke="#3a1414"></line>
+          <line x1="0.1" y1="2.25" x2="0.1" y2="3.900" stroke="#3a1414"></line>
+          <line x1="2.3" y1="2.25" x2="2.3" y2="3.900" stroke="#3a1414"></line>
+    </g>
+        <circle cx="8.3" cy="3.3" r="0.22" fill="#ff3b3b"></circle>
+        <circle cx="8.3" cy="5.4" r="0.22" fill="#ff3b3b"></circle>
         <g fill="#ccc">
           <rect x="1.85" y="14" width="0.3" height="2"></rect>
           <rect x="5.85" y="14" width="0.3" height="2"></rect>
